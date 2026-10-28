@@ -500,20 +500,115 @@
         </div>
       </div>
 
-      <!-- Navigation Tabs -->
-      <div class="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar">
-        <button data-tab="users" class="admin-tab-btn px-4 py-2.5 rounded-xl font-bold text-xs bg-slate-900 text-white shadow-md">👥 ผู้ใช้งาน</button>
-        <button data-tab="roles" class="admin-tab-btn px-4 py-2.5 rounded-xl font-bold text-xs bg-white text-slate-700 hover:bg-slate-100 border border-slate-200">🛡️ สิทธิ์การใช้งาน</button>
-        <button data-tab="receipt" class="admin-tab-btn px-4 py-2.5 rounded-xl font-bold text-xs bg-white text-slate-700 hover:bg-slate-100 border border-slate-200">🏷️ รูปแบบเลขที่ใบเสร็จ</button>
-        <button data-tab="receiptText" class="admin-tab-btn px-4 py-2.5 rounded-xl font-bold text-xs bg-white text-slate-700 hover:bg-slate-100 border border-slate-200">📝 ข้อความใบเสร็จ</button>
-        <button data-tab="printer" class="admin-tab-btn px-4 py-2.5 rounded-xl font-bold text-xs bg-white text-slate-700 hover:bg-slate-100 border border-slate-200">🖨️ เครื่องพิมพ์และกระดาษ</button>
-        <button data-tab="voice" class="admin-tab-btn px-4 py-2.5 rounded-xl font-bold text-xs bg-white text-slate-700 hover:bg-slate-100 border border-slate-200">🔊 ตั้งค่าเสียงพูดระบบ</button>
-        <button data-tab="constants" class="admin-tab-btn px-4 py-2.5 rounded-xl font-bold text-xs bg-white text-slate-700 hover:bg-slate-100 border border-slate-200">⚙️ ค่าคงที่ระบบ</button>
-        <button data-tab="categories" class="admin-tab-btn px-4 py-2.5 rounded-xl font-bold text-xs bg-white text-slate-700 hover:bg-slate-100 border border-slate-200">🗂️ หมวดสินค้า</button>
-        <button data-tab="units" class="admin-tab-btn px-4 py-2.5 rounded-xl font-bold text-xs bg-white text-slate-700 hover:bg-slate-100 border border-slate-200">📏 หน่วยนับ</button>
-        <button data-tab="audit" class="admin-tab-btn px-4 py-2.5 rounded-xl font-bold text-xs bg-white text-slate-700 hover:bg-slate-100 border border-slate-200">📋 Audit Logs</button>
-        <button data-tab="api" class="admin-tab-btn px-4 py-2.5 rounded-xl font-bold text-xs bg-white text-slate-700 hover:bg-slate-100 border border-slate-200">🌐 API URL</button>
-      </div>
+      <!-- Main Admin 2-Column Grid -->
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+
+        <!-- Left Navigation Sidebar (3 cols on lg) -->
+        <aside class="lg:col-span-3 lg:sticky lg:top-4 bg-white rounded-3xl p-4 border border-slate-200/80 shadow-sm space-y-4">
+          <!-- Mobile Dropdown Selector (visible only < lg) -->
+          <div class="block lg:hidden">
+            <label class="block text-xs font-bold text-slate-500 mb-1.5 flex items-center gap-1">
+              <span>⚙️</span> <span>เลือกเมนูการตั้งค่า</span>
+            </label>
+            <select id="adminMobileTabSelect" onchange="AdminModule.switchTab(this.value)"
+                    class="w-full px-3.5 py-2.5 rounded-2xl bg-slate-50 border border-slate-200 text-xs font-bold text-slate-800 focus:outline-none focus:border-blue-600">
+              <optgroup label="👥 ผู้ใช้และความปลอดภัย">
+                <option value="users">👤 ผู้ใช้งาน</option>
+                <option value="roles">🛡️ สิทธิ์การใช้งาน</option>
+                <option value="audit">📋 Audit Logs</option>
+              </optgroup>
+              <optgroup label="📦 ข้อมูลหลักสินค้า">
+                <option value="categories">🗂️ หมวดสินค้า</option>
+                <option value="units">📏 หน่วยนับ</option>
+              </optgroup>
+              <optgroup label="🧾 ใบเสร็จและอุปกรณ์">
+                <option value="receipt">🏷️ รูปแบบเลขที่ใบเสร็จ</option>
+                <option value="receiptText">📝 ข้อความใบเสร็จ</option>
+                <option value="printer">🖨️ เครื่องพิมพ์และกระดาษ</option>
+                <option value="voice">🔊 เสียงพูดระบบ</option>
+              </optgroup>
+              <optgroup label="⚙️ ระบบและเครือข่าย">
+                <option value="constants">⚙️ ค่าคงที่ระบบ</option>
+                <option value="api">🌐 API URL</option>
+              </optgroup>
+            </select>
+          </div>
+
+          <!-- Desktop Grouped Sidebar (hidden on mobile, visible lg:block) -->
+          <div class="hidden lg:block space-y-4">
+            <!-- Group 1: Users & Security -->
+            <div>
+              <div class="px-3 pb-1.5 text-[10px] font-black text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+                <span>👥</span> <span>ผู้ใช้และความปลอดภัย</span>
+              </div>
+              <div class="space-y-1">
+                <button data-tab="users" class="admin-tab-btn w-full px-3.5 py-2.5 rounded-2xl font-bold text-xs flex items-center gap-2.5 transition text-left cursor-pointer bg-slate-900 text-white shadow-md">
+                  <span class="text-sm">👤</span> <span class="flex-1">ผู้ใช้งาน</span>
+                </button>
+                <button data-tab="roles" class="admin-tab-btn w-full px-3.5 py-2.5 rounded-2xl font-bold text-xs flex items-center gap-2.5 transition text-left cursor-pointer text-slate-600 hover:text-slate-900 hover:bg-slate-100/80">
+                  <span class="text-sm">🛡️</span> <span class="flex-1">สิทธิ์การใช้งาน</span>
+                </button>
+                <button data-tab="audit" class="admin-tab-btn w-full px-3.5 py-2.5 rounded-2xl font-bold text-xs flex items-center gap-2.5 transition text-left cursor-pointer text-slate-600 hover:text-slate-900 hover:bg-slate-100/80">
+                  <span class="text-sm">📋</span> <span class="flex-1">Audit Logs</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Group 2: Master Data -->
+            <div class="pt-3 border-t border-slate-100">
+              <div class="px-3 pb-1.5 text-[10px] font-black text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+                <span>📦</span> <span>ข้อมูลหลักสินค้า</span>
+              </div>
+              <div class="space-y-1">
+                <button data-tab="categories" class="admin-tab-btn w-full px-3.5 py-2.5 rounded-2xl font-bold text-xs flex items-center gap-2.5 transition text-left cursor-pointer text-slate-600 hover:text-slate-900 hover:bg-slate-100/80">
+                  <span class="text-sm">🗂️</span> <span class="flex-1">หมวดสินค้า</span>
+                </button>
+                <button data-tab="units" class="admin-tab-btn w-full px-3.5 py-2.5 rounded-2xl font-bold text-xs flex items-center gap-2.5 transition text-left cursor-pointer text-slate-600 hover:text-slate-900 hover:bg-slate-100/80">
+                  <span class="text-sm">📏</span> <span class="flex-1">หน่วยนับ</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Group 3: Receipt & Hardware -->
+            <div class="pt-3 border-t border-slate-100">
+              <div class="px-3 pb-1.5 text-[10px] font-black text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+                <span>🧾</span> <span>ใบเสร็จและอุปกรณ์</span>
+              </div>
+              <div class="space-y-1">
+                <button data-tab="receipt" class="admin-tab-btn w-full px-3.5 py-2.5 rounded-2xl font-bold text-xs flex items-center gap-2.5 transition text-left cursor-pointer text-slate-600 hover:text-slate-900 hover:bg-slate-100/80">
+                  <span class="text-sm">🏷️</span> <span class="flex-1">รูปแบบเลขที่</span>
+                </button>
+                <button data-tab="receiptText" class="admin-tab-btn w-full px-3.5 py-2.5 rounded-2xl font-bold text-xs flex items-center gap-2.5 transition text-left cursor-pointer text-slate-600 hover:text-slate-900 hover:bg-slate-100/80">
+                  <span class="text-sm">📝</span> <span class="flex-1">ข้อความใบเสร็จ</span>
+                </button>
+                <button data-tab="printer" class="admin-tab-btn w-full px-3.5 py-2.5 rounded-2xl font-bold text-xs flex items-center gap-2.5 transition text-left cursor-pointer text-slate-600 hover:text-slate-900 hover:bg-slate-100/80">
+                  <span class="text-sm">🖨️</span> <span class="flex-1">เครื่องพิมพ์/กระดาษ</span>
+                </button>
+                <button data-tab="voice" class="admin-tab-btn w-full px-3.5 py-2.5 rounded-2xl font-bold text-xs flex items-center gap-2.5 transition text-left cursor-pointer text-slate-600 hover:text-slate-900 hover:bg-slate-100/80">
+                  <span class="text-sm">🔊</span> <span class="flex-1">เสียงพูดระบบ</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Group 4: System & Network -->
+            <div class="pt-3 border-t border-slate-100">
+              <div class="px-3 pb-1.5 text-[10px] font-black text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+                <span>⚙️</span> <span>ระบบและเครือข่าย</span>
+              </div>
+              <div class="space-y-1">
+                <button data-tab="constants" class="admin-tab-btn w-full px-3.5 py-2.5 rounded-2xl font-bold text-xs flex items-center gap-2.5 transition text-left cursor-pointer text-slate-600 hover:text-slate-900 hover:bg-slate-100/80">
+                  <span class="text-sm">⚙️</span> <span class="flex-1">ค่าคงที่ระบบ</span>
+                </button>
+                <button data-tab="api" class="admin-tab-btn w-full px-3.5 py-2.5 rounded-2xl font-bold text-xs flex items-center gap-2.5 transition text-left cursor-pointer text-slate-600 hover:text-slate-900 hover:bg-slate-100/80">
+                  <span class="text-sm">🌐</span> <span class="flex-1">API Web App</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </aside>
+
+        <!-- Right Content Area (9 cols on lg) -->
+        <div class="lg:col-span-9 min-w-0 space-y-4">
 
       <!-- Tab Content 1: Users Table -->
       <div id="adminTab_users" class="admin-tab-content bg-white rounded-3xl p-5 border border-slate-200/80 shadow-sm space-y-4">
@@ -1150,6 +1245,9 @@
           ทดสอบการเชื่อมต่อและบันทึก
         </button>
       </div>
+
+        </div><!-- End Right Content Area (lg:col-span-9) -->
+      </div><!-- End Main Admin 2-Column Grid -->
 
     </section>
 
