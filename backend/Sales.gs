@@ -170,14 +170,8 @@ function checkoutSale(payload, sessionUser) {
 
     logAudit(sessionUser.userId, 'CHECKOUT_SALE', 'Sales', { receiptNo, total: grandTotal, items: preparedItems.length });
 
-    // Store config info for printing
-    const storeInfo = {
-      name: getConfig('STORE_NAME', 'POS Store'),
-      address: branch.address || getConfig('STORE_ADDRESS', ''),
-      phone: branch.phone || getConfig('STORE_PHONE', ''),
-      taxId: branch.taxId || getConfig('STORE_TAX_ID', ''),
-      footer: getConfig('RECEIPT_FOOTER', 'ขอบคุณที่ใช้บริการ')
-    };
+    // Store config info for printing resolved via ReceiptTexts
+    const storeInfo = getReceiptStoreInfo(branchId);
 
     return {
       ok: true,
@@ -256,15 +250,7 @@ function getReceiptDetails(receiptNo) {
   if (!sale) throw new Error('ไม่พบข้อมูลใบเสร็จ');
 
   const items = findRows(SHEETS.SALE_ITEMS, r => r.receiptNo === receiptNo);
-  const branch = findRow(SHEETS.BRANCHES, r => r.branchId === sale.branchId) || {};
-
-  const storeInfo = {
-    name: getConfig('STORE_NAME', 'POS Store'),
-    address: branch.address || getConfig('STORE_ADDRESS', ''),
-    phone: branch.phone || getConfig('STORE_PHONE', ''),
-    taxId: branch.taxId || getConfig('STORE_TAX_ID', ''),
-    footer: getConfig('RECEIPT_FOOTER', 'ขอบคุณที่ใช้บริการ')
-  };
+  const storeInfo = getReceiptStoreInfo(sale.branchId);
 
   return {
     sale: sale,

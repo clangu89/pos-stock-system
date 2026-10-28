@@ -484,6 +484,7 @@
         <button data-tab="users" class="admin-tab-btn px-4 py-2.5 rounded-xl font-bold text-xs bg-slate-900 text-white shadow-md">👥 ผู้ใช้งาน</button>
         <button data-tab="roles" class="admin-tab-btn px-4 py-2.5 rounded-xl font-bold text-xs bg-white text-slate-700 hover:bg-slate-100 border border-slate-200">🛡️ สิทธิ์การใช้งาน</button>
         <button data-tab="receipt" class="admin-tab-btn px-4 py-2.5 rounded-xl font-bold text-xs bg-white text-slate-700 hover:bg-slate-100 border border-slate-200">🏷️ รูปแบบเลขที่ใบเสร็จ</button>
+        <button data-tab="receiptText" class="admin-tab-btn px-4 py-2.5 rounded-xl font-bold text-xs bg-white text-slate-700 hover:bg-slate-100 border border-slate-200">📝 ข้อความใบเสร็จ</button>
         <button data-tab="printer" class="admin-tab-btn px-4 py-2.5 rounded-xl font-bold text-xs bg-white text-slate-700 hover:bg-slate-100 border border-slate-200">🖨️ เครื่องพิมพ์และกระดาษ</button>
         <button data-tab="voice" class="admin-tab-btn px-4 py-2.5 rounded-xl font-bold text-xs bg-white text-slate-700 hover:bg-slate-100 border border-slate-200">🔊 ตั้งค่าเสียงพูดระบบ</button>
         <button data-tab="audit" class="admin-tab-btn px-4 py-2.5 rounded-xl font-bold text-xs bg-white text-slate-700 hover:bg-slate-100 border border-slate-200">📋 Audit Logs</button>
@@ -550,6 +551,243 @@
         </div>
       </div>
 
+      <!-- Tab Content 3.5: Receipt Text Customization & Live Preview -->
+      <div id="adminTab_receiptText" class="admin-tab-content hidden space-y-4">
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+          
+          <!-- Left Column: Settings Form (7 cols) -->
+          <div class="lg:col-span-7 bg-white rounded-3xl p-6 border border-slate-200/80 shadow-sm space-y-4">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-slate-100 gap-2">
+              <div>
+                <h3 class="font-bold text-base text-slate-900">กำหนดข้อความบนใบเสร็จรับเงิน</h3>
+                <p class="text-xs text-slate-500">ปรับเปลี่ยนชื่อร้าน ที่อยู่ หัวเอกสาร ข้อความต้อนรับ และคำขอบคุณท้ายบิล</p>
+              </div>
+              <div class="flex items-center gap-2">
+                <span class="text-xs font-bold text-slate-500">ขอบเขต:</span>
+                <select id="receiptTextBranchSelect" onchange="AdminModule.onReceiptTextScopeChange(this.value)"
+                        class="px-3 py-1.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-bold text-slate-800">
+                  <option value="DEFAULT">⭐ ค่ากลาง (ใช้งานทุกสาขา)</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- Branch Override Alert Banner -->
+            <div id="receiptTextOverrideBanner" class="hidden p-3.5 rounded-2xl bg-blue-50 border border-blue-200 flex items-center justify-between text-xs">
+              <div class="flex items-center gap-2 text-blue-900 font-bold">
+                <span>🏢</span>
+                <span id="receiptTextOverrideText">สาขานี้ใช้การตั้งค่าเฉพาะของตนเอง</span>
+              </div>
+              <button onclick="AdminModule.deleteReceiptTextOverride()" class="px-3 py-1 rounded-xl bg-red-100 hover:bg-red-200 text-red-700 font-bold text-[11px] transition">
+                ลบการปรับแต่ง (กลับไปใช้ค่ากลาง)
+              </button>
+            </div>
+
+            <div class="space-y-3.5">
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label class="block text-xs font-bold text-slate-700 mb-1">หัวเอกสาร (Title)</label>
+                  <input type="text" id="receiptTextTitleInput" oninput="AdminModule.updateReceiptTextPreview()"
+                         value="ใบเสร็จรับเงิน / ใบกำกับภาษีอย่างย่อ"
+                         placeholder="เช่น ใบเสร็จรับเงิน หรือ RECEIPT"
+                         class="w-full px-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-bold">
+                </div>
+                <div>
+                  <label class="block text-xs font-bold text-slate-700 mb-1">ชื่อร้านค้า / กิจการ (Store Name)</label>
+                  <input type="text" id="receiptTextStoreNameInput" oninput="AdminModule.updateReceiptTextPreview()"
+                         value="ระบบขายสินค้าและสต๊อก POS Store"
+                         placeholder="ชื่อร้านที่จะปรากฏตัวใหญ่บนสุด"
+                         class="w-full px-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-bold">
+                </div>
+              </div>
+
+              <div>
+                <label class="block text-xs font-bold text-slate-700 mb-1">ข้อความใต้ชื่อร้าน (Subheader - รองรับหลายบรรทัด)</label>
+                <textarea id="receiptTextSubHeaderInput" oninput="AdminModule.updateReceiptTextPreview()" rows="2"
+                          placeholder="เช่น ยินดีต้อนรับ / Welcome หรือ สโลแกนร้าน"
+                          class="w-full px-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-sans leading-relaxed"></textarea>
+              </div>
+
+              <div>
+                <label class="block text-xs font-bold text-slate-700 mb-1">ที่อยู่ร้านค้า (Address - รองรับหลายบรรทัด)</label>
+                <textarea id="receiptTextAddressInput" oninput="AdminModule.updateReceiptTextPreview()" rows="2"
+                          placeholder="เลขที่ ถนน แขวง/ตำบล เขต/อำเภอ จังหวัด รหัสไปรษณีย์"
+                          class="w-full px-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-sans leading-relaxed"></textarea>
+              </div>
+
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label class="block text-xs font-bold text-slate-700 mb-1">เบอร์โทรศัพท์ (Phone)</label>
+                  <input type="text" id="receiptTextPhoneInput" oninput="AdminModule.updateReceiptTextPreview()"
+                         value="02-123-4567"
+                         placeholder="เช่น 02-123-4567, 081-xxx-xxxx"
+                         class="w-full px-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs">
+                </div>
+                <div>
+                  <label class="block text-xs font-bold text-slate-700 mb-1">เลขประจำตัวผู้เสียภาษี (Tax ID)</label>
+                  <input type="text" id="receiptTextTaxIdInput" oninput="AdminModule.updateReceiptTextPreview()"
+                         value="0105500000000"
+                         placeholder="เลข 13 หลัก"
+                         class="w-full px-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-mono">
+                </div>
+              </div>
+
+              <div>
+                <label class="block text-xs font-bold text-slate-700 mb-1">ข้อความท้ายใบเสร็จ (Footer - รองรับหลายบรรทัด)</label>
+                <textarea id="receiptTextFooterInput" oninput="AdminModule.updateReceiptTextPreview()" rows="3"
+                          placeholder="เช่น ขอบคุณที่ใช้บริการ / Thank you!&#10;สินค้าซื้อแล้วไม่รับเปลี่ยนคืน"
+                          class="w-full px-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-sans leading-relaxed"></textarea>
+              </div>
+
+              <!-- Switches / Toggles -->
+              <div class="pt-2 border-t border-slate-100">
+                <span class="block text-xs font-bold text-slate-700 mb-2">เลือกข้อมูลที่ต้องการแสดงบนใบเสร็จ:</span>
+                <div class="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs">
+                  <label class="flex items-center gap-2 cursor-pointer p-2 rounded-xl bg-slate-50 border border-slate-200 hover:bg-slate-100">
+                    <input type="checkbox" id="receiptTextShowAddressCheck" onchange="AdminModule.updateReceiptTextPreview()" checked class="rounded text-blue-600">
+                    <span class="font-medium text-slate-700">แสดงที่อยู่</span>
+                  </label>
+                  <label class="flex items-center gap-2 cursor-pointer p-2 rounded-xl bg-slate-50 border border-slate-200 hover:bg-slate-100">
+                    <input type="checkbox" id="receiptTextShowPhoneCheck" onchange="AdminModule.updateReceiptTextPreview()" checked class="rounded text-blue-600">
+                    <span class="font-medium text-slate-700">แสดงเบอร์โทร</span>
+                  </label>
+                  <label class="flex items-center gap-2 cursor-pointer p-2 rounded-xl bg-slate-50 border border-slate-200 hover:bg-slate-100">
+                    <input type="checkbox" id="receiptTextShowTaxIdCheck" onchange="AdminModule.updateReceiptTextPreview()" checked class="rounded text-blue-600">
+                    <span class="font-medium text-slate-700">แสดงเลขผู้เสียภาษี</span>
+                  </label>
+                  <label class="flex items-center gap-2 cursor-pointer p-2 rounded-xl bg-slate-50 border border-slate-200 hover:bg-slate-100">
+                    <input type="checkbox" id="receiptTextShowCashierCheck" onchange="AdminModule.updateReceiptTextPreview()" checked class="rounded text-blue-600">
+                    <span class="font-medium text-slate-700">แสดงชื่อแคชเชียร์</span>
+                  </label>
+                  <label class="flex items-center gap-2 cursor-pointer p-2 rounded-xl bg-slate-50 border border-slate-200 hover:bg-slate-100">
+                    <input type="checkbox" id="receiptTextShowBranchCheck" onchange="AdminModule.updateReceiptTextPreview()" checked class="rounded text-blue-600">
+                    <span class="font-medium text-slate-700">แสดงชื่อสาขา</span>
+                  </label>
+                </div>
+              </div>
+
+              <!-- Action Buttons -->
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-3 border-t border-slate-100">
+                <button onclick="AdminModule.testPrintFromTextSettings()" class="py-3 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs border border-slate-300 transition flex items-center justify-center gap-1.5">
+                  <span>🖨️</span>
+                  <span>ทดสอบพิมพ์ / ดูตัวอย่างเต็ม</span>
+                </button>
+                <button onclick="AdminModule.saveReceiptTextSettings()" class="py-3 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-xs shadow-md transition flex items-center justify-center gap-1.5">
+                  <span>💾</span>
+                  <span>บันทึกข้อความใบเสร็จ</span>
+                </button>
+              </div>
+
+            </div>
+          </div>
+
+          <!-- Right Column: Live Thermal Receipt Preview (5 cols, sticky) -->
+          <div class="lg:col-span-5 sticky top-20 space-y-3">
+            <div class="flex items-center justify-between px-2">
+              <span class="text-xs font-black uppercase tracking-wider text-slate-500">ตัวอย่างใบเสร็จจริง (Live Preview)</span>
+              <div class="flex items-center gap-1 bg-slate-200 p-0.5 rounded-lg text-[11px] font-bold">
+                <button id="previewWidth58Btn" onclick="AdminModule.setPreviewPaperWidth(58)" class="px-2 py-0.5 rounded bg-white text-slate-900 shadow-xs">58 มม.</button>
+                <button id="previewWidth80Btn" onclick="AdminModule.setPreviewPaperWidth(80)" class="px-2 py-0.5 rounded text-slate-600 hover:text-slate-900">80 มม.</button>
+              </div>
+            </div>
+
+            <!-- Receipt Container -->
+            <div class="bg-slate-200/80 p-4 rounded-3xl border border-slate-300/60 shadow-inner flex justify-center">
+              <div id="receiptLivePreviewCard" class="bg-white p-4 shadow-xl rounded-sm text-black font-sans border-t-8 border-slate-800 transition-all duration-200"
+                   style="width: 260px; font-size: 11px; line-height: 1.35;">
+                <!-- Header -->
+                <div class="text-center space-y-0.5">
+                  <div id="prevStoreName" class="font-black text-sm text-slate-900 leading-tight">POS Store</div>
+                  <div id="prevSubHeader" class="text-[10px] text-slate-600">ยินดีต้อนรับ / Welcome</div>
+                  <div id="prevAddress" class="text-[10px] text-slate-600">123/45 ถ.สุขุมวิท กทม.</div>
+                  <div id="prevPhone" class="text-[10px] text-slate-600">โทร: 02-123-4567</div>
+                  <div id="prevTaxId" class="text-[10px] text-slate-600">เลขผู้เสียภาษี: 0105500000000</div>
+                  <div id="prevTitle" class="font-bold text-[11px] pt-1 text-slate-900">ใบเสร็จรับเงิน / ใบกำกับภาษีอย่างย่อ</div>
+                </div>
+
+                <div class="border-t border-dashed border-slate-400 my-2"></div>
+
+                <!-- Meta -->
+                <div class="text-[10px] space-y-0.5">
+                  <div class="flex justify-between">
+                    <span>เลขที่: <b class="font-mono">RCMAIN-20261028-00001</b></span>
+                    <span id="prevBranch">สาขา: MAIN</span>
+                  </div>
+                  <div class="flex justify-between">
+                    <span>วันที่: 28/10/2026 14:30</span>
+                    <span id="prevCashier">แคชเชียร์: admin</span>
+                  </div>
+                </div>
+
+                <div class="border-t border-dashed border-slate-400 my-2"></div>
+
+                <!-- Items -->
+                <table class="w-full text-[10px] border-collapse">
+                  <thead>
+                    <tr class="border-b border-dashed border-slate-400 font-bold">
+                      <th class="text-left pb-1">รายการ</th>
+                      <th class="text-right pb-1">ลด</th>
+                      <th class="text-right pb-1">รวม</th>
+                    </tr>
+                  </thead>
+                  <tbody class="divide-y divide-dotted divide-slate-200">
+                    <tr>
+                      <td colspan="3" class="font-semibold pt-1">น้ำดื่มสิงห์ 600 มล.</td>
+                    </tr>
+                    <tr>
+                      <td class="pl-1 text-slate-500">2 x 10.00</td>
+                      <td class="text-right text-red-600">-</td>
+                      <td class="text-right font-semibold">20.00</td>
+                    </tr>
+                    <tr>
+                      <td colspan="3" class="font-semibold pt-1">ข้าวผัดกระเพราไก่ไข่ดาว</td>
+                    </tr>
+                    <tr>
+                      <td class="pl-1 text-slate-500">1 x 55.00</td>
+                      <td class="text-right text-red-600">-</td>
+                      <td class="text-right font-semibold">55.00</td>
+                    </tr>
+                  </tbody>
+                </table>
+
+                <div class="border-t border-dashed border-slate-400 my-2"></div>
+
+                <!-- Totals -->
+                <div class="text-[10px] space-y-0.5">
+                  <div class="flex justify-between">
+                    <span>รวมเป็นเงิน:</span>
+                    <span>75.00</span>
+                  </div>
+                  <div class="flex justify-between font-bold text-xs pt-1 border-t border-b border-slate-800 my-1 py-1">
+                    <span>ยอดชำระสุทธิ:</span>
+                    <span>75.00 บาท</span>
+                  </div>
+                  <div class="flex justify-between">
+                    <span>วิธีชำระ:</span>
+                    <span>เงินสด (Cash)</span>
+                  </div>
+                  <div class="flex justify-between">
+                    <span>รับเงินมา:</span>
+                    <span>100.00</span>
+                  </div>
+                  <div class="flex justify-between font-bold">
+                    <span>เงินทอน:</span>
+                    <span>25.00 บาท</span>
+                  </div>
+                </div>
+
+                <div class="border-t border-dashed border-slate-400 my-2"></div>
+
+                <!-- Footer -->
+                <div class="text-center text-[10px] text-slate-700 pt-1 leading-relaxed">
+                  <div id="prevFooter">ขอบคุณที่ใช้บริการ / Thank you!<br>สินค้าซื้อแล้วไม่รับเปลี่ยนคืน</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
       <!-- Tab Content 4: Printer & Paper Settings -->
       <div id="adminTab_printer" class="admin-tab-content hidden bg-white rounded-3xl p-6 border border-slate-200/80 shadow-sm space-y-5 max-w-2xl">
         <h3 class="font-bold text-base text-slate-900 pb-2 border-b border-slate-100">ตั้งค่าไดรเวอร์และกระดาษพิมพ์ใบเสร็จ</h3>
@@ -589,9 +827,11 @@
               <input type="number" id="printerFontSizeInput" value="11" class="w-full px-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-bold text-right">
             </div>
           </div>
-          <div>
-            <label class="block text-xs font-bold text-slate-700 mb-1">ข้อความท้ายใบเสร็จ (Footer)</label>
-            <input type="text" id="printerFooterInput" value="ขอบคุณที่ใช้บริการ / Thank you!" class="w-full px-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs">
+          <div class="p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-600 flex items-center justify-between">
+            <span>📝 ข้อความหัว-ท้ายใบเสร็จ ชื่อร้าน และที่อยู่ จัดการได้ที่แท็บ</span>
+            <button type="button" onclick="document.querySelector('[data-tab=\'receiptText\']').click()" class="px-2.5 py-1 rounded-lg bg-blue-50 text-blue-700 font-bold hover:bg-blue-100">
+              ข้อความใบเสร็จ →
+            </button>
           </div>
           <label class="flex items-center gap-2 text-xs font-bold text-slate-800 cursor-pointer pt-1">
             <input type="checkbox" id="printerAutoPrintCheck" checked class="rounded text-blue-600">

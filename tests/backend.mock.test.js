@@ -264,3 +264,75 @@ test('GAS Mock: setupDatabase, login, and verify lock behavior in checkoutSale',
   assert.strictEqual(p1001AfterVoid.stockQty, 100, 'Restored back to 100');
   assert.strictEqual(p1004AfterVoid.stockQty, 25, 'Restored back to 25');
 });
+
+test('GAS Mock: ReceiptTexts CRUD, branch override inheritance, and setup security', () => {
+  const { sandbox } = createGasMockContext();
+
+  // 1. Initial setup
+  const setupRes = sandbox.setupDatabase();
+  assert.strictEqual(setupRes.ok, true);
+
+  // 2. Check default receipt text
+  const defaultInfo = sandbox.getReceiptStoreInfo('B01');
+  assert.strictEqual(defaultInfo.receiptTitle, 'ใบเสร็จรับเงิน / ใบกำกับภาษีอย่างย่อ');
+  assert.strictEqual(defaultInfo.showAddress, true);
+  assert.strictEqual(defaultInfo.showCashier, true);
+  assert.ok(defaultInfo.footer.includes('ขอบคุณที่ใช้บริการ'));
+
+  // 3. Login as admin
+  const adminLogin = sandbox.loginUser('admin', 'Admin1234!');
+
+  // 4. Save branch-specific override for B01
+  const saveOverrideRes = sandbox.saveReceiptTexts({
+    scopeId: 'BRANCH_B01',
+    branchId: 'B01',
+    receiptTitle: 'ใบเสร็จรับเงินสาขาสุขุมวิท',
+    storeName: 'POS Store สาขา 1 สุขุมวิท',
+    subHeader: 'สาขาเปิด 24 ชม.',
+    address: 'อาคารเอ็กซ์ ถ.สุขุมวิท กทม.',
+    phone: '02-999-8888',
+    taxId: '0105500000000',
+    footer: 'เฉพาะสาขานี้สะสมแต้มได้ 2 เท่า',
+    showAddress: true,
+    showPhone: true,
+    showTaxId: true,
+    showCashier: false, // Turn off cashier display
+    showBranch: true
+  }, adminLogin.user);
+
+  assert.strictEqual(saveOverrideRes.ok, true);
+
+  // 5. Query store info for B01 vs other branch (e.g. B99)
+  const b01Info = sandbox.getReceiptStoreInfo('B01');
+  assert.strictEqual(b01Info.receiptTitle, 'ใบเสร็จรับเงินสาขาสุขุมวิท');
+  assert.strictEqual(b01Info.storeName, 'POS Store สาขา 1 สุขุมวิท');
+  assert.strictEqual(b01Info.showCashier, false, 'Cashier should be false for B01 override');
+  assert.strictEqual(b01Info.footer, 'เฉพาะสาขานี้สะสมแต้มได้ 2 เท่า');
+
+  const b99Info = sandbox.getReceiptStoreInfo('B99');
+  assert.strictEqual(b99Info.receiptTitle, 'ใบเสร็จรับเงิน / ใบกำกับภาษีอย่างย่อ', 'B99 should inherit DEFAULT title');
+  assert.strictEqual(b99Info.showCashier, true, 'B99 should inherit DEFAULT showCashier (true)');
+
+  // 6. Delete branch override for B01
+  const delRes = sandbox.deleteBranchReceiptTexts('B01', adminLogin.user);
+  assert.strictEqual(delRes.ok, true);
+
+  // After delete, B01 should revert to DEFAULT
+  const b01Reverted = sandbox.getReceiptStoreInfo('B01');
+  assert.strictEqual(b01Reverted.receiptTitle, 'ใบเสร็จรับเงิน / ใบกำกับภาษีอย่างย่อ');
+  assert.strictEqual(b01Reverted.showCashier, true);
+
+  // 7. Test Setup Action Security:
+  // Now that Users table is populated, calling routeAction('setup') without token or with non-admin should fail
+  const unauthSetup = sandbox.routeAction('setup', '', {}, {});
+  assert.strictEqual(unauthSetup.ok, false);
+  assert.strictEqual(unauthSetup.error, 'UNAUTHORIZED');
+
+  const cashierLogin = sandbox.loginUser('cashier', 'Cashier1234!');
+  const cashierSetup = sandbox.routeAction('setup', cashierLogin.token, {}, {});
+  assert.strictEqual(cashierSetup.ok, false);
+  assert.strictEqual(cashierSetup.error, 'UNAUTHORIZED');
+
+  const adminSetup = sandbox.routeAction('setup', adminLogin.token, {}, {});
+  assert.strictEqual(adminSetup.ok, true);
+});

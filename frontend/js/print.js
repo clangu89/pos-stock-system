@@ -2,6 +2,20 @@
  * print.js - Thermal Receipt Printing Engine & Continuous Print Configuration
  */
 
+function escapeHtml(str) {
+  if (str === null || str === undefined) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+function multilineHtml(str) {
+  return escapeHtml(str).replace(/\r?\n/g, '<br>');
+}
+
 const PrintManager = {
   profiles: [],
   activeProfile: null,
@@ -27,8 +41,7 @@ const PrintManager = {
       fontSize: 11,
       copies: 1,
       autoPrint: true,
-      showLogo: true,
-      footer: 'ขอบคุณที่ใช้บริการ / Thank you!'
+      showLogo: true
     };
   },
 
@@ -53,10 +66,11 @@ const PrintManager = {
       const p = parseFloat(it.unitPrice) || 0;
       const amt = parseFloat(it.amount) || (q * p);
       const disc = parseFloat(it.discount) || 0;
+      const itemName = escapeHtml(it.name || it.sku);
 
       return `
         <tr>
-          <td colspan="3" style="font-weight:600;">${it.name || it.sku}</td>
+          <td colspan="3" style="font-weight:600;">${itemName}</td>
         </tr>
         <tr>
           <td style="color:#555; padding-left: 8px;">${q} x ${p.toFixed(2)}</td>
@@ -72,14 +86,32 @@ const PrintManager = {
 
     const payMethodText = sale.payMethod === 'CASH' ? 'เงินสด (Cash)' :
       sale.payMethod === 'TRANSFER' ? 'โอนเงิน / PromptPay' :
-      sale.payMethod === 'QR' ? 'QR Code' : sale.payMethod || 'เงินสด';
+      sale.payMethod === 'QR' ? 'QR Code' : escapeHtml(sale.payMethod || 'เงินสด');
+
+    const storeName = multilineHtml(store.storeName || store.name || 'POS Store');
+    const receiptTitle = escapeHtml(store.receiptTitle || 'ใบเสร็จรับเงิน / ใบกำกับภาษีอย่างย่อ');
+    const subHeader = store.subHeader ? `<div style="font-size: 0.85em; color: #444; margin-top: 1px;">${multilineHtml(store.subHeader)}</div>` : '';
+
+    const showAddress = store.showAddress !== false && String(store.showAddress) !== 'false';
+    const showPhone = store.showPhone !== false && String(store.showPhone) !== 'false';
+    const showTaxId = store.showTaxId !== false && String(store.showTaxId) !== 'false';
+    const showCashier = store.showCashier !== false && String(store.showCashier) !== 'false';
+    const showBranch = store.showBranch !== false && String(store.showBranch) !== 'false';
+
+    const addressHtml = (showAddress && store.address) ? `<div style="font-size: 0.85em;">${multilineHtml(store.address)}</div>` : '';
+    const phoneHtml = (showPhone && store.phone) ? `<div style="font-size: 0.85em;">โทร: ${escapeHtml(store.phone)}</div>` : '';
+    const taxIdHtml = (showTaxId && store.taxId) ? `<div style="font-size: 0.85em;">เลขผู้เสียภาษี: ${escapeHtml(store.taxId)}</div>` : '';
+
+    const footerHtml = store.footer
+      ? `<div style="margin-top: 6px; line-height: 1.35;">${multilineHtml(store.footer)}</div>`
+      : `<div style="margin-top: 6px;">ขอบคุณที่ใช้บริการ / Thank you!</div>`;
 
     return `
       <!DOCTYPE html>
       <html>
       <head>
         <meta charset="utf-8">
-        <title>Receipt - ${sale.receiptNo || 'Bill'}</title>
+        <title>Receipt - ${escapeHtml(sale.receiptNo || 'Bill')}</title>
         <style>
           @page {
             size: ${widthMm}mm auto;
@@ -120,24 +152,25 @@ const PrintManager = {
       </head>
       <body>
         <div class="receipt-box">
-          ${isVoid ? `<div class="void-stamp">*** ยกเลิกใบเสร็จ (VOID) ***<br><small>${sale.voidReason || ''}</small></div>` : ''}
+          ${isVoid ? `<div class="void-stamp">*** ยกเลิกใบเสร็จ (VOID) ***<br><small>${escapeHtml(sale.voidReason || '')}</small></div>` : ''}
           <div class="text-center">
-            <div style="font-size: 1.25em; font-weight: 800;">${store.name || 'POS Store'}</div>
-            ${store.address ? `<div style="font-size: 0.85em;">${store.address}</div>` : ''}
-            ${store.phone ? `<div style="font-size: 0.85em;">โทร: ${store.phone}</div>` : ''}
-            ${store.taxId ? `<div style="font-size: 0.85em;">เลขผู้เสียภาษี: ${store.taxId}</div>` : ''}
-            <div style="font-size: 0.9em; font-weight: 700; margin-top: 4px;">ใบเสร็จรับเงิน / ใบกำกับภาษีอย่างย่อ</div>
+            <div style="font-size: 1.25em; font-weight: 800; line-height: 1.2;">${storeName}</div>
+            ${subHeader}
+            ${addressHtml}
+            ${phoneHtml}
+            ${taxIdHtml}
+            <div style="font-size: 0.9em; font-weight: 700; margin-top: 4px;">${receiptTitle}</div>
           </div>
 
           <div class="divider"></div>
 
           <div class="meta-row">
-            <span>เลขที่: <b style="font-family:monospace;">${sale.receiptNo || '-'}</b></span>
-            <span>สาขา: ${sale.branchId || 'MAIN'}</span>
+            <span>เลขที่: <b style="font-family:monospace;">${escapeHtml(sale.receiptNo || '-')}</b></span>
+            ${showBranch ? `<span>สาขา: ${escapeHtml(sale.branchId || 'MAIN')}</span>` : '<span></span>'}
           </div>
           <div class="meta-row">
             <span>วันที่: ${formattedDate}</span>
-            <span>แคชเชียร์: ${sale.cashierName || sale.userId || '-'}</span>
+            ${showCashier ? `<span>แคชเชียร์: ${escapeHtml(sale.cashierName || sale.userId || '-')}</span>` : '<span></span>'}
           </div>
 
           <div class="divider"></div>
@@ -194,9 +227,8 @@ const PrintManager = {
 
           <div class="divider"></div>
 
-          <div class="text-center" style="font-size: 0.85em; margin-top: 6px;">
-            <div>${prof.footer || store.footer || 'ขอบคุณที่ใช้บริการ / Thank you!'}</div>
-            <div style="font-size: 0.75em; color: #777; margin-top: 4px;">Print Profile: ${prof.printerName || prof.profileId}</div>
+          <div class="text-center" style="font-size: 0.85em;">
+            ${footerHtml}
           </div>
         </div>
       </body>

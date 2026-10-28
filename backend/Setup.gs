@@ -20,7 +20,8 @@ function setupDatabase() {
     [SHEETS.SALE_ITEMS]: ['receiptNo', 'lineNo', 'sku', 'barcode', 'name', 'qty', 'unitPrice', 'unitCost', 'discount', 'amount'],
     [SHEETS.COUNTERS]: ['key', 'value', 'updatedAt'],
     [SHEETS.CONFIG]: ['key', 'value', 'description', 'updatedAt'],
-    [SHEETS.PRINT_PROFILES]: ['profileId', 'branchId', 'stationId', 'printerName', 'paperType', 'widthMm', 'heightMm', 'marginMm', 'fontSize', 'copies', 'autoPrint', 'showLogo', 'footer', 'updatedAt'],
+    [SHEETS.RECEIPT_TEXTS]: ['scopeId', 'branchId', 'receiptTitle', 'storeName', 'subHeader', 'address', 'phone', 'taxId', 'footer', 'showAddress', 'showPhone', 'showTaxId', 'showCashier', 'showBranch', 'updatedBy', 'updatedAt'],
+    [SHEETS.PRINT_PROFILES]: ['profileId', 'branchId', 'stationId', 'printerName', 'paperType', 'widthMm', 'heightMm', 'marginMm', 'fontSize', 'copies', 'autoPrint', 'showLogo', 'updatedAt'],
     [SHEETS.AUDIT_LOG]: ['ts', 'userId', 'action', 'target', 'detail']
   };
 
@@ -210,7 +211,7 @@ function setupDatabase() {
     appendRows(SHEETS.STOCK_MOVEMENTS, movements);
   }
 
-  // Seed Config
+  // Seed Config (Only insert if not already present)
   const configs = [
     { key: 'RECEIPT_PREFIX', value: 'RC', description: 'คำนำหน้าเลขที่ใบเสร็จ' },
     { key: 'RECEIPT_FORMAT', value: '{PREFIX}{BRANCH}-{YYYY}{MM}{DD}-{RUN:5}', description: 'รูปแบบเลขที่ใบเสร็จ' },
@@ -219,7 +220,7 @@ function setupDatabase() {
     { key: 'STORE_ADDRESS', value: '123/45 ถ.สุขุมวิท แขวงคลองเตย เขตคลองเตย กรุงเทพมหานคร 10110', description: 'ที่อยู่ร้านค้า' },
     { key: 'STORE_PHONE', value: '02-123-4567', description: 'เบอร์โทรศัพท์ร้านค้า' },
     { key: 'STORE_TAX_ID', value: '0105500000000', description: 'เลขประจำตัวผู้เสียภาษี' },
-    { key: 'RECEIPT_FOOTER', value: 'ขอบคุณที่ใช้บริการ / Thank you!', description: 'ข้อความท้ายใบเสร็จ' },
+    { key: 'RECEIPT_FOOTER', value: 'ขอบคุณที่ใช้บริการ / Thank you!\nสินค้าซื้อแล้วไม่รับเปลี่ยนคืน', description: 'ข้อความท้ายใบเสร็จ' },
     { key: 'VAT_RATE', value: '0', description: 'อัตราภาษีมูลค่าเพิ่ม (%)' },
     { key: 'ALLOW_NEGATIVE_STOCK', value: 'false', description: 'อนุญาตให้ขายสินค้าแม้สต๊อกติดลบหรือไม่ (true/false)' },
     { key: 'SESSION_EXPIRE_HOURS', value: '12', description: 'อายุเซสชันการล็อกอิน (ชั่วโมง)' },
@@ -231,7 +232,32 @@ function setupDatabase() {
   ];
 
   for (const c of configs) {
-    setConfig(c.key, c.value, c.description);
+    const existing = findRow(SHEETS.CONFIG, r => r.key === c.key);
+    if (!existing) {
+      setConfig(c.key, c.value, c.description);
+    }
+  }
+
+  // Seed Default Receipt Texts (Central template)
+  if (getTable(SHEETS.RECEIPT_TEXTS).rows.length === 0) {
+    appendRow(SHEETS.RECEIPT_TEXTS, {
+      scopeId: 'DEFAULT',
+      branchId: '*',
+      receiptTitle: 'ใบเสร็จรับเงิน / ใบกำกับภาษีอย่างย่อ',
+      storeName: getConfig('STORE_NAME', 'ระบบขายสินค้าและสต๊อก POS Store'),
+      subHeader: 'ยินดีต้อนรับ / Welcome',
+      address: getConfig('STORE_ADDRESS', '123/45 ถ.สุขุมวิท แขวงคลองเตย เขตคลองเตย กรุงเทพมหานคร 10110'),
+      phone: getConfig('STORE_PHONE', '02-123-4567'),
+      taxId: getConfig('STORE_TAX_ID', '0105500000000'),
+      footer: getConfig('RECEIPT_FOOTER', 'ขอบคุณที่ใช้บริการ / Thank you!\nสินค้าซื้อแล้วไม่รับเปลี่ยนคืน'),
+      showAddress: 'true',
+      showPhone: 'true',
+      showTaxId: 'true',
+      showCashier: 'true',
+      showBranch: 'true',
+      updatedBy: 'SYSTEM',
+      updatedAt: new Date().toISOString()
+    });
   }
 
   // Seed Print Profiles
@@ -250,7 +276,6 @@ function setupDatabase() {
         copies: 1,
         autoPrint: 'true',
         showLogo: 'true',
-        footer: 'ขอบคุณที่ใช้บริการ / Thank you!',
         updatedAt: new Date().toISOString()
       },
       {
@@ -266,7 +291,6 @@ function setupDatabase() {
         copies: 1,
         autoPrint: 'true',
         showLogo: 'true',
-        footer: 'ขอบคุณที่ใช้บริการ / Thank you!',
         updatedAt: new Date().toISOString()
       }
     ]);

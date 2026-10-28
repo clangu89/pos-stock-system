@@ -17,6 +17,7 @@ const SHEETS = {
   SALE_ITEMS: 'SaleItems',
   COUNTERS: 'Counters',
   CONFIG: 'Config',
+  RECEIPT_TEXTS: 'ReceiptTexts',
   PRINT_PROFILES: 'PrintProfiles',
   AUDIT_LOG: 'AuditLog'
 };

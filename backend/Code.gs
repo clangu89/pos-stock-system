@@ -44,6 +44,17 @@ function routeAction(action, token, data, reqContext) {
   }
 
   if (action === 'setup') {
+    const usersTable = getTable(SHEETS.USERS);
+    if (usersTable.rows.length > 0) {
+      const session = verifySession(token);
+      if (!session || !hasPermission(session, 'admin', 'config')) {
+        return {
+          ok: false,
+          error: 'UNAUTHORIZED',
+          message: 'ระบบได้รับการติดตั้งเรียบร้อยแล้ว การรัน setup ใหม่ต้องใช้สิทธิ์ Admin เท่านั้น'
+        };
+      }
+    }
     return setupDatabase();
   }
 
@@ -82,6 +93,7 @@ function routeAction(action, token, data, reqContext) {
       products: getProductsWithStock(branchId),
       branches: getBranchesList(),
       configs: getAllConfigs(),
+      receiptTexts: getReceiptStoreInfo(branchId),
       printProfiles: getPrintProfilesList(),
       categories: getCategories(),
       units: getUnits()
@@ -195,6 +207,22 @@ function routeAction(action, token, data, reqContext) {
   if (action === 'admin:saveConfigs') {
     requireAuth(token, 'admin', 'config');
     return saveBatchConfigs(data, session);
+  }
+
+  // --- Admin: Receipt Text Customizations ---
+  if (action === 'admin:receiptTexts') {
+    requireAuth(token, 'admin', 'config');
+    return { ok: true, data: getReceiptTextsList() };
+  }
+
+  if (action === 'admin:saveReceiptTexts') {
+    requireAuth(token, 'admin', 'config');
+    return saveReceiptTexts(data, session);
+  }
+
+  if (action === 'admin:deleteReceiptTexts') {
+    requireAuth(token, 'admin', 'config');
+    return deleteBranchReceiptTexts(data.branchId, session);
   }
 
   if (action === 'admin:printProfiles') {
