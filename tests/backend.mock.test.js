@@ -336,3 +336,88 @@ test('GAS Mock: ReceiptTexts CRUD, branch override inheritance, and setup securi
   const adminSetup = sandbox.routeAction('setup', adminLogin.token, {}, {});
   assert.strictEqual(adminSetup.ok, true);
 });
+
+test('GAS Mock: Categories, Units, and Configs CRUD with Delete Protection', () => {
+  const { sandbox } = createGasMockContext();
+  sandbox.setupDatabase();
+  const adminLogin = sandbox.loginUser('admin', 'Admin1234!');
+
+  // --- 1. Categories CRUD ---
+  // A) Save new category
+  const saveCatRes = sandbox.saveCategory({
+    categoryId: 'CAT_TEST',
+    name: 'อุปกรณ์ไอที',
+    color: '#9B59B6',
+    sortOrder: 10
+  }, adminLogin.user);
+  assert.strictEqual(saveCatRes.ok, true);
+  assert.strictEqual(saveCatRes.category.name, 'อุปกรณ์ไอที');
+
+  // Verify it exists in getCategories
+  let cats = sandbox.getCategories();
+  assert.ok(cats.some(c => c.categoryId === 'CAT_TEST'));
+
+  // B) Delete protection: CAT_BEV is used by sample products (P1001, P1002)
+  assert.throws(() => {
+    sandbox.deleteCategory('CAT_BEV', adminLogin.user);
+  }, /ไม่สามารถลบหมวดหมู่นี้ได้/);
+
+  // C) Delete unused category CAT_TEST should succeed
+  const delCatRes = sandbox.deleteCategory('CAT_TEST', adminLogin.user);
+  assert.strictEqual(delCatRes.ok, true);
+  cats = sandbox.getCategories();
+  assert.ok(!cats.some(c => c.categoryId === 'CAT_TEST'));
+
+  // --- 2. Units CRUD ---
+  // A) Save new unit
+  const saveUnitRes = sandbox.saveUnit({
+    unitId: 'U_KG',
+    name: 'กิโลกรัม'
+  }, adminLogin.user);
+  assert.strictEqual(saveUnitRes.ok, true);
+  assert.strictEqual(saveUnitRes.unit.name, 'กิโลกรัม');
+
+  // Duplicate name check
+  assert.throws(() => {
+    sandbox.saveUnit({ unitId: 'U_KG2', name: 'กิโลกรัม' }, adminLogin.user);
+  }, /ชื่อหน่วยนับ "กิโลกรัม" มีอยู่ในระบบแล้ว/);
+
+  // B) Delete protection: 'ขวด' is used by sample products
+  const btlUnit = sandbox.getUnits().find(u => u.name === 'ขวด');
+  assert.ok(btlUnit, 'Should have unit ขวด');
+  assert.throws(() => {
+    sandbox.deleteUnit(btlUnit.unitId, adminLogin.user);
+  }, /ไม่สามารถลบหน่วยนับ "ขวด" ได้/);
+
+  // C) Delete unused unit U_KG should succeed
+  const delUnitRes = sandbox.deleteUnit('U_KG', adminLogin.user);
+  assert.strictEqual(delUnitRes.ok, true);
+  const units = sandbox.getUnits();
+  assert.ok(!units.some(u => u.unitId === 'U_KG'));
+
+  // --- 3. Configs Table & Item CRUD ---
+  // A) Get configs table
+  const confTable = sandbox.getConfigsTable();
+  assert.ok(confTable.length >= 10);
+  const vatItem = confTable.find(c => c.key === 'VAT_RATE');
+  assert.ok(vatItem);
+  assert.strictEqual(vatItem.isSystem, true);
+
+  // B) Save core config
+  sandbox.saveConfigItem({ key: 'VAT_RATE', value: '7', description: 'อัตราภาษี 7%' }, adminLogin.user);
+  assert.strictEqual(sandbox.getConfig('VAT_RATE'), '7');
+
+  // C) Save custom config
+  sandbox.saveConfigItem({ key: 'CUSTOM_BANNER_TEXT', value: 'ยินดีต้อนรับทุกท่าน', description: 'แบนเนอร์' }, adminLogin.user);
+  assert.strictEqual(sandbox.getConfig('CUSTOM_BANNER_TEXT'), 'ยินดีต้อนรับทุกท่าน');
+
+  // D) Delete system key protection
+  assert.throws(() => {
+    sandbox.deleteConfigItem('VAT_RATE', adminLogin.user);
+  }, /ไม่อนุญาตให้ลบคีย์ระบบ/);
+
+  // E) Delete custom key should succeed
+  const delConfRes = sandbox.deleteConfigItem('CUSTOM_BANNER_TEXT', adminLogin.user);
+  assert.strictEqual(delConfRes.ok, true);
+  assert.strictEqual(sandbox.getConfig('CUSTOM_BANNER_TEXT', 'NOT_FOUND'), 'NOT_FOUND');
+});

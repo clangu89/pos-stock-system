@@ -96,6 +96,116 @@ function getCategories() {
   return getTable(SHEETS.CATEGORIES).rows;
 }
 
+function saveCategory(catData, sessionUser) {
+  let categoryId = String(catData.categoryId || '').trim();
+  const name = String(catData.name || '').trim();
+  const color = String(catData.color || '#3498DB').trim();
+  const sortOrder = parseInt(catData.sortOrder, 10) || 0;
+
+  if (!name) {
+    throw new Error('กรุณาระบุชื่อหมวดหมู่สินค้า');
+  }
+
+  // If new and no categoryId provided, generate one
+  if (!categoryId) {
+    categoryId = 'CAT_' + Date.now().toString(36).toUpperCase();
+  }
+
+  const existing = findRow(SHEETS.CATEGORIES, r => r.categoryId === categoryId);
+  const record = {
+    categoryId: categoryId,
+    name: name,
+    color: color,
+    sortOrder: sortOrder
+  };
+
+  if (existing) {
+    updateRows(SHEETS.CATEGORIES, r => r.categoryId === categoryId, r => {
+      Object.assign(r, record);
+      return r;
+    });
+    logAudit(sessionUser.userId, 'UPDATE_CATEGORY', 'Categories', { categoryId, name });
+  } else {
+    appendRow(SHEETS.CATEGORIES, record);
+    logAudit(sessionUser.userId, 'CREATE_CATEGORY', 'Categories', { categoryId, name });
+  }
+
+  return { ok: true, category: record };
+}
+
+function deleteCategory(categoryId, sessionUser) {
+  if (!categoryId) throw new Error('กรุณาระบุรหัสหมวดหมู่สินค้า');
+
+  // Delete protection: check if any active product is using this categoryId
+  const activeProducts = findRows(SHEETS.PRODUCTS, r => r.categoryId === categoryId && String(r.active) !== 'false');
+  if (activeProducts.length > 0) {
+    throw new Error(`ไม่สามารถลบหมวดหมู่นี้ได้ เนื่องจากมีสินค้าใช้งานอยู่ ${activeProducts.length} รายการ (เช่น ${activeProducts[0].name || activeProducts[0].sku})`);
+  }
+
+  const deleted = deleteRows(SHEETS.CATEGORIES, r => r.categoryId === categoryId);
+  logAudit(sessionUser.userId, 'DELETE_CATEGORY', 'Categories', { categoryId, deleted });
+
+  return { ok: true, message: 'ลบหมวดหมู่สินค้าสำเร็จ' };
+}
+
 function getUnits() {
   return getTable(SHEETS.UNITS).rows;
+}
+
+function saveUnit(unitData, sessionUser) {
+  let unitId = String(unitData.unitId || '').trim();
+  const name = String(unitData.name || '').trim();
+
+  if (!name) {
+    throw new Error('กรุณาระบุชื่อหน่วยนับ');
+  }
+
+  if (!unitId) {
+    unitId = 'U_' + Date.now().toString(36).toUpperCase();
+  }
+
+  // Check duplicate unit name for other IDs
+  const dup = findRow(SHEETS.UNITS, r => String(r.name).trim().toLowerCase() === name.toLowerCase() && r.unitId !== unitId);
+  if (dup) {
+    throw new Error(`ชื่อหน่วยนับ "${name}" มีอยู่ในระบบแล้ว`);
+  }
+
+  const existing = findRow(SHEETS.UNITS, r => r.unitId === unitId);
+  const record = {
+    unitId: unitId,
+    name: name
+  };
+
+  if (existing) {
+    updateRows(SHEETS.UNITS, r => r.unitId === unitId, r => {
+      Object.assign(r, record);
+      return r;
+    });
+    logAudit(sessionUser.userId, 'UPDATE_UNIT', 'Units', { unitId, name });
+  } else {
+    appendRow(SHEETS.UNITS, record);
+    logAudit(sessionUser.userId, 'CREATE_UNIT', 'Units', { unitId, name });
+  }
+
+  return { ok: true, unit: record };
+}
+
+function deleteUnit(unitId, sessionUser) {
+  if (!unitId) throw new Error('กรุณาระบุรหัสหน่วยนับ');
+
+  const unitRow = findRow(SHEETS.UNITS, r => r.unitId === unitId);
+  if (!unitRow) throw new Error('ไม่พบข้อมูลหน่วยนับที่ต้องการลบ');
+
+  const unitName = String(unitRow.name || '').trim();
+
+  // Delete protection: check if any active product is using this unit name
+  const activeProducts = findRows(SHEETS.PRODUCTS, r => String(r.unit).trim() === unitName && String(r.active) !== 'false');
+  if (activeProducts.length > 0) {
+    throw new Error(`ไม่สามารถลบหน่วยนับ "${unitName}" ได้ เนื่องจากมีสินค้าใช้งานอยู่ ${activeProducts.length} รายการ (เช่น ${activeProducts[0].name || activeProducts[0].sku})`);
+  }
+
+  const deleted = deleteRows(SHEETS.UNITS, r => r.unitId === unitId);
+  logAudit(sessionUser.userId, 'DELETE_UNIT', 'Units', { unitId, unitName, deleted });
+
+  return { ok: true, message: 'ลบหน่วยนับสำเร็จ' };
 }

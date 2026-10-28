@@ -186,6 +186,54 @@ function getAllConfigs() {
   return configMap;
 }
 
+const SYSTEM_CONFIG_KEYS = new Set([
+  'RECEIPT_PREFIX', 'RECEIPT_FORMAT', 'RECEIPT_RESET_CYCLE',
+  'STORE_NAME', 'STORE_ADDRESS', 'STORE_PHONE', 'STORE_TAX_ID', 'RECEIPT_FOOTER',
+  'VAT_RATE', 'ALLOW_NEGATIVE_STOCK', 'SESSION_EXPIRE_HOURS',
+  'VOICE_SELECTION', 'VOICE_SOUND_ENABLED', 'VOICE_RATE', 'VOICE_PITCH', 'VOICE_PARTICLE',
+  'DEFAULT_PAY_METHOD', 'CURRENCY_SYMBOL'
+]);
+
+function getConfigsTable() {
+  const rows = getTable(SHEETS.CONFIG).rows;
+  return rows.map(r => ({
+    key: r.key,
+    value: r.value,
+    description: r.description || '',
+    updatedAt: r.updatedAt || '',
+    isSystem: SYSTEM_CONFIG_KEYS.has(r.key)
+  }));
+}
+
+function saveConfigItem(configData, sessionUser) {
+  const key = String(configData.key || '').trim().toUpperCase();
+  const value = configData.value !== undefined ? String(configData.value).trim() : '';
+  const desc = configData.description !== undefined ? String(configData.description).trim() : '';
+
+  if (!key) {
+    throw new Error('กรุณาระบุคีย์ค่าคงที่ (Config Key)');
+  }
+
+  setConfig(key, value, desc);
+  logAudit(sessionUser.userId, 'SAVE_CONFIG_ITEM', 'Config', { key, value, desc });
+
+  return { ok: true, message: `บันทึกค่าคงที่ [${key}] สำเร็จ`, item: { key, value, description: desc } };
+}
+
+function deleteConfigItem(key, sessionUser) {
+  const cleanKey = String(key || '').trim().toUpperCase();
+  if (!cleanKey) throw new Error('กรุณาระบุคีย์ค่าคงที่');
+
+  if (SYSTEM_CONFIG_KEYS.has(cleanKey)) {
+    throw new Error(`ไม่อนุญาตให้ลบคีย์ระบบ [${cleanKey}] ออกจากระบบ`);
+  }
+
+  const deleted = deleteRows(SHEETS.CONFIG, r => r.key === cleanKey);
+  logAudit(sessionUser.userId, 'DELETE_CONFIG_ITEM', 'Config', { key: cleanKey, deleted });
+
+  return { ok: true, message: `ลบคีย์ค่าคงที่ [${cleanKey}] สำเร็จ` };
+}
+
 function saveBatchConfigs(configsObj, sessionUser) {
   for (const k in configsObj) {
     setConfig(k, configsObj[k]);

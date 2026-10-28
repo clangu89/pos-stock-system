@@ -204,9 +204,54 @@ function routeAction(action, token, data, reqContext) {
     return { ok: true, configs: getAllConfigs() };
   }
 
+  if (action === 'admin:configsTable') {
+    requireAuth(token, 'admin', 'config');
+    return { ok: true, configs: getConfigsTable() };
+  }
+
+  if (action === 'admin:saveConfigItem') {
+    requireAuth(token, 'admin', 'config');
+    return saveConfigItem(data, session);
+  }
+
+  if (action === 'admin:deleteConfigItem') {
+    requireAuth(token, 'admin', 'config');
+    return deleteConfigItem(data.key, session);
+  }
+
   if (action === 'admin:saveConfigs') {
     requireAuth(token, 'admin', 'config');
     return saveBatchConfigs(data, session);
+  }
+
+  // --- Admin: Categories CRUD ---
+  if (action === 'admin:categories') {
+    return { ok: true, categories: getCategories() };
+  }
+
+  if (action === 'admin:saveCategory') {
+    requireAuth(token, 'stock', 'edit');
+    return saveCategory(data, session);
+  }
+
+  if (action === 'admin:deleteCategory') {
+    requireAuth(token, 'stock', 'delete');
+    return deleteCategory(data.categoryId, session);
+  }
+
+  // --- Admin: Units CRUD ---
+  if (action === 'admin:units') {
+    return { ok: true, units: getUnits() };
+  }
+
+  if (action === 'admin:saveUnit') {
+    requireAuth(token, 'stock', 'edit');
+    return saveUnit(data, session);
+  }
+
+  if (action === 'admin:deleteUnit') {
+    requireAuth(token, 'stock', 'delete');
+    return deleteUnit(data.unitId, session);
   }
 
   // --- Admin: Receipt Text Customizations ---

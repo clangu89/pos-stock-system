@@ -487,6 +487,9 @@
         <button data-tab="receiptText" class="admin-tab-btn px-4 py-2.5 rounded-xl font-bold text-xs bg-white text-slate-700 hover:bg-slate-100 border border-slate-200">📝 ข้อความใบเสร็จ</button>
         <button data-tab="printer" class="admin-tab-btn px-4 py-2.5 rounded-xl font-bold text-xs bg-white text-slate-700 hover:bg-slate-100 border border-slate-200">🖨️ เครื่องพิมพ์และกระดาษ</button>
         <button data-tab="voice" class="admin-tab-btn px-4 py-2.5 rounded-xl font-bold text-xs bg-white text-slate-700 hover:bg-slate-100 border border-slate-200">🔊 ตั้งค่าเสียงพูดระบบ</button>
+        <button data-tab="constants" class="admin-tab-btn px-4 py-2.5 rounded-xl font-bold text-xs bg-white text-slate-700 hover:bg-slate-100 border border-slate-200">⚙️ ค่าคงที่ระบบ</button>
+        <button data-tab="categories" class="admin-tab-btn px-4 py-2.5 rounded-xl font-bold text-xs bg-white text-slate-700 hover:bg-slate-100 border border-slate-200">🗂️ หมวดสินค้า</button>
+        <button data-tab="units" class="admin-tab-btn px-4 py-2.5 rounded-xl font-bold text-xs bg-white text-slate-700 hover:bg-slate-100 border border-slate-200">📏 หน่วยนับ</button>
         <button data-tab="audit" class="admin-tab-btn px-4 py-2.5 rounded-xl font-bold text-xs bg-white text-slate-700 hover:bg-slate-100 border border-slate-200">📋 Audit Logs</button>
         <button data-tab="api" class="admin-tab-btn px-4 py-2.5 rounded-xl font-bold text-xs bg-white text-slate-700 hover:bg-slate-100 border border-slate-200">🌐 API URL</button>
       </div>
@@ -925,6 +928,179 @@
         </div>
       </div>
 
+      <!-- Tab Content 5.1: System Constants & Configs -->
+      <div id="adminTab_constants" class="admin-tab-content hidden space-y-6">
+        <!-- Core System Settings Card -->
+        <div class="bg-white rounded-3xl p-6 border border-slate-200/80 shadow-sm space-y-5">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-slate-100 gap-2">
+            <div>
+              <h3 class="font-bold text-base text-slate-900">การตั้งค่าระบบหลัก (Core System Settings)</h3>
+              <p class="text-xs text-slate-500">กำหนดพฤติกรรมการขาย ภาษีมูลค่าเพิ่ม อายุเซสชัน และสกุลเงินของระบบ</p>
+            </div>
+            <button onclick="AdminModule.saveCoreConstants()" class="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-xs shadow-md transition flex items-center gap-1.5 self-start sm:self-auto">
+              <span>💾</span>
+              <span>บันทึกการตั้งค่าระบบหลัก</span>
+            </button>
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div>
+              <label class="block text-xs font-bold text-slate-700 mb-1">อัตราภาษีมูลค่าเพิ่ม VAT (%)</label>
+              <div class="relative">
+                <input type="number" id="constVatRateInput" min="0" max="100" step="0.5" value="0"
+                       class="w-full px-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-sm font-bold font-mono">
+                <span class="absolute right-3 top-2.5 text-xs font-bold text-slate-400">%</span>
+              </div>
+              <p class="text-[11px] text-slate-400 mt-1">ใส่ 0 หากไม่คิดภาษี หรือ 7 สำหรับ VAT 7%</p>
+            </div>
+
+            <div>
+              <label class="block text-xs font-bold text-slate-700 mb-1">อายุเซสชันการเข้าสู่ระบบ (ชั่วโมง)</label>
+              <input type="number" id="constSessionHoursInput" min="1" max="168" value="12"
+                     class="w-full px-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-sm font-bold font-mono">
+              <p class="text-[11px] text-slate-400 mt-1">ระบบจะให้ออกจากระบบเมื่อไม่ได้ใช้งาน</p>
+            </div>
+
+            <div>
+              <label class="block text-xs font-bold text-slate-700 mb-1">วิธีชำระเงินเริ่มต้นในหน้าขาย (POS)</label>
+              <select id="constDefaultPayMethodSelect" class="w-full px-3 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-bold">
+                <option value="CASH">💵 เงินสด (Cash)</option>
+                <option value="TRANSFER">🏦 โอนเงิน / PromptPay</option>
+                <option value="QR">📱 สแกน QR Code</option>
+              </select>
+              <p class="text-[11px] text-slate-400 mt-1">ช่องทางการชำระที่เลือกอัตโนมัติเมื่อกดจบการขาย</p>
+            </div>
+
+            <div>
+              <label class="block text-xs font-bold text-slate-700 mb-1">สัญลักษณ์สกุลเงิน (Currency)</label>
+              <input type="text" id="constCurrencySymbolInput" value="฿"
+                     class="w-full px-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-sm font-bold">
+              <p class="text-[11px] text-slate-400 mt-1">เช่น ฿ หรือ THB</p>
+            </div>
+          </div>
+
+          <div class="p-4 rounded-2xl bg-slate-50 border border-slate-200/90 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <div class="font-bold text-xs text-slate-900">อนุญาตให้ขายสินค้าแม้สต๊อกติดลบ (Allow Negative Stock)</div>
+              <div class="text-[11px] text-slate-500">หากเปิดใช้งาน แคชเชียร์จะสามารถขายสินค้าได้แม้จำนวนคงเหลือในระบบเป็น 0 หรือไม่พอ</div>
+            </div>
+            <label class="relative inline-flex items-center cursor-pointer">
+              <input type="checkbox" id="constAllowNegativeCheck" onchange="document.getElementById('constAllowNegativeLabel').textContent = this.checked ? 'เปิดใช้งาน' : 'ปิด'" class="sr-only peer">
+              <div class="w-11 h-6 bg-slate-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+              <span id="constAllowNegativeLabel" class="ml-2 text-xs font-bold text-slate-600">ปิด</span>
+            </label>
+          </div>
+        </div>
+
+        <!-- All Configs Table Card -->
+        <div class="bg-white rounded-3xl p-6 border border-slate-200/80 shadow-sm space-y-4">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-slate-100 gap-3">
+            <div>
+              <h3 class="font-bold text-base text-slate-900">รายการค่าคงที่ระบบทั้งหมด (Config Key-Value)</h3>
+              <p class="text-xs text-slate-500">ดูและแก้ไขค่าคอนฟิกทั้งหมดที่จัดเก็บในชีต Config</p>
+            </div>
+            <div class="flex items-center gap-2">
+              <input type="text" id="constSearchInput" oninput="AdminModule.filterConfigsTable(this.value)"
+                     placeholder="ค้นหา Key หรือคำอธิบาย..."
+                     class="px-3.5 py-1.5 rounded-xl bg-slate-50 border border-slate-200 text-xs w-48 sm:w-64">
+              <button onclick="AdminModule.openConfigModal()" class="px-3.5 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs shadow-sm flex items-center gap-1 whitespace-nowrap">
+                <span>+</span>
+                <span>เพิ่มค่าคงที่</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="overflow-x-auto">
+            <table class="w-full text-left text-xs">
+              <thead>
+                <tr class="border-b border-slate-200 text-slate-400 uppercase font-bold">
+                  <th class="py-2.5 px-3">คีย์ (Key)</th>
+                  <th class="py-2.5 px-3">ค่าปัจจุบัน (Value)</th>
+                  <th class="py-2.5 px-3">คำอธิบาย (Description)</th>
+                  <th class="py-2.5 px-3">อัปเดตล่าสุด</th>
+                  <th class="py-2.5 px-3 text-right">จัดการ</th>
+                </tr>
+              </thead>
+              <tbody id="adminConfigsTableBody">
+                <tr><td colspan="5" class="text-center py-6 text-slate-400">กำลังโหลดรายการค่าคงที่...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tab Content 5.2: Product Categories Management -->
+      <div id="adminTab_categories" class="admin-tab-content hidden bg-white rounded-3xl p-6 border border-slate-200/80 shadow-sm space-y-4">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-slate-100 gap-3">
+          <div>
+            <h3 class="font-bold text-base text-slate-900">หมวดหมู่สินค้าทั้งหมด (Product Categories)</h3>
+            <p class="text-xs text-slate-500">จัดการป้ายสีหมวดหมู่ ลำดับการแสดงผลในหน้าขาย และการจัดหมวดสินค้า</p>
+          </div>
+          <div class="flex items-center gap-2">
+            <input type="text" id="categorySearchInput" oninput="AdminModule.filterCategoriesTable(this.value)"
+                   placeholder="ค้นหาหมวดหมู่..."
+                   class="px-3.5 py-1.5 rounded-xl bg-slate-50 border border-slate-200 text-xs w-48">
+            <button onclick="AdminModule.openCategoryModal()" class="px-3.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-sm flex items-center gap-1 whitespace-nowrap">
+              <span>+</span>
+              <span>เพิ่มหมวดสินค้า</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-xs">
+            <thead>
+              <tr class="border-b border-slate-200 text-slate-400 uppercase font-bold">
+                <th class="py-2.5 px-3 text-center">สี</th>
+                <th class="py-2.5 px-3">รหัสหมวดหมู่</th>
+                <th class="py-2.5 px-3">ชื่อหมวดหมู่</th>
+                <th class="py-2.5 px-3 text-center">ลำดับแสดง</th>
+                <th class="py-2.5 px-3 text-center">สินค้าในหมวด</th>
+                <th class="py-2.5 px-3 text-right">จัดการ</th>
+              </tr>
+            </thead>
+            <tbody id="adminCategoriesTableBody">
+              <tr><td colspan="6" class="text-center py-6 text-slate-400">กำลังโหลดหมวดหมู่สินค้า...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Tab Content 5.3: Units of Measure Management -->
+      <div id="adminTab_units" class="admin-tab-content hidden bg-white rounded-3xl p-6 border border-slate-200/80 shadow-sm space-y-4">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-slate-100 gap-3">
+          <div>
+            <h3 class="font-bold text-base text-slate-900">หน่วยนับสินค้าทั้งหมด (Units of Measure)</h3>
+            <p class="text-xs text-slate-500">จัดการรายชื่อหน่วยนับสินค้า (เช่น ชิ้น, ขวด, กล่อง, แพ็ค, กิโลกรัม)</p>
+          </div>
+          <div class="flex items-center gap-2">
+            <input type="text" id="unitSearchInput" oninput="AdminModule.filterUnitsTable(this.value)"
+                   placeholder="ค้นหาหน่วยนับ..."
+                   class="px-3.5 py-1.5 rounded-xl bg-slate-50 border border-slate-200 text-xs w-48">
+            <button onclick="AdminModule.openUnitModal()" class="px-3.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-sm flex items-center gap-1 whitespace-nowrap">
+              <span>+</span>
+              <span>เพิ่มหน่วยนับ</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-xs">
+            <thead>
+              <tr class="border-b border-slate-200 text-slate-400 uppercase font-bold">
+                <th class="py-2.5 px-3">รหัสหน่วยนับ</th>
+                <th class="py-2.5 px-3">ชื่อหน่วยนับ</th>
+                <th class="py-2.5 px-3 text-center">สินค้าที่ใช้งาน</th>
+                <th class="py-2.5 px-3 text-right">จัดการ</th>
+              </tr>
+            </thead>
+            <tbody id="adminUnitsTableBody">
+              <tr><td colspan="4" class="text-center py-6 text-slate-400">กำลังโหลดหน่วยนับสินค้า...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
       <!-- Tab Content 6: Audit Logs -->
       <div id="adminTab_audit" class="admin-tab-content hidden bg-white rounded-3xl p-5 border border-slate-200/80 shadow-sm space-y-3">
         <h3 class="font-bold text-sm text-slate-900">ประวัติการดำเนินงานในระบบ (Audit Logs)</h3>
@@ -1167,6 +1343,110 @@
       <div class="flex justify-end gap-2 pt-2">
         <button onclick="UI.closeModal('apiUrlModal')" class="px-4 py-2 rounded-xl bg-slate-100 text-xs font-bold">ยกเลิก</button>
         <button onclick="Api.setApiUrl(document.getElementById('quickApiUrlInput').value); UI.closeModal('apiUrlModal');" class="px-5 py-2 rounded-xl bg-blue-600 text-white font-bold text-xs">บันทึก</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 8. Config Edit Modal -->
+  <div id="configEditModal" class="hidden fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-4">
+      <div class="flex items-center justify-between pb-3 border-b border-slate-100">
+        <h3 id="configModalTitle" class="font-bold text-base text-slate-900">ค่าคงที่ระบบ</h3>
+        <button onclick="UI.closeModal('configEditModal')" class="text-slate-400 hover:text-slate-700">✕</button>
+      </div>
+      <div class="space-y-3 text-xs">
+        <div>
+          <label class="block font-bold text-slate-700 mb-1">คีย์ค่าคงที่ (Key)</label>
+          <input type="text" id="configModalKey" class="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 font-mono font-bold uppercase">
+          <p class="text-[11px] text-slate-400 mt-1">ใช้ตัวพิมพ์ใหญ่ภาษาอังกฤษ เช่น CUSTOM_DISCOUNT_NOTE</p>
+        </div>
+        <div>
+          <label class="block font-bold text-slate-700 mb-1">ค่า (Value)</label>
+          <textarea id="configModalValue" rows="3" class="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 font-mono text-xs"></textarea>
+        </div>
+        <div>
+          <label class="block font-bold text-slate-700 mb-1">คำอธิบาย (Description)</label>
+          <input type="text" id="configModalDesc" placeholder="คำอธิบายการใช้งานค่านี้" class="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200">
+        </div>
+        <button onclick="AdminModule.saveConfigModal()" class="w-full py-3 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-xs shadow-md mt-2">
+          บันทึกค่าคงที่
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 9. Category Edit Modal -->
+  <div id="categoryEditModal" class="hidden fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-4">
+      <div class="flex items-center justify-between pb-3 border-b border-slate-100">
+        <h3 id="categoryModalTitle" class="font-bold text-base text-slate-900">หมวดหมู่สินค้า</h3>
+        <button onclick="UI.closeModal('categoryEditModal')" class="text-slate-400 hover:text-slate-700">✕</button>
+      </div>
+      <div class="space-y-3 text-xs">
+        <div>
+          <label class="block font-bold text-slate-700 mb-1">รหัสหมวดหมู่ (Category ID)</label>
+          <input type="text" id="categoryModalId" placeholder="เว้นว่างเพื่อให้ระบบสุ่มรหัสให้อัตโนมัติ"
+                 class="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 font-mono font-bold uppercase">
+        </div>
+        <div>
+          <label class="block font-bold text-slate-700 mb-1">ชื่อหมวดหมู่สินค้า</label>
+          <input type="text" id="categoryModalName" placeholder="เช่น เครื่องดื่ม, เบเกอรี่, เครื่องเขียน"
+                 class="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 font-bold">
+        </div>
+        <div>
+          <label class="block font-bold text-slate-700 mb-1">สีประจำหมวดหมู่</label>
+          <div class="flex items-center gap-2">
+            <input type="color" id="categoryModalColor" value="#3498DB"
+                   onchange="document.getElementById('categoryModalColorHex').value = this.value"
+                   class="w-10 h-10 p-0.5 rounded-xl border border-slate-200 cursor-pointer">
+            <input type="text" id="categoryModalColorHex" value="#3498DB"
+                   onchange="document.getElementById('categoryModalColor').value = this.value"
+                   class="w-24 px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 font-mono font-bold text-xs uppercase">
+            <div class="flex items-center gap-1 overflow-x-auto">
+              <button type="button" onclick="AdminModule.setCategoryModalColor('#3498DB')" class="w-6 h-6 rounded-full bg-[#3498DB] shadow-xs"></button>
+              <button type="button" onclick="AdminModule.setCategoryModalColor('#2ECC71')" class="w-6 h-6 rounded-full bg-[#2ECC71] shadow-xs"></button>
+              <button type="button" onclick="AdminModule.setCategoryModalColor('#E67E22')" class="w-6 h-6 rounded-full bg-[#E67E22] shadow-xs"></button>
+              <button type="button" onclick="AdminModule.setCategoryModalColor('#9B59B6')" class="w-6 h-6 rounded-full bg-[#9B59B6] shadow-xs"></button>
+              <button type="button" onclick="AdminModule.setCategoryModalColor('#E74C3C')" class="w-6 h-6 rounded-full bg-[#E74C3C] shadow-xs"></button>
+              <button type="button" onclick="AdminModule.setCategoryModalColor('#F1C40F')" class="w-6 h-6 rounded-full bg-[#F1C40F] shadow-xs"></button>
+              <button type="button" onclick="AdminModule.setCategoryModalColor('#1ABC9C')" class="w-6 h-6 rounded-full bg-[#1ABC9C] shadow-xs"></button>
+              <button type="button" onclick="AdminModule.setCategoryModalColor('#34495E')" class="w-6 h-6 rounded-full bg-[#34495E] shadow-xs"></button>
+            </div>
+          </div>
+        </div>
+        <div>
+          <label class="block font-bold text-slate-700 mb-1">ลำดับการแสดงผลในหน้าขาย</label>
+          <input type="number" id="categoryModalSortOrder" min="1" value="1"
+                 class="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 font-bold text-center">
+        </div>
+        <button onclick="AdminModule.saveCategoryModal()" class="w-full py-3 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-xs shadow-md mt-2">
+          บันทึกหมวดหมู่สินค้า
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 10. Unit Edit Modal -->
+  <div id="unitEditModal" class="hidden fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-white rounded-3xl max-w-sm w-full p-6 shadow-2xl border border-slate-200 space-y-4">
+      <div class="flex items-center justify-between pb-3 border-b border-slate-100">
+        <h3 id="unitModalTitle" class="font-bold text-base text-slate-900">หน่วยนับสินค้า</h3>
+        <button onclick="UI.closeModal('unitEditModal')" class="text-slate-400 hover:text-slate-700">✕</button>
+      </div>
+      <div class="space-y-3 text-xs">
+        <div>
+          <label class="block font-bold text-slate-700 mb-1">รหัสหน่วยนับ (Unit ID)</label>
+          <input type="text" id="unitModalId" placeholder="เว้นว่างเพื่อให้ระบบสุ่มรหัสให้อัตโนมัติ"
+                 class="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 font-mono font-bold uppercase">
+        </div>
+        <div>
+          <label class="block font-bold text-slate-700 mb-1">ชื่อหน่วยนับ</label>
+          <input type="text" id="unitModalName" placeholder="เช่น ชิ้น, ขวด, กล่อง, แพ็ค, กิโลกรัม"
+                 class="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 font-bold">
+        </div>
+        <button onclick="AdminModule.saveUnitModal()" class="w-full py-3 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-xs shadow-md mt-2">
+          บันทึกหน่วยนับ
+        </button>
       </div>
     </div>
   </div>
