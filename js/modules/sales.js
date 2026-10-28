@@ -10,6 +10,8 @@ const SalesModule = {
   selectedCategory: 'ALL',
   searchQuery: '',
   activeBranchId: 'B01',
+  receiptStoreInfo: null,
+  isSubmittingPayment: false,
   currentSuggestions: [],
   activeSuggestionIndex: -1,
   isDropdownOpen: false,
@@ -31,6 +33,9 @@ const SalesModule = {
     if (res && res.ok) {
       this.products = res.products || [];
       this.categories = res.categories || [];
+      if (res.receiptTexts) {
+        this.receiptStoreInfo = res.receiptTexts;
+      }
       if (res.printProfiles) {
         PrintManager.init(res.printProfiles);
       }
@@ -39,6 +44,10 @@ const SalesModule = {
       this.renderBillTabs();
       this.renderCart();
     }
+  },
+
+  generateClientTxnId() {
+    return 'TXN_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 10);
   },
 
   loadDraftBills() {
@@ -51,9 +60,30 @@ const SalesModule = {
       this.bills = [];
     }
 
-    if (!this.bills || this.bills.length === 0) {
+    if (!Array.isArray(this.bills) || this.bills.length === 0) {
       this.bills = [this.createNewBillObject(1)];
       this.activeBillIndex = 0;
+      this.saveDraftBills();
+      return;
+    }
+
+    // ล้าง clientTxnId ค้างจากเวอร์ชันเก่า (ไม่มี txnSchema: 2) หรือบิลว่าง เพื่อให้ทุกบิลมีรหัสธุรกรรมใหม่เสมอ
+    let migrated = false;
+    this.bills.forEach((b, idx) => {
+      if (!b || typeof b !== 'object') {
+        this.bills[idx] = this.createNewBillObject(idx + 1);
+        migrated = true;
+        return;
+      }
+      if (!Array.isArray(b.items)) b.items = [];
+      if (b.txnSchema !== 2 || !b.clientTxnId || b.items.length === 0) {
+        b.clientTxnId = this.generateClientTxnId();
+        b.txnSchema = 2;
+        migrated = true;
+      }
+    });
+    if (migrated) {
+      this.saveDraftBills();
     }
   },
 
@@ -65,17 +95,14 @@ const SalesModule = {
 
   createNewBillObject(billNum) {
     return {
-      id: 'bill_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
+      id: 'bill_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
       title: `บิลที่ ${billNum || this.bills.length + 1}`,
       items: [],
       discount: 0,
       note: '',
-      clientTxnId: 'TXN_' + UtilitiesRandom()
+      clientTxnId: this.generateClientTxnId(),
+      txnSchema: 2
     };
-
-    function UtilitiesRandom() {
-      return Date.now().toString(36) + Math.random().toString(36).substr(2, 6);
-    }
   },
 
   getActiveBill() {
@@ -108,9 +135,9 @@ const SalesModule = {
   closeBill(index, e) {
     if (e) e.stopPropagation();
     if (this.bills.length <= 1) {
-      // Just clear current bill items
-      this.bills[0].items = [];
-      this.bills[0].discount = 0;
+      // สร้างบิลที่ 1 ใหม่ทั้งก้อนเพื่อให้ได้ id และ clientTxnId ใหม่เสมอ (ป้องกันการส่ง clientTxnId บิลเก่าซ้ำ)
+      this.bills = [this.createNewBillObject(1)];
+      this.activeBillIndex = 0;
       this.saveDraftBills();
       this.renderBillTabs();
       this.renderCart();
@@ -601,6 +628,8 @@ const SalesModule = {
       });
     }
 
+    bill.clientTxnId = this.generateClientTxnId();
+    bill.txnSchema = 2;
     this.saveDraftBills();
     this.renderBillTabs();
     this.renderCart();
@@ -627,6 +656,8 @@ const SalesModule = {
 
     item.qty = newQty;
     item.amount = Math.max(0, (item.qty * item.unitPrice) - item.discount);
+    bill.clientTxnId = this.generateClientTxnId();
+    bill.txnSchema = 2;
     this.saveDraftBills();
     this.renderBillTabs();
     this.renderCart();
@@ -635,6 +666,8 @@ const SalesModule = {
   removeItemFromCart(sku) {
     const bill = this.getActiveBill();
     bill.items = bill.items.filter(i => i.sku !== sku);
+    bill.clientTxnId = this.generateClientTxnId();
+    bill.txnSchema = 2;
     this.saveDraftBills();
     this.renderBillTabs();
     this.renderCart();
@@ -643,6 +676,8 @@ const SalesModule = {
   setBillDiscount(amount) {
     const bill = this.getActiveBill();
     bill.discount = Math.max(0, parseFloat(amount) || 0);
+    bill.clientTxnId = this.generateClientTxnId();
+    bill.txnSchema = 2;
     this.saveDraftBills();
     this.renderCart();
   },
@@ -651,6 +686,8 @@ const SalesModule = {
     const bill = this.getActiveBill();
     bill.items = [];
     bill.discount = 0;
+    bill.clientTxnId = this.generateClientTxnId();
+    bill.txnSchema = 2;
     this.saveDraftBills();
     this.renderBillTabs();
     this.renderCart();
@@ -860,7 +897,7 @@ const SalesModule = {
 
     document.getElementById('payModalGrandTotal').textContent = `฿${grandTotal.toFixed(2)}`;
     document.getElementById('payReceivedInput').value = grandTotal;
-    this.calculateChange();
+    this.onPayMethodChange();
 
     // Voice announcement for bill total
     SoundManager.announceTotal(grandTotal);
@@ -873,6 +910,17 @@ const SalesModule = {
         input.select();
       }
     }, 150);
+  },
+
+  onPayMethodChange() {
+    const payMethod = document.querySelector('input[name="payMethodOption"]:checked')?.value || 'CASH';
+    const bill = this.getActiveBill();
+    const grandTotal = Math.max(0, bill.items.reduce((s, it) => s + it.amount, 0) - (bill.discount || 0));
+    const input = document.getElementById('payReceivedInput');
+    if (payMethod !== 'CASH' && input) {
+      input.value = grandTotal;
+    }
+    this.calculateChange();
   },
 
   setQuickCash(amount) {
@@ -907,6 +955,8 @@ const SalesModule = {
   },
 
   async confirmPayment() {
+    if (this.isSubmittingPayment) return;
+
     const bill = this.getActiveBill();
     const calc = this.calculateChange();
     if (calc.received < calc.grandTotal) {
@@ -915,8 +965,15 @@ const SalesModule = {
       return;
     }
 
+    if (!bill.clientTxnId || bill.txnSchema !== 2) {
+      bill.clientTxnId = this.generateClientTxnId();
+      bill.txnSchema = 2;
+      this.saveDraftBills();
+    }
+
     const payMethod = document.querySelector('input[name="payMethodOption"]:checked')?.value || 'CASH';
 
+    this.isSubmittingPayment = true;
     UI.closeModal('paymentModal');
     UI.showLoading('กำลังบันทึกรายการขายและตัดสต๊อก...');
 
@@ -930,34 +987,44 @@ const SalesModule = {
       clientTxnId: bill.clientTxnId
     };
 
-    const res = await Api.call('sales:checkout', payload);
-    UI.hideLoading();
+    let res;
+    try {
+      res = await Api.call('sales:checkout', payload);
+    } finally {
+      this.isSubmittingPayment = false;
+      UI.hideLoading();
+    }
 
     if (res && res.ok && res.sale) {
+      const receiptNo = res.receiptNo || res.sale.receiptNo || '-';
+      const parsedChange = parseFloat(res.sale.change);
+      const actualChange = isNaN(parsedChange) ? calc.change : parsedChange;
+      const storeInfo = res.store || this.receiptStoreInfo || {};
+
       // 1. Voice Announcement
       SoundManager.playSuccessChime();
       setTimeout(() => {
-        SoundManager.announceChange(calc.change);
+        SoundManager.announceChange(actualChange);
       }, 400);
 
-      // 2. Clear completed bill or reset
+      // 2. Clear completed bill or reset (พร้อมสร้าง clientTxnId ใหม่สำหรับบิลถัดไปทันที)
       this.closeBill(this.activeBillIndex);
 
-      UI.showToast(`ชำระเงินสำเร็จ! ใบเสร็จเลขที่: ${res.receiptNo}`, 'success');
+      UI.showToast(`ชำระเงินสำเร็จ! ใบเสร็จเลขที่: ${receiptNo}`, 'success');
 
       // 3. Auto Print Receipt (or preview)
       const prof = PrintManager.activeProfile;
       if (prof && (prof.autoPrint === true || String(prof.autoPrint) === 'true')) {
-        PrintManager.printReceiptDirect(res.sale, res.items, res.store, prof);
+        PrintManager.printReceiptDirect(res.sale, res.items, storeInfo, prof);
       } else {
-        PrintManager.previewReceiptModal(res.sale, res.items, res.store, prof);
+        PrintManager.previewReceiptModal(res.sale, res.items, storeInfo, prof);
       }
 
       // 4. Background refresh stock balances
       this.refreshProductsStockSilent();
     } else {
       SoundManager.playErrorTone();
-      UI.showToast(`ชำระเงินไม่สำเร็จ: ${res.error || res.message}`, 'error');
+      UI.showToast(`ชำระเงินไม่สำเร็จ: ${(res && (res.error || res.message)) || 'ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์'}`, 'error');
     }
   },
 
