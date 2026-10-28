@@ -64,31 +64,27 @@
 
 ---
 
+## ข้อมูลการเชื่อมต่อระบบที่ Deploy แล้ว
+
+- **GitHub Pages Frontend**: [https://clangu89.github.io/pos-stock-system/](https://clangu89.github.io/pos-stock-system/)
+- **GitHub Repository**: [https://github.com/clangu89/pos-stock-system](https://github.com/clangu89/pos-stock-system)
+- **Google Spreadsheet Database**: [https://docs.google.com/spreadsheets/d/1YEVUjb74z9BmGPalcmOS7mfX9TzvUGx0sXKFfzgiYJc/edit](https://docs.google.com/spreadsheets/d/1YEVUjb74z9BmGPalcmOS7mfX9TzvUGx0sXKFfzgiYJc/edit)
+- **Google Apps Script Editor**: [https://script.google.com/d/10rMmH_47aiOvXCzDPBf2ih4z3-cDrf8URBuycGHiyiwV8i_TGNKWCcV4/edit](https://script.google.com/d/10rMmH_47aiOvXCzDPBf2ih4z3-cDrf8URBuycGHiyiwV8i_TGNKWCcV4/edit)
+- **Web App API Endpoint**: `https://script.google.com/macros/s/AKfycbzzUM7ML5EeQbJXa-CxiZCy6-nhtM6ib8MC70t9Ig-PuUlTUPxCe4C4lqYXYcIQBrmK/exec` (ตั้งค่าใน `frontend/config.js` เรียบร้อยแล้ว)
+
+---
+
 ## ขั้นตอนการติดตั้งและเชื่อมต่อ
 
-### ขั้นตอนที่ 1: ติดตั้ง Google Apps Script (Backend)
-1. เปิด Google Drive ของคุณ และสร้าง **Google Spreadsheet** ใหม่ ตั้งชื่อเช่น `POS & Stock DB`
-2. ไปที่เมนู **ส่วนขยาย (Extensions)** -> **Apps Script**
-3. คัดลอกโค้ดจากโฟลเดอร์ `backend/` ในโปรเจกต์นี้ไปใส่ใน Apps Script:
-   - `Db.gs`
-   - `Auth.gs`
-   - `Setup.gs`
-   - `Receipt.gs`
-   - `Products.gs`
-   - `Stock.gs`
-   - `Sales.gs`
-   - `Reports.gs`
-   - `Admin.gs`
-   - `Code.gs`
-   - `appsscript.json` (ตั้ง timezone เป็น `Asia/Bangkok`)
-4. ในหน้าต่าง Apps Script เลือกฟังก์ชัน **`setupDatabase`** แล้วกดปุ่ม **Run (เรียกใช้)** 1 ครั้ง
-   - กดยอมรับสิทธิ์การเข้าถึง (Authorization)
-   - ระบบจะสร้างชีตทั้งหมดและข้อมูลเริ่มต้น (Admin, Cashier, สินค้าตัวอย่าง, การตั้งค่า) โดยอัตโนมัติ
-5. กดปุ่ม **Deploy (ทำให้ใช้งานได้)** -> **New deployment (การทำให้ใช้งานได้ใหม่)**:
-   - เลือกประเภท: **Web app**
-   - Execute as: **Me (ฉัน)**
-   - Who has access: **Anyone (ทุกคน)**
-   - กด **Deploy** แล้วคัดลอก **Web app URL** (ลงท้ายด้วย `/exec`)
+### ขั้นตอนที่ 1: ให้สิทธิ์ Apps Script ครั้งแรก (Authorization)
+1. เปิดลิงก์ **[Google Apps Script Editor](https://script.google.com/d/10rMmH_47aiOvXCzDPBf2ih4z3-cDrf8URBuycGHiyiwV8i_TGNKWCcV4/edit)** (ล็อกอินด้วยบัญชี Google ของคุณ)
+2. ที่แถบเมนูด้านบน เลือกฟังก์ชัน **`setupDatabase`** แล้วกดปุ่ม **เรียกใช้ (Run)**
+3. จะมีหน้าต่างขึ้นมาแจ้งว่า *"จำเป็นต้องมีการให้สิทธิ์ (Authorization Required)"*:
+   - กดปุ่ม **ตรวจสอบสิทธิ์ (Review Permissions)**
+   - เลือกบัญชี Google ของคุณ
+   - กด **ขั้นสูง (Advanced)** -> กด **ไปที่ POS Stock Script (ไม่ปลอดภัย)**
+   - กด **อนุญาต (Allow)**
+4. เมื่อฟังก์ชัน `setupDatabase` ทำงานเสร็จสิ้น ตารางทั้งหมด (Users, Products, StockBalance, Sales ฯลฯ) จะถูกสร้างลงใน **[Google Sheet](https://docs.google.com/spreadsheets/d/1YEVUjb74z9BmGPalcmOS7mfX9TzvUGx0sXKFfzgiYJc/edit)** ทันที และระบบเว็บจะพร้อมใช้งาน 100%!
 
 ---
 
