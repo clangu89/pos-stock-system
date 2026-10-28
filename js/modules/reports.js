@@ -12,11 +12,20 @@ const ReportsModule = {
     await this.generateReport();
   },
 
+  // วันที่ท้องถิ่น (yyyy-MM-dd) — ห้ามใช้ toISOString() เพราะเป็นเวลา UTC ทำให้ช่วง 00:00-06:59 น. (เวลาไทย)
+  // วันที่สิ้นสุดกลายเป็น "เมื่อวาน" และยอดขายวันนี้หายจากรายงาน
+  formatLocalDate(d) {
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
+  },
+
   setDefaultDates() {
     const today = new Date();
     const past = new Date(Date.now() - 30 * 86400000);
 
-    const format = d => d.toISOString().split('T')[0];
+    const format = d => this.formatLocalDate(d);
     const startEl = document.getElementById('reportStartDate');
     const endEl = document.getElementById('reportEndDate');
     if (startEl && !startEl.value) startEl.value = format(past);
@@ -72,6 +81,22 @@ const ReportsModule = {
     document.getElementById('repTotalProfit').textContent = `฿${(sum.totalProfit || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}`;
     document.getElementById('repTotalBills').textContent = `${(sum.totalBills || 0).toLocaleString()} บิล`;
     document.getElementById('repCashRatio').textContent = `เงินสด: ฿${(sum.cashSales || 0).toFixed(0)} | โอน: ฿${(sum.transferSales || 0).toFixed(0)}`;
+
+    const voidEl = document.getElementById('repVoidInfo');
+    if (voidEl) {
+      voidEl.textContent = `ยกเลิก: ${(sum.voidBills || 0).toLocaleString()} บิล (฿${(sum.voidAmount || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })})`;
+    }
+
+    const scopeEl = document.getElementById('repScopeInfo');
+    if (scopeEl) {
+      const select = document.getElementById('reportBranchSelect');
+      const branchLabel = select && select.value
+        ? (select.options[select.selectedIndex]?.textContent.trim() || select.value)
+        : 'ทุกสาขา';
+      const s = document.getElementById('reportStartDate')?.value || '';
+      const e = document.getElementById('reportEndDate')?.value || '';
+      scopeEl.textContent = `${branchLabel} | ${s} ถึง ${e} (ไม่รวมบิลที่ยกเลิก)`;
+    }
   },
 
   renderDailyTable(list = []) {

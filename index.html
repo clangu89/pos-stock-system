@@ -444,6 +444,8 @@
           <div class="text-xs font-bold text-slate-400 mb-1">ยอดขายรวม (Total Sales)</div>
           <div id="repTotalSales" class="text-2xl font-black text-blue-600 font-mono">฿0.00</div>
           <div id="repCashRatio" class="text-[11px] text-slate-500 mt-2 truncate">เงินสด: ฿0 | โอน: ฿0</div>
+          <div id="repVoidInfo" class="text-[11px] text-rose-500 mt-0.5 truncate">ยกเลิก: 0 บิล (฿0.00)</div>
+          <div id="repScopeInfo" class="text-[10px] text-slate-400 mt-0.5 truncate">ขอบเขต: ทุกสาขา (ไม่รวมบิลที่ยกเลิก)</div>
         </div>
         <div class="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-sm">
           <div class="text-xs font-bold text-slate-400 mb-1">กำไรขั้นต้นโดยประมาณ</div>
@@ -829,96 +831,7 @@
 
             <!-- Receipt Container -->
             <div class="bg-slate-200/80 p-4 rounded-3xl border border-slate-300/60 shadow-inner flex justify-center">
-              <div id="receiptLivePreviewCard" class="bg-white p-4 shadow-xl rounded-sm text-black font-sans border-t-8 border-slate-800 transition-all duration-200"
-                   style="width: 260px; font-size: 11px; line-height: 1.35;">
-                <!-- Header -->
-                <div class="text-center space-y-0.5">
-                  <div id="prevStoreName" class="font-black text-sm text-slate-900 leading-tight">POS Store</div>
-                  <div id="prevSubHeader" class="text-[10px] text-slate-600">ยินดีต้อนรับ / Welcome</div>
-                  <div id="prevAddress" class="text-[10px] text-slate-600">123/45 ถ.สุขุมวิท กทม.</div>
-                  <div id="prevPhone" class="text-[10px] text-slate-600">โทร: 02-123-4567</div>
-                  <div id="prevTaxId" class="text-[10px] text-slate-600">เลขผู้เสียภาษี: 0105500000000</div>
-                  <div id="prevTitle" class="font-bold text-[11px] pt-1 text-slate-900">ใบเสร็จรับเงิน / ใบกำกับภาษีอย่างย่อ</div>
-                </div>
-
-                <div class="border-t border-dashed border-slate-400 my-2"></div>
-
-                <!-- Meta -->
-                <div class="text-[10px] space-y-0.5">
-                  <div class="flex justify-between">
-                    <span>เลขที่: <b class="font-mono">RCMAIN-20261028-00001</b></span>
-                    <span id="prevBranch">สาขา: MAIN</span>
-                  </div>
-                  <div class="flex justify-between">
-                    <span>วันที่: 28/10/2026 14:30</span>
-                    <span id="prevCashier">แคชเชียร์: admin</span>
-                  </div>
-                </div>
-
-                <div class="border-t border-dashed border-slate-400 my-2"></div>
-
-                <!-- Items -->
-                <table class="w-full text-[10px] border-collapse">
-                  <thead>
-                    <tr class="border-b border-dashed border-slate-400 font-bold">
-                      <th class="text-left pb-1">รายการ</th>
-                      <th class="text-right pb-1">ลด</th>
-                      <th class="text-right pb-1">รวม</th>
-                    </tr>
-                  </thead>
-                  <tbody class="divide-y divide-dotted divide-slate-200">
-                    <tr>
-                      <td colspan="3" class="font-semibold pt-1">น้ำดื่มสิงห์ 600 มล.</td>
-                    </tr>
-                    <tr>
-                      <td class="pl-1 text-slate-500">2 x 10.00</td>
-                      <td class="text-right text-red-600">-</td>
-                      <td class="text-right font-semibold">20.00</td>
-                    </tr>
-                    <tr>
-                      <td colspan="3" class="font-semibold pt-1">ข้าวผัดกระเพราไก่ไข่ดาว</td>
-                    </tr>
-                    <tr>
-                      <td class="pl-1 text-slate-500">1 x 55.00</td>
-                      <td class="text-right text-red-600">-</td>
-                      <td class="text-right font-semibold">55.00</td>
-                    </tr>
-                  </tbody>
-                </table>
-
-                <div class="border-t border-dashed border-slate-400 my-2"></div>
-
-                <!-- Totals -->
-                <div class="text-[10px] space-y-0.5">
-                  <div class="flex justify-between">
-                    <span>รวมเป็นเงิน:</span>
-                    <span>75.00</span>
-                  </div>
-                  <div class="flex justify-between font-bold text-xs pt-1 border-t border-b border-slate-800 my-1 py-1">
-                    <span>ยอดชำระสุทธิ:</span>
-                    <span>75.00 บาท</span>
-                  </div>
-                  <div class="flex justify-between">
-                    <span>วิธีชำระ:</span>
-                    <span>เงินสด (Cash)</span>
-                  </div>
-                  <div class="flex justify-between">
-                    <span>รับเงินมา:</span>
-                    <span>100.00</span>
-                  </div>
-                  <div class="flex justify-between font-bold">
-                    <span>เงินทอน:</span>
-                    <span>25.00 บาท</span>
-                  </div>
-                </div>
-
-                <div class="border-t border-dashed border-slate-400 my-2"></div>
-
-                <!-- Footer -->
-                <div class="text-center text-[10px] text-slate-700 pt-1 leading-relaxed">
-                  <div id="prevFooter">ขอบคุณที่ใช้บริการ / Thank you!<br>สินค้าซื้อแล้วไม่รับเปลี่ยนคืน</div>
-                </div>
-              </div>
+              <div id="receiptLivePreviewCard" class="bg-white shadow-xl rounded-sm border-t-8 border-slate-800 transition-all duration-200 overflow-hidden" style="width: 260px; max-width: 100%;"></div>
             </div>
           </div>
 
@@ -1402,7 +1315,7 @@
       <div id="receiptPreviewModalContent" class="flex-1 overflow-y-auto p-2 border border-slate-100 rounded-xl bg-slate-50"></div>
       <div class="grid grid-cols-2 gap-2 pt-2">
         <button onclick="UI.closeModal('receiptPreviewModal')" class="py-2.5 rounded-xl bg-slate-100 text-xs font-bold">ปิด</button>
-        <button onclick="window.print()" class="py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-sm">สั่งพิมพ์</button>
+        <button onclick="PrintManager.printLastPreview()" class="py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-sm">สั่งพิมพ์</button>
       </div>
     </div>
   </div>
