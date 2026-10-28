@@ -621,3 +621,68 @@ test('GAS Mock: Checkout rounds money, enforces payment rules, and reports inclu
   assert.strictEqual(rep.summary.grossBills, 4);
   assert.strictEqual(rep.summary.totalSales, 0.3, 'ยอดสุทธิ = 0.3 + 0 + 0 (ไม่รวมบิลที่ยกเลิก)');
 });
+
+test('GAS Mock: Smart idempotency distinguishes true network retry vs stale clientTxnId across new bills', () => {
+  const { sandbox } = createGasMockContext();
+  sandbox.setupDatabase();
+  const admin = sandbox.loginUser('admin', 'Admin1234!');
+
+  // ตั้งชื่อร้านเฉพาะเพื่อยืนยันว่าทั้งบิลปกติและบิลซ้ำส่ง store กลับมาครบถ้วน (ไม่หลุดเป็น POS Store)
+  sandbox.saveReceiptTexts({
+    scopeId: 'DEFAULT', branchId: '*',
+    receiptTitle: 'ใบเสร็จรับเงิน', storeName: 'ร้าน ศศิธร อะไหล่ แอร์', subHeader: 'ยินดีต้อนรับ',
+    address: 'กทม.', phone: '02-123-4567', taxId: '0105500000000', footer: 'ขอบคุณที่ใช้บริการ',
+    showAddress: false, showPhone: false, showTaxId: false, showCashier: true, showBranch: false
+  }, admin.user);
+
+  // บิลที่ 1: 65 บาท เงินสด ด้วย clientTxnId = TXN_STALE_01
+  const bill1Payload = {
+    branchId: 'B01',
+    items: [
+      { sku: 'P1001', name: 'น้ำดื่มสิงห์ 600 มล.', qty: 1, unitPrice: 10, discount: 0 },
+      { sku: 'P1004', name: 'ข้าวผัดกระเพราไก่ไข่ดาว', qty: 1, unitPrice: 55, discount: 0 }
+    ],
+    discount: 0,
+    received: 100,
+    payMethod: 'CASH',
+    clientTxnId: 'TXN_STALE_01'
+  };
+  const res1 = sandbox.checkoutSale(bill1Payload, admin.user);
+  assert.strictEqual(res1.ok, true);
+  assert.strictEqual(res1.sale.total, 65);
+  assert.strictEqual(res1.store.storeName, 'ร้าน ศศิธร อะไหล่ แอร์');
+
+  // กรณี A: เน็ตสะดุดส่ง payload เดิมเป๊ะซ้ำทันที -> ต้องได้ isDuplicate: true พร้อม receiptNo และ store ครบ!
+  const retryRes = sandbox.checkoutSale(bill1Payload, admin.user);
+  assert.strictEqual(retryRes.isDuplicate, true);
+  assert.strictEqual(retryRes.receiptNo, res1.receiptNo, 'ต้องมี receiptNo ใน response เสมอ');
+  assert.ok(retryRes.store, 'ต้องแนบ store มาด้วยแม้เป็น isDuplicate');
+  assert.strictEqual(retryRes.store.storeName, 'ร้าน ศศิธร อะไหล่ แอร์');
+  assert.strictEqual(retryRes.store.showBranch, false);
+
+  // กรณี B: บิลใหม่ยอด 120 บาท โอน/QR แต่ติด clientTxnId เดิมค้างมาจาก localStorage!
+  // ต้องไม่คืนบิลเก่า 65 บาท! ต้องออกเลขที่ใบเสร็จใหม่ ยอด 120 โอน/QR และตัดสต๊อกจริง!
+  const bill2Payload = {
+    branchId: 'B01',
+    items: [
+      { sku: 'P1001', name: 'น้ำดื่มสิงห์ 600 มล.', qty: 12, unitPrice: 10, discount: 0 }
+    ],
+    discount: 0,
+    received: 120,
+    payMethod: 'TRANSFER',
+    clientTxnId: 'TXN_STALE_01' // จงใจส่งรหัสซ้ำกับบิล 65 บาท!
+  };
+  const res2 = sandbox.checkoutSale(bill2Payload, admin.user);
+  assert.strictEqual(res2.ok, true);
+  assert.strictEqual( Boolean(res2.isDuplicate), false, 'ต้องบันทึกเป็นบิลใหม่ ไม่ใช่บิลซ้ำ');
+  assert.notStrictEqual(res2.receiptNo, res1.receiptNo, 'ต้องได้เลขที่ใบเสร็จใบใหม่');
+  assert.strictEqual(res2.sale.total, 120, 'ยอดสุทธิใบเสร็จต้องเป็น 120 บาทตรงตามที่ชำระ');
+  assert.strictEqual(res2.sale.payMethod, 'TRANSFER');
+  assert.strictEqual(res2.sale.received, 120);
+  assert.strictEqual(res2.sale.change, 0);
+  assert.strictEqual(res2.store.storeName, 'ร้าน ศศิธร อะไหล่ แอร์');
+
+  // สต๊อก P1001 เดิม 100 -> ขายบิลแรก 1 ชิ้น (retry ไม่ตัดซ้ำ) -> ขายบิลสอง 12 ชิ้น = คงเหลือ 87 ชิ้น
+  const p1001 = sandbox.getProductsWithStock('B01').find(p => p.sku === 'P1001');
+  assert.strictEqual(p1001.stockQty, 87);
+});

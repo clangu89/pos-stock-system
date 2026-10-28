@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>ระบบขายสินค้าและสต๊อก (POS & Stock Management)</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <link rel="stylesheet" href="css/app.css">
-  <link rel="stylesheet" href="css/receipt.css">
+  <link rel="stylesheet" href="css/app.css?v=20261028-v8">
+  <link rel="stylesheet" href="css/receipt.css?v=20261028-v8">
 </head>
 <body class="bg-slate-50 text-slate-900 min-h-screen flex flex-col font-sans antialiased select-none">
 
@@ -1242,10 +1242,10 @@
       <!-- Payment Method -->
       <div class="grid grid-cols-2 gap-2 text-xs font-bold">
         <label class="flex items-center justify-center gap-2 p-2.5 rounded-xl border border-slate-200 hover:bg-slate-50 cursor-pointer">
-          <input type="radio" name="payMethodOption" value="CASH" checked> 💵 เงินสด
+          <input type="radio" name="payMethodOption" value="CASH" onchange="SalesModule.onPayMethodChange()" checked> 💵 เงินสด
         </label>
         <label class="flex items-center justify-center gap-2 p-2.5 rounded-xl border border-slate-200 hover:bg-slate-50 cursor-pointer">
-          <input type="radio" name="payMethodOption" value="TRANSFER"> 📱 โอน / QR Code
+          <input type="radio" name="payMethodOption" value="TRANSFER" onchange="SalesModule.onPayMethodChange()"> 📱 โอน / QR Code
         </label>
       </div>
 
@@ -1651,19 +1651,19 @@
   <iframe id="receiptPrintIframe" class="hidden"></iframe>
 
   <!-- ================= SCRIPTS ================= -->
-  <script src="config.js"></script>
-  <script src="js/numberToThai.js"></script>
-  <script src="js/sound.js"></script>
-  <script src="js/print.js"></script>
-  <script src="js/ui.js"></script>
-  <script src="js/api.js"></script>
-  <script src="js/auth.js"></script>
-  <script src="js/modules/launcher.js"></script>
-  <script src="js/modules/sales.js"></script>
-  <script src="js/modules/stock.js"></script>
-  <script src="js/modules/reports.js"></script>
-  <script src="js/modules/admin.js"></script>
-  <script src="js/router.js"></script>
+  <script src="config.js?v=20261028-v8"></script>
+  <script src="js/numberToThai.js?v=20261028-v8"></script>
+  <script src="js/sound.js?v=20261028-v8"></script>
+  <script src="js/print.js?v=20261028-v8"></script>
+  <script src="js/ui.js?v=20261028-v8"></script>
+  <script src="js/api.js?v=20261028-v8"></script>
+  <script src="js/auth.js?v=20261028-v8"></script>
+  <script src="js/modules/launcher.js?v=20261028-v8"></script>
+  <script src="js/modules/sales.js?v=20261028-v8"></script>
+  <script src="js/modules/stock.js?v=20261028-v8"></script>
+  <script src="js/modules/reports.js?v=20261028-v8"></script>
+  <script src="js/modules/admin.js?v=20261028-v8"></script>
+  <script src="js/router.js?v=20261028-v8"></script>
 
   <script>
     // System Startup

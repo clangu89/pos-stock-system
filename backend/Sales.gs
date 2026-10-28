@@ -10,68 +10,40 @@ function acquireScriptLock_(timeoutMs) {
   return lock;
 }
 
+/**
+ * สร้างลายนิ้วมือรายการสินค้า (sku:qty:unitPrice:discount) เพื่อแยกแยะ
+ * "การส่งซ้ำเพราะเน็ตสะดุด" ออกจาก "บิลใหม่ที่บังเอิญติด clientTxnId ค้างมาจาก localStorage"
+ */
+function buildItemsSignature_(list) {
+  return (list || [])
+    .map(it => {
+      const q = round2_(parseFloat(it.qty) || 0);
+      const p = round2_(parseFloat(it.unitPrice) || 0);
+      const d = round2_(Math.max(0, parseFloat(it.discount) || 0));
+      return `${String(it.sku || '').trim()}:${q}:${p}:${d}`;
+    })
+    .join('|');
+}
+
 function checkoutSale(payload, sessionUser) {
   const lock = acquireScriptLock_(15000);
   try {
     const branchId = payload.branchId || 'B01';
     const items = payload.items || [];
-    const clientTxnId = payload.clientTxnId || '';
+    const clientTxnId = String(payload.clientTxnId || '').trim();
 
     if (items.length === 0) {
       throw new Error('ไม่พบรายการสินค้าในบิล');
     }
 
-    // 1. Idempotency Check
-    if (clientTxnId) {
-      const existingSale = findRow(SHEETS.SALES, r => r.clientTxnId === clientTxnId);
-      if (existingSale) {
-        const saleItems = findRows(SHEETS.SALE_ITEMS, r => r.receiptNo === existingSale.receiptNo);
-        return {
-          ok: true,
-          isDuplicate: true,
-          sale: existingSale,
-          items: saleItems
-        };
-      }
-    }
-
-    // 2. Fetch Branch info
-    const branch = findRow(SHEETS.BRANCHES, r => r.branchId === branchId) || {
-      branchId: branchId,
-      code: 'MAIN',
-      name: 'สำนักงานใหญ่'
-    };
-
-    // 3. Stock Availability Check
-    const allowNegative = getConfig('ALLOW_NEGATIVE_STOCK', 'false') === 'true';
-    const currentBalances = getTable(SHEETS.STOCK_BALANCE).rows;
-    const balanceMap = {};
-    for (let i = 0; i < currentBalances.length; i++) {
-      const r = currentBalances[i];
-      if (r.branchId === branchId) {
-        balanceMap[r.sku] = parseFloat(r.qty) || 0;
-      }
-    }
-
-    // Read current products for cost prices
+    // Read current products for cost prices & item metadata
     const products = getTable(SHEETS.PRODUCTS).rows;
     const productMap = {};
     for (let i = 0; i < products.length; i++) {
       productMap[products[i].sku] = products[i];
     }
 
-    if (!allowNegative) {
-      for (let i = 0; i < items.length; i++) {
-        const it = items[i];
-        const reqQty = parseFloat(it.qty) || 0;
-        const currStock = balanceMap[it.sku] !== undefined ? balanceMap[it.sku] : 0;
-        if (reqQty > currStock) {
-          throw new Error(`สินค้า "${it.name || it.sku}" มีสต๊อกคงเหลือไม่พอ (คงเหลือ ${currStock}, ขอซื้อ ${reqQty})`);
-        }
-      }
-    }
-
-    // 4. Calculate Bill Totals (ปัดเศษเงิน 2 ตำแหน่งทุกขั้น เพื่อให้ยอดในชีต/ใบเสร็จ/รายงานตรงกัน)
+    // 1. Calculate Bill Totals First (เพื่อใช้เทียบความตรงกันใน Idempotency Check ด้วย)
     let subtotal = 0;
     const preparedItems = [];
 
@@ -123,6 +95,67 @@ function checkoutSale(payload, sessionUser) {
     }
     const change = round2_(Math.max(0, received - grandTotal));
 
+    // 2. Smart Idempotency Check (เช็คลายนิ้วมือบิล + ยอด + วิธีชำระ + เวลาไม่เกิน 5 นาที)
+    let effectiveClientTxnId = clientTxnId || ('TXN_SRV_' + Utilities.getUuid().slice(0, 12));
+    if (clientTxnId) {
+      const matchedSales = findRows(SHEETS.SALES, r => String(r.clientTxnId || '') === clientTxnId);
+      const existingSale = matchedSales.length > 0 ? matchedSales[matchedSales.length - 1] : null;
+      if (existingSale) {
+        const saleItems = findRows(SHEETS.SALE_ITEMS, r => r.receiptNo === existingSale.receiptNo);
+        const existingTs = existingSale.ts ? new Date(existingSale.ts).getTime() : 0;
+        const isRecent = existingTs > 0 && Math.abs(Date.now() - existingTs) <= 5 * 60 * 1000;
+        const isSamePayload =
+          existingSale.status !== 'VOID' &&
+          String(existingSale.branchId) === String(branchId) &&
+          String(existingSale.payMethod) === String(payMethod) &&
+          round2_(existingSale.total) === grandTotal &&
+          buildItemsSignature_(saleItems) === buildItemsSignature_(preparedItems);
+
+        if (isRecent && isSamePayload) {
+          return {
+            ok: true,
+            isDuplicate: true,
+            receiptNo: existingSale.receiptNo,
+            sale: existingSale,
+            items: saleItems,
+            store: getReceiptStoreInfo(existingSale.branchId || branchId)
+          };
+        }
+
+        // clientTxnId ชนกับบิลเก่าคนละรายการ/คนละยอด (เช่น ค้างมาจาก localStorage เดิม) -> ออกรหัสใหม่เพื่อให้บันทึกบิลนี้ได้ตามปกติ
+        effectiveClientTxnId = `${clientTxnId}_${Utilities.getUuid().slice(0, 8)}`;
+      }
+    }
+
+    // 3. Fetch Branch info
+    const branch = findRow(SHEETS.BRANCHES, r => r.branchId === branchId) || {
+      branchId: branchId,
+      code: 'MAIN',
+      name: 'สำนักงานใหญ่'
+    };
+
+    // 4. Stock Availability Check
+    const allowNegative = getConfig('ALLOW_NEGATIVE_STOCK', 'false') === 'true';
+    const currentBalances = getTable(SHEETS.STOCK_BALANCE).rows;
+    const balanceMap = {};
+    for (let i = 0; i < currentBalances.length; i++) {
+      const r = currentBalances[i];
+      if (r.branchId === branchId) {
+        balanceMap[r.sku] = parseFloat(r.qty) || 0;
+      }
+    }
+
+    if (!allowNegative) {
+      for (let i = 0; i < items.length; i++) {
+        const it = items[i];
+        const reqQty = parseFloat(it.qty) || 0;
+        const currStock = balanceMap[it.sku] !== undefined ? balanceMap[it.sku] : 0;
+        if (reqQty > currStock) {
+          throw new Error(`สินค้า "${it.name || it.sku}" มีสต๊อกคงเหลือไม่พอ (คงเหลือ ${currStock}, ขอซื้อ ${reqQty})`);
+        }
+      }
+    }
+
     // 5. Generate Receipt Number
     const receiptNo = generateReceiptNo(branch.code || 'MAIN');
     const now = new Date().toISOString();
@@ -146,7 +179,7 @@ function checkoutSale(payload, sessionUser) {
       voidBy: '',
       voidAt: '',
       voidReason: '',
-      clientTxnId: clientTxnId
+      clientTxnId: effectiveClientTxnId
     };
     appendRow(SHEETS.SALES, saleRecord);
 
