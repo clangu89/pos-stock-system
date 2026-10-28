@@ -1,0 +1,243 @@
+/**
+ * Admin.gs - User Management, Roles/Permissions, System Config, Printer Profiles, Audit Logs
+ */
+
+function getUsersList() {
+  const users = getTable(SHEETS.USERS).rows;
+  const roles = getTable(SHEETS.ROLES).rows;
+  const roleMap = {};
+  roles.forEach(r => { roleMap[r.roleId] = r.roleName; });
+
+  return users.map(u => ({
+    userId: u.userId,
+    username: u.username,
+    name: u.name,
+    roleId: u.roleId,
+    roleName: roleMap[u.roleId] || u.roleId,
+    branchIds: String(u.branchIds || '').split(',').map(s => s.trim()).filter(Boolean),
+    active: u.active === true || String(u.active) === 'true',
+    lastLogin: u.lastLogin,
+    failCount: u.failCount,
+    createdAt: u.createdAt
+  }));
+}
+
+function saveUserAccount(userData, sessionUser) {
+  const username = String(userData.username || '').trim().toLowerCase();
+  const name = String(userData.name || '').trim();
+  const roleId = String(userData.roleId || '').trim();
+
+  if (!username || !name || !roleId) {
+    throw new Error('กรุณากรอกชื่อผู้ใช้ ชื่อ-นามสกุล และเลือกบทบาท (Role)');
+  }
+
+  const existing = findRow(SHEETS.USERS, r => String(r.username).toLowerCase() === username);
+
+  if (userData.userId) {
+    // Update existing user
+    updateRows(SHEETS.USERS, r => r.userId === userData.userId, r => {
+      r.name = name;
+      r.roleId = roleId;
+      r.branchIds = Array.isArray(userData.branchIds) ? userData.branchIds.join(',') : (userData.branchIds || '');
+      if (userData.active !== undefined) {
+        r.active = String(userData.active);
+      }
+      if (userData.password) {
+        const salt = generateRandomHex(16);
+        r.salt = salt;
+        r.passHash = hashPassword(userData.password, salt);
+        r.failCount = 0;
+        r.lockedUntil = '';
+      }
+      return r;
+    });
+    logAudit(sessionUser.userId, 'UPDATE_USER', 'Users', { userId: userData.userId, username });
+    return { ok: true, message: 'แก้ไขข้อมูลผู้ใช้สำเร็จ' };
+  } else {
+    // Create new user
+    if (existing) {
+      throw new Error(`ชื่อผู้ใช้ "${username}" มีอยู่ในระบบแล้ว`);
+    }
+    if (!userData.password) {
+      throw new Error('กรุณากำหนดรหัสผ่านเริ่มต้นสำหรับผู้ใช้ใหม่');
+    }
+
+    const newUserId = 'USR_' + Utilities.getUuid().substring(0, 8).toUpperCase();
+    const salt = generateRandomHex(16);
+    const passHash = hashPassword(userData.password, salt);
+
+    appendRow(SHEETS.USERS, {
+      userId: newUserId,
+      username: username,
+      passHash: passHash,
+      salt: salt,
+      name: name,
+      roleId: roleId,
+      branchIds: Array.isArray(userData.branchIds) ? userData.branchIds.join(',') : (userData.branchIds || 'B01'),
+      active: 'true',
+      lastLogin: '',
+      failCount: 0,
+      lockedUntil: '',
+      createdAt: new Date().toISOString()
+    });
+
+    logAudit(sessionUser.userId, 'CREATE_USER', 'Users', { newUserId, username });
+    return { ok: true, message: 'สร้างผู้ใช้ใหม่สำเร็จ', userId: newUserId };
+  }
+}
+
+function getRolesList() {
+  const roles = getTable(SHEETS.ROLES).rows;
+  return roles.map(r => {
+    let p = {};
+    try {
+      p = typeof r.permissions === 'string' ? JSON.parse(r.permissions) : (r.permissions || {});
+    } catch (e) {
+      p = {};
+    }
+    return {
+      roleId: r.roleId,
+      roleName: r.roleName,
+      description: r.description,
+      permissions: p
+    };
+  });
+}
+
+function saveRolePermissions(roleData, sessionUser) {
+  const roleId = String(roleData.roleId || '').trim();
+  const roleName = String(roleData.roleName || '').trim();
+  if (!roleId || !roleName) {
+    throw new Error('กรุณาระบุรหัสบทบาทและชื่อบทบาท');
+  }
+
+  const permJson = typeof roleData.permissions === 'string'
+    ? roleData.permissions
+    : JSON.stringify(roleData.permissions || {});
+
+  const existing = findRow(SHEETS.ROLES, r => r.roleId === roleId);
+  if (existing) {
+    updateRows(SHEETS.ROLES, r => r.roleId === roleId, r => {
+      r.roleName = roleName;
+      r.description = roleData.description || '';
+      r.permissions = permJson;
+      return r;
+    });
+    logAudit(sessionUser.userId, 'UPDATE_ROLE', 'Roles', { roleId, roleName });
+  } else {
+    appendRow(SHEETS.ROLES, {
+      roleId: roleId,
+      roleName: roleName,
+      description: roleData.description || '',
+      permissions: permJson,
+      createdAt: new Date().toISOString()
+    });
+    logAudit(sessionUser.userId, 'CREATE_ROLE', 'Roles', { roleId, roleName });
+  }
+
+  return { ok: true, message: 'บันทึกสิทธิ์สำเร็จ' };
+}
+
+function getBranchesList() {
+  return getTable(SHEETS.BRANCHES).rows;
+}
+
+function saveBranchData(branchData, sessionUser) {
+  const branchId = String(branchData.branchId || '').trim();
+  const code = String(branchData.code || '').trim().toUpperCase();
+  const name = String(branchData.name || '').trim();
+
+  if (!branchId || !name || !code) {
+    throw new Error('กรุณาระบุรหัสสาขา ตัวย่อสาขา และชื่อสาขา');
+  }
+
+  const existing = findRow(SHEETS.BRANCHES, r => r.branchId === branchId);
+  const record = {
+    branchId: branchId,
+    code: code,
+    name: name,
+    address: branchData.address || '',
+    phone: branchData.phone || '',
+    taxId: branchData.taxId || '',
+    active: branchData.active !== false && String(branchData.active) !== 'false' ? 'true' : 'false'
+  };
+
+  if (existing) {
+    updateRows(SHEETS.BRANCHES, r => r.branchId === branchId, r => {
+      Object.assign(r, record);
+      return r;
+    });
+    logAudit(sessionUser.userId, 'UPDATE_BRANCH', 'Branches', { branchId, name });
+  } else {
+    record.createdAt = new Date().toISOString();
+    appendRow(SHEETS.BRANCHES, record);
+    logAudit(sessionUser.userId, 'CREATE_BRANCH', 'Branches', { branchId, name });
+  }
+
+  return { ok: true, branch: record };
+}
+
+function getAllConfigs() {
+  const rows = getTable(SHEETS.CONFIG).rows;
+  const configMap = {};
+  rows.forEach(r => {
+    configMap[r.key] = r.value;
+  });
+  return configMap;
+}
+
+function saveBatchConfigs(configsObj, sessionUser) {
+  for (const k in configsObj) {
+    setConfig(k, configsObj[k]);
+  }
+  logAudit(sessionUser.userId, 'UPDATE_CONFIG', 'Config', configsObj);
+  return { ok: true, message: 'บันทึกการตั้งค่าสำเร็จ' };
+}
+
+function getPrintProfilesList(branchId = '', stationId = '') {
+  return getTable(SHEETS.PRINT_PROFILES).rows;
+}
+
+function savePrintProfileData(profileData, sessionUser) {
+  const profileId = String(profileData.profileId || '').trim();
+  if (!profileId) {
+    throw new Error('กรุณาระบุรหัสโปรไฟล์เครื่องพิมพ์');
+  }
+
+  const now = new Date().toISOString();
+  const record = {
+    profileId: profileId,
+    branchId: profileData.branchId || '*',
+    stationId: profileData.stationId || '*',
+    printerName: profileData.printerName || 'Standard Printer',
+    paperType: profileData.paperType || '58mm',
+    widthMm: parseFloat(profileData.widthMm) || 58,
+    heightMm: parseFloat(profileData.heightMm) || 0,
+    marginMm: parseFloat(profileData.marginMm) || 2,
+    fontSize: parseFloat(profileData.fontSize) || 12,
+    copies: parseInt(profileData.copies, 10) || 1,
+    autoPrint: String(profileData.autoPrint !== false),
+    showLogo: String(profileData.showLogo !== false),
+    footer: profileData.footer || '',
+    updatedAt: now
+  };
+
+  const existing = findRow(SHEETS.PRINT_PROFILES, r => r.profileId === profileId);
+  if (existing) {
+    updateRows(SHEETS.PRINT_PROFILES, r => r.profileId === profileId, r => {
+      Object.assign(r, record);
+      return r;
+    });
+    logAudit(sessionUser.userId, 'UPDATE_PRINT_PROFILE', 'PrintProfiles', { profileId });
+  } else {
+    appendRow(SHEETS.PRINT_PROFILES, record);
+    logAudit(sessionUser.userId, 'CREATE_PRINT_PROFILE', 'PrintProfiles', { profileId });
+  }
+
+  return { ok: true, profile: record };
+}
+
+function getAuditLogsList(limit = 100) {
+  const logs = getTable(SHEETS.AUDIT_LOG).rows;
+  return logs.reverse().slice(0, limit);
+}

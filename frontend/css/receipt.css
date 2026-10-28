@@ -1,0 +1,138 @@
+/**
+ * receipt.css - Thermal Receipt Styles for 58mm / 80mm / A5 / A4 Continuous Printing
+ */
+
+@media print {
+  @page {
+    margin: var(--receipt-margin, 2mm);
+    size: var(--receipt-width, 58mm) auto;
+  }
+
+  body {
+    margin: 0 !important;
+    padding: 0 !important;
+    background: transparent !important;
+    color: #000 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  .no-print {
+    display: none !important;
+  }
+
+  .receipt-container {
+    box-shadow: none !important;
+    border: none !important;
+    width: 100% !important;
+    max-width: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+}
+
+.receipt-container {
+  font-family: 'Sarabun', 'Courier New', monospace, sans-serif;
+  color: #111;
+  background: #fff;
+  line-height: 1.35;
+  font-size: var(--receipt-font-size, 12px);
+  width: var(--receipt-width, 58mm);
+  margin: 0 auto;
+  padding: 6px;
+  box-sizing: border-box;
+}
+
+.receipt-header {
+  text-align: center;
+  margin-bottom: 8px;
+}
+
+.receipt-title {
+  font-size: 1.25em;
+  font-weight: 800;
+  margin-bottom: 2px;
+}
+
+.receipt-subtitle {
+  font-size: 0.85em;
+  color: #333;
+  margin-bottom: 2px;
+}
+
+.receipt-divider {
+  border-top: 1px dashed #444;
+  margin: 6px 0;
+}
+
+.receipt-meta {
+  font-size: 0.85em;
+  margin-bottom: 6px;
+}
+
+.receipt-meta-row {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 2px;
+}
+
+.receipt-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9em;
+  margin: 6px 0;
+}
+
+.receipt-table th {
+  border-bottom: 1px dashed #444;
+  padding: 4px 1px;
+  text-align: left;
+  font-weight: 700;
+}
+
+.receipt-table td {
+  padding: 3px 1px;
+  vertical-align: top;
+}
+
+.receipt-table .text-right {
+  text-align: right;
+}
+
+.receipt-table .text-center {
+  text-align: center;
+}
+
+.receipt-summary-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 2px 0;
+  font-size: 0.95em;
+}
+
+.receipt-summary-row.bold {
+  font-weight: 800;
+  font-size: 1.1em;
+  border-top: 1px solid #111;
+  border-bottom: 1px solid #111;
+  padding: 4px 0;
+  margin: 4px 0;
+}
+
+.receipt-footer {
+  text-align: center;
+  font-size: 0.8em;
+  margin-top: 10px;
+  color: #333;
+}
+
+.receipt-void-watermark {
+  color: #c0392b;
+  font-weight: 900;
+  font-size: 1.3em;
+  text-align: center;
+  border: 2px solid #c0392b;
+  padding: 4px;
+  margin: 6px 0;
+  text-transform: uppercase;
+}

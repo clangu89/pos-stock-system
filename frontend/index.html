@@ -1,0 +1,972 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ระบบขายสินค้าและสต๊อก (POS & Stock Management)</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="css/app.css">
+  <link rel="stylesheet" href="css/receipt.css">
+</head>
+<body class="bg-slate-50 text-slate-900 min-h-screen flex flex-col font-sans antialiased select-none">
+
+  <!-- ================= TOP HEADER BAR ================= -->
+  <header id="mainHeader" class="hidden sticky top-0 z-40 glass-header border-b border-slate-200/80 shadow-sm transition-all">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4">
+      
+      <!-- Brand & Launcher Switcher -->
+      <div class="flex items-center gap-3">
+        <button onclick="Router.navigate('launcher')" 
+                title="กลับหน้าเลือกระบบ (Launcher)" 
+                class="flex items-center gap-2 px-3 py-1.5 rounded-2xl bg-blue-50 hover:bg-blue-100 text-blue-700 font-extrabold text-sm border border-blue-200 transition shadow-sm cursor-pointer">
+          <span class="text-base">⊞</span>
+          <span class="hidden sm:inline">เลือกระบบ</span>
+        </button>
+        <span class="font-black text-lg tracking-tight bg-gradient-to-r from-blue-700 to-indigo-800 bg-clip-text text-transparent">
+          POS & Stock
+        </span>
+      </div>
+
+      <!-- Center Controls: Voice Status Badge & Sound Toggle -->
+      <div class="flex items-center gap-2">
+        <button id="soundQuickToggleBtn" 
+                onclick="const s = SoundManager.toggleSound(); SoundManager.updateStatusBadge(); UI.showToast(s ? 'เปิดเสียงแล้ว' : 'ปิดเสียงแล้ว', 'info');"
+                title="เปิด/ปิดเสียงระบบ"
+                class="p-2 rounded-xl bg-white border border-slate-200 text-slate-700 hover:bg-slate-100 transition shadow-sm cursor-pointer">
+          🔊
+        </button>
+        <span id="voiceStatusBadge" class="text-xs px-3 py-1 rounded-full bg-slate-100 text-slate-600 font-bold border border-slate-200 whitespace-nowrap hidden sm:inline-block">
+          กำลังตรวจเสียง...
+        </span>
+      </div>
+
+      <!-- Right Controls: User Profile & Logout -->
+      <div class="flex items-center gap-3">
+        <div class="text-right hidden sm:block">
+          <div id="headerUserName" class="text-xs font-extrabold text-slate-900 leading-tight">User</div>
+          <div id="headerUserRole" class="text-[10px] font-bold text-blue-600 uppercase">Role</div>
+        </div>
+        <button onclick="Auth.logout()" 
+                title="ออกจากระบบ" 
+                class="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-rose-50 text-slate-600 hover:text-rose-600 font-bold text-xs border border-slate-200 transition cursor-pointer">
+          🚪 <span class="hidden md:inline">ออกจากระบบ</span>
+        </button>
+      </div>
+
+    </div>
+  </header>
+
+  <!-- ================= MAIN VIEW CONTAINERS ================= -->
+  <main class="flex-1 w-full max-w-7xl mx-auto p-4 sm:p-6 lg:p-8 flex flex-col">
+
+    <!-- 1. LOGIN SCREEN -->
+    <section id="view_login" class="view-screen my-auto flex flex-col items-center justify-center py-12">
+      <div class="w-full max-w-md bg-white border border-slate-200/80 rounded-3xl p-8 shadow-2xl relative overflow-hidden">
+        <div class="w-20 h-20 mx-auto rounded-3xl bg-gradient-to-br from-blue-600 to-indigo-700 text-white flex items-center justify-center text-4xl shadow-xl mb-6">
+          🛒
+        </div>
+        <h2 class="text-2xl font-black text-center text-slate-900 mb-1">ยินดีต้อนรับ</h2>
+        <p class="text-xs text-center text-slate-500 mb-6">ระบบขายสินค้าและสต๊อก (Google Apps Script + GitHub Pages)</p>
+
+        <form onsubmit="event.preventDefault(); Auth.login(document.getElementById('loginUsername').value, document.getElementById('loginPassword').value);" class="space-y-4">
+          <div>
+            <label class="block text-xs font-bold text-slate-700 mb-1">ชื่อผู้ใช้งาน (Username)</label>
+            <input type="text" id="loginUsername" required placeholder="เช่น admin หรือ cashier"
+                   class="w-full px-4 py-3 rounded-2xl bg-slate-50 border border-slate-200 focus:outline-none focus:border-blue-600 focus:bg-white text-sm font-semibold transition">
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-slate-700 mb-1">รหัสผ่าน (Password)</label>
+            <input type="password" id="loginPassword" required placeholder="••••••••"
+                   class="w-full px-4 py-3 rounded-2xl bg-slate-50 border border-slate-200 focus:outline-none focus:border-blue-600 focus:bg-white text-sm font-semibold transition">
+          </div>
+          <button type="submit" 
+                  class="w-full py-3.5 rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-700 hover:from-blue-700 hover:to-indigo-800 text-white font-extrabold text-sm shadow-lg hover:shadow-xl transition-all duration-200 transform hover:-translate-y-0.5 cursor-pointer">
+            เข้าสู่ระบบ
+          </button>
+        </form>
+
+        <div class="mt-6 pt-6 border-t border-slate-100 flex items-center justify-between text-xs text-slate-400">
+          <span>ค่าเริ่มต้น: admin / Admin1234!</span>
+          <button onclick="UI.openModal('apiUrlModal')" class="text-blue-600 hover:underline font-bold">⚙️ ตั้งค่า API URL</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- 2. LAUNCHER DASHBOARD (SCREEN WITH ICONS) -->
+    <section id="view_launcher" class="view-screen hidden space-y-6">
+      <div class="flex items-center justify-between pb-4 border-b border-slate-200">
+        <div>
+          <h1 class="text-2xl font-black text-slate-900 tracking-tight">เลือกระบบการทำงาน</h1>
+          <p class="text-xs text-slate-500 mt-0.5">ระบบที่แสดงขึ้นกับสิทธิ์การเข้าใช้งานของผู้ใช้ปัจจุบัน</p>
+        </div>
+      </div>
+
+      <!-- Icon Cards Grid -->
+      <div id="launcherCardsContainer" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 pt-4">
+        <!-- Rendered dynamically by launcher.js -->
+      </div>
+    </section>
+
+    <!-- 3. POS SALES SCREEN (MULTIPLE BILLS + VOICE + PRINT) -->
+    <section id="view_sales" class="view-screen hidden flex-1 flex flex-col gap-4">
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-5 flex-1">
+        
+        <!-- Left: Product Catalog & Barcode Scanner (7 cols) -->
+        <div class="lg:col-span-7 bg-white rounded-3xl p-5 border border-slate-200/80 shadow-sm flex flex-col gap-4">
+          
+          <!-- Scanner & Search Bar -->
+          <div class="flex items-center gap-2">
+            <div class="relative flex-1">
+              <span class="absolute inset-y-0 left-3 flex items-center text-slate-400">🔍</span>
+              <input type="text" id="posBarcodeSearchInput" autofocus
+                     placeholder="สแกนบาร์โค้ด หรือพิมพ์ชื่อสินค้า/SKU แล้วกด Enter..."
+                     class="w-full pl-9 pr-4 py-2.5 rounded-2xl bg-slate-50 border border-slate-200 focus:outline-none focus:border-blue-600 focus:bg-white text-sm font-semibold transition">
+            </div>
+            <button onclick="SalesModule.refreshData()" title="รีเฟรชสต๊อกล่าสุด" class="p-2.5 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition">
+              🔄
+            </button>
+            <button onclick="SalesModule.openVoidModal()" title="ยกเลิกใบเสร็จ (Void)" class="px-3 py-2 rounded-2xl bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-xs font-bold transition flex items-center gap-1">
+              🚫 <span>ยกเลิกบิล</span>
+            </button>
+          </div>
+
+          <!-- Category Chips Filter -->
+          <div id="posCategoryChips" class="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar">
+            <!-- Rendered by sales.js -->
+          </div>
+
+          <!-- Product Cards Grid -->
+          <div id="posProductGrid" class="flex-1 overflow-y-auto grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-3 pr-1 max-h-[calc(100vh-270px)]">
+            <!-- Rendered by sales.js -->
+          </div>
+
+        </div>
+
+        <!-- Right: Multi-Bill Tabs & Cart (5 cols) -->
+        <div class="lg:col-span-5 bg-white rounded-3xl p-5 border border-slate-200/80 shadow-sm flex flex-col justify-between">
+          
+          <!-- Top: Multi-Bill Tabs -->
+          <div>
+            <div id="posBillTabsContainer" class="flex items-center gap-1 overflow-x-auto border-b border-slate-200 pb-0.5 mb-3">
+              <!-- Rendered by sales.js (Bill 1, Bill 2, Bill 3...) -->
+            </div>
+
+            <!-- Cart Items List -->
+            <div id="posCartItemsList" class="pos-cart-scroll overflow-y-auto space-y-2 pr-1">
+              <!-- Rendered by sales.js -->
+            </div>
+          </div>
+
+          <!-- Bottom: Cart Summary & Checkout -->
+          <div class="pt-4 border-t border-slate-200 space-y-3">
+            <div class="space-y-1 text-xs">
+              <div class="flex justify-between text-slate-500 font-medium">
+                <span>ยอดรวมสินค้า (Subtotal)</span>
+                <span id="posSummarySubtotal" class="font-mono font-bold text-slate-800">฿0.00</span>
+              </div>
+              <div class="flex justify-between text-slate-500 font-medium items-center">
+                <span class="flex items-center gap-1">
+                  ส่วนลดท้ายบิล
+                  <button onclick="const d = prompt('กรุณาระบุจำนวนเงินส่วนลด (บาท):', '0'); if(d !== null) SalesModule.setBillDiscount(d);"
+                          class="text-blue-600 hover:underline font-bold text-[11px]">(แก้)</button>
+                </span>
+                <span id="posSummaryDiscount" class="font-mono font-bold text-rose-600">฿0.00</span>
+              </div>
+            </div>
+
+            <!-- Grand Total Display -->
+            <div class="flex items-baseline justify-between p-3.5 rounded-2xl bg-blue-50/80 border border-blue-200">
+              <span class="text-xs font-bold text-blue-900 uppercase">ยอดชำระสุทธิ</span>
+              <span id="posSummaryTotal" class="text-2xl font-black font-mono text-blue-700">฿0.00</span>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="grid grid-cols-4 gap-2">
+              <button onclick="SalesModule.clearCurrentCart()" 
+                      title="ล้างรายการทั้งหมดในบิลนี้"
+                      class="col-span-1 py-3.5 rounded-2xl bg-slate-100 hover:bg-rose-50 text-slate-600 hover:text-rose-600 font-bold text-xs border border-slate-200 transition">
+                🗑️ ล้างบิล
+              </button>
+              <button id="posPayButton" 
+                      onclick="SalesModule.openPaymentModal()"
+                      disabled
+                      class="col-span-3 py-3.5 rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-700 hover:from-blue-700 hover:to-indigo-800 disabled:opacity-50 text-white font-black text-base shadow-lg hover:shadow-xl transition flex items-center justify-between px-5 cursor-pointer">
+                <span>ชำระเงิน (F4)</span>
+                <span class="font-mono">฿0.00</span>
+              </button>
+            </div>
+          </div>
+
+        </div>
+
+      </div>
+    </section>
+
+    <!-- 4. STOCK MANAGEMENT SCREEN -->
+    <section id="view_stock" class="view-screen hidden space-y-5 flex-1">
+      <div class="flex items-center justify-between pb-3 border-b border-slate-200">
+        <div>
+          <h1 class="text-2xl font-black text-slate-900 tracking-tight">ระบบสต๊อกสินค้า</h1>
+          <p class="text-xs text-slate-500">จัดการแคตตาล็อก รับสินค้าเข้า ปรับปรุงยอด และโอนย้ายระหว่างสาขา</p>
+        </div>
+        <div class="flex items-center gap-2">
+          <button onclick="StockModule.openProductModal()" class="px-4 py-2 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-md transition flex items-center gap-1.5 cursor-pointer">
+            <span>+</span> <span>เพิ่มสินค้าใหม่</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Navigation Tabs -->
+      <div class="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar">
+        <button data-tab="products" class="stock-tab-btn px-4 py-2.5 rounded-xl font-bold text-xs bg-emerald-600 text-white shadow-md">📋 แคตตาล็อกสินค้า</button>
+        <button data-tab="receive" class="stock-tab-btn px-4 py-2.5 rounded-xl font-bold text-xs bg-white text-slate-700 hover:bg-slate-100 border border-slate-200">📥 รับสินค้าเข้า</button>
+        <button data-tab="adjust" class="stock-tab-btn px-4 py-2.5 rounded-xl font-bold text-xs bg-white text-slate-700 hover:bg-slate-100 border border-slate-200">⚖️ ตรวจนับ/ปรับยอด</button>
+        <button data-tab="transfer" class="stock-tab-btn px-4 py-2.5 rounded-xl font-bold text-xs bg-white text-slate-700 hover:bg-slate-100 border border-slate-200">🔄 โอนย้ายสาขา</button>
+        <button data-tab="card" class="stock-tab-btn px-4 py-2.5 rounded-xl font-bold text-xs bg-white text-slate-700 hover:bg-slate-100 border border-slate-200">📜 Stock Card</button>
+      </div>
+
+      <!-- Tab Content 1: Products Table -->
+      <div id="stockTab_products" class="stock-tab-content bg-white rounded-3xl p-5 border border-slate-200/80 shadow-sm space-y-4">
+        <div class="flex flex-col sm:flex-row gap-3 items-center justify-between">
+          <div class="flex items-center gap-2 w-full sm:w-auto">
+            <input type="text" id="stockSearchInput" oninput="StockModule.renderProductsTable()" placeholder="ค้นหา SKU, บาร์โค้ด, ชื่อ..." class="px-4 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs font-semibold focus:outline-none focus:border-emerald-600">
+            <select id="stockCategoryFilter" onchange="StockModule.renderProductsTable()" class="px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs font-semibold focus:outline-none"></select>
+          </div>
+          <label class="flex items-center gap-2 text-xs font-bold text-slate-700 cursor-pointer self-start sm:self-auto">
+            <input type="checkbox" id="stockLowStockOnlyCheck" onchange="StockModule.renderProductsTable()" class="rounded text-emerald-600">
+            <span>แสดงเฉพาะสินค้าใกล้หมด (Low Stock)</span>
+          </label>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="w-full text-left">
+            <thead>
+              <tr class="border-b border-slate-200 text-xs text-slate-400 font-bold uppercase">
+                <th class="py-2.5 px-3">SKU</th>
+                <th class="py-2.5 px-3">บาร์โค้ด</th>
+                <th class="py-2.5 px-3">ชื่อสินค้า</th>
+                <th class="py-2.5 px-3">หน่วย</th>
+                <th class="py-2.5 px-3 text-right">ทุน</th>
+                <th class="py-2.5 px-3 text-right">ขาย</th>
+                <th class="py-2.5 px-3 text-center">คงเหลือ</th>
+                <th class="py-2.5 px-3 text-right">จัดการ</th>
+              </tr>
+            </thead>
+            <tbody id="stockProductsTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Tab Content 2: Receive Stock -->
+      <div id="stockTab_receive" class="stock-tab-content hidden bg-white rounded-3xl p-5 border border-slate-200/80 shadow-sm space-y-4">
+        <div class="flex flex-col sm:flex-row gap-3 items-center justify-between pb-3 border-b border-slate-100">
+          <div class="flex items-center gap-3">
+            <label class="text-xs font-bold">รับเข้าสาขา:</label>
+            <select id="receiveBranchSelect" class="px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs font-bold"></select>
+          </div>
+          <button onclick="StockModule.addReceiveItemRow()" class="px-3 py-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 text-xs font-bold">
+            + เพิ่มรายการรับเข้า
+          </button>
+        </div>
+        <table class="w-full text-left text-xs">
+          <thead>
+            <tr class="border-b border-slate-200 text-slate-400 uppercase font-bold">
+              <th class="py-2 px-3">สินค้า</th>
+              <th class="py-2 px-3 text-right">จำนวน</th>
+              <th class="py-2 px-3 text-right">ราคาทุน/หน่วย</th>
+              <th class="py-2 px-3 text-right">รวมเป็นเงิน</th>
+              <th class="py-2 px-3 text-center">ลบ</th>
+            </tr>
+          </thead>
+          <tbody id="receiveItemsTableBody"></tbody>
+        </table>
+        <div class="pt-3 border-t border-slate-100 flex items-center justify-between gap-4">
+          <input type="text" id="receiveNoteInput" placeholder="หมายเหตุ / เลขที่บิลส่งของ (ถ้ามี)" class="flex-1 px-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs">
+          <button onclick="StockModule.submitReceiveStock()" class="px-6 py-2.5 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs shadow-md">
+            บันทึกรับเข้าสต๊อก
+          </button>
+        </div>
+      </div>
+
+      <!-- Tab Content 3: Adjust Stock -->
+      <div id="stockTab_adjust" class="stock-tab-content hidden bg-white rounded-3xl p-5 border border-slate-200/80 shadow-sm space-y-4">
+        <div class="flex items-center justify-between pb-3 border-b border-slate-100">
+          <div class="flex items-center gap-3">
+            <label class="text-xs font-bold">สาขาที่ตรวจนับ:</label>
+            <select id="adjustBranchSelect" class="px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs font-bold"></select>
+          </div>
+          <span class="text-xs text-slate-500">กรอกยอดนับได้จริง ระบบจะคำนวณส่วนต่างอัตโนมัติ</span>
+        </div>
+        <div class="max-h-96 overflow-y-auto">
+          <table class="w-full text-left text-xs">
+            <thead>
+              <tr class="border-b border-slate-200 text-slate-400 uppercase font-bold sticky top-0 bg-white">
+                <th class="py-2 px-3">SKU</th>
+                <th class="py-2 px-3">ชื่อสินค้า</th>
+                <th class="py-2 px-3 text-center">ยอดในระบบ</th>
+                <th class="py-2 px-3 text-center">ยอดนับได้จริง</th>
+                <th class="py-2 px-3 text-center">ผลต่าง</th>
+                <th class="py-2 px-3">หมายเหตุเฉพาะรายการ</th>
+              </tr>
+            </thead>
+            <tbody id="adjustItemsTableBody"></tbody>
+          </table>
+        </div>
+        <div class="pt-3 border-t border-slate-100 flex items-center justify-between gap-4">
+          <input type="text" id="adjustGeneralNote" placeholder="หมายเหตุภาพรวม เช่น ตรวจนับสิ้นเดือน..." class="flex-1 px-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs">
+          <button onclick="StockModule.submitAdjustStock()" class="px-6 py-2.5 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs shadow-md">
+            บันทึกปรับยอดตรวจนับ
+          </button>
+        </div>
+      </div>
+
+      <!-- Tab Content 4: Transfer Stock -->
+      <div id="stockTab_transfer" class="stock-tab-content hidden bg-white rounded-3xl p-5 border border-slate-200/80 shadow-sm space-y-4">
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 pb-3 border-b border-slate-100">
+          <div>
+            <label class="block text-xs font-bold text-slate-700 mb-1">สาขาต้นทาง (หักสต๊อก)</label>
+            <select id="transferFromBranch" class="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs font-bold"></select>
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-slate-700 mb-1">สาขาปลายทาง (เพิ่มสต๊อก)</label>
+            <select id="transferToBranch" class="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs font-bold"></select>
+          </div>
+        </div>
+        <div class="flex justify-end">
+          <button onclick="StockModule.addTransferRow()" class="px-3 py-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 text-xs font-bold">
+            + เพิ่มรายการโอน
+          </button>
+        </div>
+        <table class="w-full text-left text-xs">
+          <thead>
+            <tr class="border-b border-slate-200 text-slate-400 uppercase font-bold">
+              <th class="py-2 px-3">สินค้า</th>
+              <th class="py-2 px-3 text-right">จำนวนโอน</th>
+              <th class="py-2 px-3 text-center">ลบ</th>
+            </tr>
+          </thead>
+          <tbody id="transferItemsTableBody"></tbody>
+        </table>
+        <div class="pt-3 border-t border-slate-100 flex items-center justify-between gap-4">
+          <input type="text" id="transferNoteInput" placeholder="หมายเหตุการโอนย้าย..." class="flex-1 px-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs">
+          <button onclick="StockModule.submitTransferStock()" class="px-6 py-2.5 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs shadow-md">
+            ยืนยันการโอนย้าย
+          </button>
+        </div>
+      </div>
+
+      <!-- Tab Content 5: Stock Card -->
+      <div id="stockTab_card" class="stock-tab-content hidden bg-white rounded-3xl p-5 border border-slate-200/80 shadow-sm space-y-4">
+        <div class="flex flex-col sm:flex-row gap-3 items-center">
+          <select id="cardBranchSelect" class="px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs font-bold"></select>
+          <select id="cardProductSelect" class="flex-1 px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs font-bold"></select>
+          <button onclick="StockModule.loadStockCard()" class="px-5 py-2 rounded-xl bg-slate-900 text-white font-bold text-xs hover:bg-slate-800">
+            ดูความเคลื่อนไหว
+          </button>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="w-full text-left">
+            <thead>
+              <tr class="border-b border-slate-200 text-xs text-slate-400 uppercase font-bold">
+                <th class="py-2.5 px-3">วัน-เวลา</th>
+                <th class="py-2.5 px-3">ประเภท</th>
+                <th class="py-2.5 px-3">เอกสารอ้างอิง</th>
+                <th class="py-2.5 px-3 text-right">เข้า (+)</th>
+                <th class="py-2.5 px-3 text-right">ออก (-)</th>
+                <th class="py-2.5 px-3 text-right">คงเหลือหลังทำ</th>
+                <th class="py-2.5 px-3">หมายเหตุ (ผู้ทำ)</th>
+              </tr>
+            </thead>
+            <tbody id="stockCardTableBody">
+              <tr><td colspan="7" class="text-center py-6 text-slate-400">เลือกสินค้าและสาขาเพื่อดูประวัติ</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- 5. REPORTS SCREEN -->
+    <section id="view_reports" class="view-screen hidden space-y-6 flex-1">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-slate-200 gap-3">
+        <div>
+          <h1 class="text-2xl font-black text-slate-900 tracking-tight">รายงานและการเงิน</h1>
+          <p class="text-xs text-slate-500">สรุปยอดขาย กำไร-ต้นทุน สินค้าขายดี และมูลค่าสต๊อกรวม</p>
+        </div>
+        <div class="flex items-center gap-2">
+          <input type="date" id="reportStartDate" class="px-3 py-1.5 rounded-xl bg-white border border-slate-200 text-xs font-bold">
+          <span class="text-xs text-slate-400">ถึง</span>
+          <input type="date" id="reportEndDate" class="px-3 py-1.5 rounded-xl bg-white border border-slate-200 text-xs font-bold">
+          <select id="reportBranchSelect" class="px-3 py-1.5 rounded-xl bg-white border border-slate-200 text-xs font-bold"></select>
+          <button onclick="ReportsModule.generateReport()" class="px-4 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs shadow-sm">
+            คำนวณ
+          </button>
+        </div>
+      </div>
+
+      <!-- KPI Summary Cards -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div class="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-sm">
+          <div class="text-xs font-bold text-slate-400 mb-1">ยอดขายรวม (Total Sales)</div>
+          <div id="repTotalSales" class="text-2xl font-black text-blue-600 font-mono">฿0.00</div>
+          <div id="repCashRatio" class="text-[11px] text-slate-500 mt-2 truncate">เงินสด: ฿0 | โอน: ฿0</div>
+        </div>
+        <div class="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-sm">
+          <div class="text-xs font-bold text-slate-400 mb-1">กำไรขั้นต้นโดยประมาณ</div>
+          <div id="repTotalProfit" class="text-2xl font-black text-emerald-600 font-mono">฿0.00</div>
+          <div class="text-[11px] text-slate-500 mt-2">คำนวณจากราคาขาย - ทุนสินค้า</div>
+        </div>
+        <div class="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-sm">
+          <div class="text-xs font-bold text-slate-400 mb-1">จำนวนบิลที่ขายได้</div>
+          <div id="repTotalBills" class="text-2xl font-black text-slate-800 font-mono">0 บิล</div>
+          <div class="text-[11px] text-slate-500 mt-2">ไม่นับรวมบิลที่ยกเลิก (VOID)</div>
+        </div>
+        <div class="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-sm">
+          <div class="text-xs font-bold text-slate-400 mb-1">มูลค่าสต๊อกสินค้าคงเหลือ</div>
+          <div id="valTotalCost" class="text-2xl font-black text-amber-600 font-mono">฿0.00</div>
+          <div id="valTotalUnits" class="text-[11px] text-slate-500 mt-2 truncate">0 ชิ้น</div>
+        </div>
+      </div>
+
+      <!-- Tables Grid: Daily vs Top Selling -->
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <!-- Daily Sales Table -->
+        <div class="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-sm space-y-3">
+          <h3 class="font-bold text-sm text-slate-900">สรุปยอดขายรายวัน</h3>
+          <div class="max-h-80 overflow-y-auto">
+            <table class="w-full text-left text-xs">
+              <thead>
+                <tr class="border-b border-slate-200 text-slate-400 uppercase font-bold sticky top-0 bg-white">
+                  <th class="py-2 px-3">วันที่</th>
+                  <th class="py-2 px-3 text-center">บิล</th>
+                  <th class="py-2 px-3 text-right">ยอดรวม</th>
+                  <th class="py-2 px-3 text-right">ส่วนลด</th>
+                  <th class="py-2 px-3 text-right">สุทธิ</th>
+                  <th class="py-2 px-3 text-right">กำไร</th>
+                </tr>
+              </thead>
+              <tbody id="reportDailyTableBody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Top Selling Table -->
+        <div class="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-sm space-y-3">
+          <h3 class="font-bold text-sm text-slate-900">15 อันดับสินค้าขายดี (Top Sellers)</h3>
+          <div class="max-h-80 overflow-y-auto">
+            <table class="w-full text-left text-xs">
+              <thead>
+                <tr class="border-b border-slate-200 text-slate-400 uppercase font-bold sticky top-0 bg-white">
+                  <th class="py-2 px-3 text-center">#</th>
+                  <th class="py-2 px-3">สินค้า</th>
+                  <th class="py-2 px-3 text-center">ขายได้</th>
+                  <th class="py-2 px-3 text-right">ยอดขาย</th>
+                  <th class="py-2 px-3 text-right">กำไร</th>
+                </tr>
+              </thead>
+              <tbody id="reportTopSellingTableBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 6. ADMIN SCREEN -->
+    <section id="view_admin" class="view-screen hidden space-y-5 flex-1">
+      <div class="flex items-center justify-between pb-3 border-b border-slate-200">
+        <div>
+          <h1 class="text-2xl font-black text-slate-900 tracking-tight">ระบบผู้ดูแลระบบ (Admin)</h1>
+          <p class="text-xs text-slate-500">จัดการผู้ใช้ สิทธิ์ รูปแบบเลขที่ใบเสร็จ ไดรเวอร์เครื่องพิมพ์ และเสียงพูด</p>
+        </div>
+      </div>
+
+      <!-- Navigation Tabs -->
+      <div class="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar">
+        <button data-tab="users" class="admin-tab-btn px-4 py-2.5 rounded-xl font-bold text-xs bg-slate-900 text-white shadow-md">👥 ผู้ใช้งาน</button>
+        <button data-tab="roles" class="admin-tab-btn px-4 py-2.5 rounded-xl font-bold text-xs bg-white text-slate-700 hover:bg-slate-100 border border-slate-200">🛡️ สิทธิ์การใช้งาน</button>
+        <button data-tab="receipt" class="admin-tab-btn px-4 py-2.5 rounded-xl font-bold text-xs bg-white text-slate-700 hover:bg-slate-100 border border-slate-200">🏷️ รูปแบบเลขที่ใบเสร็จ</button>
+        <button data-tab="printer" class="admin-tab-btn px-4 py-2.5 rounded-xl font-bold text-xs bg-white text-slate-700 hover:bg-slate-100 border border-slate-200">🖨️ เครื่องพิมพ์และกระดาษ</button>
+        <button data-tab="voice" class="admin-tab-btn px-4 py-2.5 rounded-xl font-bold text-xs bg-white text-slate-700 hover:bg-slate-100 border border-slate-200">🔊 ตั้งค่าเสียงพูดระบบ</button>
+        <button data-tab="audit" class="admin-tab-btn px-4 py-2.5 rounded-xl font-bold text-xs bg-white text-slate-700 hover:bg-slate-100 border border-slate-200">📋 Audit Logs</button>
+        <button data-tab="api" class="admin-tab-btn px-4 py-2.5 rounded-xl font-bold text-xs bg-white text-slate-700 hover:bg-slate-100 border border-slate-200">🌐 API URL</button>
+      </div>
+
+      <!-- Tab Content 1: Users Table -->
+      <div id="adminTab_users" class="admin-tab-content bg-white rounded-3xl p-5 border border-slate-200/80 shadow-sm space-y-4">
+        <div class="flex justify-between items-center pb-2 border-b border-slate-100">
+          <span class="text-sm font-bold text-slate-800">รายชื่อผู้ใช้งานทั้งหมด</span>
+          <button onclick="AdminModule.openUserModal()" class="px-3.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-sm">
+            + เพิ่มผู้ใช้งาน
+          </button>
+        </div>
+        <table class="w-full text-left text-xs">
+          <thead>
+            <tr class="border-b border-slate-200 text-slate-400 uppercase font-bold">
+              <th class="py-2.5 px-3">Username</th>
+              <th class="py-2.5 px-3">ชื่อ-นามสกุล</th>
+              <th class="py-2.5 px-3">บทบาท (Role)</th>
+              <th class="py-2.5 px-3">สาขาที่เข้าถึง</th>
+              <th class="py-2.5 px-3 text-center">สถานะ</th>
+              <th class="py-2.5 px-3 text-right">แก้ไข</th>
+            </tr>
+          </thead>
+          <tbody id="adminUsersTableBody"></tbody>
+        </table>
+      </div>
+
+      <!-- Tab Content 2: Roles Matrix -->
+      <div id="adminTab_roles" class="admin-tab-content hidden bg-white rounded-3xl p-5 border border-slate-200/80 shadow-sm space-y-4">
+        <div id="adminRolesContainer" class="space-y-4"></div>
+      </div>
+
+      <!-- Tab Content 3: Receipt Format Settings -->
+      <div id="adminTab_receipt" class="admin-tab-content hidden bg-white rounded-3xl p-6 border border-slate-200/80 shadow-sm space-y-5 max-w-2xl">
+        <h3 class="font-bold text-base text-slate-900 pb-2 border-b border-slate-100">กำหนดรูปแบบเลขที่ใบเสร็จรับเงิน</h3>
+        <div class="space-y-3">
+          <div>
+            <label class="block text-xs font-bold text-slate-700 mb-1">อักษรนำหน้า (Prefix)</label>
+            <input type="text" id="receiptPrefixInput" oninput="AdminModule.updateReceiptPreview()" value="RC" class="w-full px-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-sm font-bold">
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-slate-700 mb-1">รูปแบบ (Format Pattern)</label>
+            <input type="text" id="receiptFormatInput" oninput="AdminModule.updateReceiptPreview()" value="{PREFIX}{BRANCH}-{YYYY}{MM}{DD}-{RUN:5}" class="w-full px-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-sm font-mono font-bold">
+            <p class="text-[11px] text-slate-400 mt-1">Tokens: {PREFIX}, {BRANCH}, {YYYY}, {YY}, {BE}, {MM}, {DD}, {RUN:5}</p>
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-slate-700 mb-1">รอบการรีเซ็ตเลขรันนิ่ง (Reset Cycle)</label>
+            <select id="receiptCycleSelect" class="w-full px-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-bold">
+              <option value="DAILY">รีเซ็ตทุกวัน (เริ่มต้น 00001 ใหม่ทุกเที่ยงคืน)</option>
+              <option value="MONTHLY">รีเซ็ตทุกต้นเดือน</option>
+              <option value="YEARLY">รีเซ็ตทุกต้นปี</option>
+              <option value="NEVER">ไม่รีเซ็ต (รันยาวต่อเนื่อง)</option>
+            </select>
+          </div>
+          <div class="p-4 rounded-2xl bg-slate-100 border border-slate-200 space-y-1">
+            <div class="text-[11px] font-bold text-slate-500 uppercase">ตัวอย่างเลขที่ใบเสร็จที่จะได้จริง:</div>
+            <div id="receiptFormatPreview" class="text-xl font-mono font-black text-blue-700">RCMAIN-20261028-00001</div>
+          </div>
+          <button onclick="AdminModule.saveReceiptSettings()" class="w-full py-3 rounded-2xl bg-slate-900 text-white font-extrabold text-xs hover:bg-slate-800 transition">
+            บันทึกรูปแบบเลขที่ใบเสร็จ
+          </button>
+        </div>
+      </div>
+
+      <!-- Tab Content 4: Printer & Paper Settings -->
+      <div id="adminTab_printer" class="admin-tab-content hidden bg-white rounded-3xl p-6 border border-slate-200/80 shadow-sm space-y-5 max-w-2xl">
+        <h3 class="font-bold text-base text-slate-900 pb-2 border-b border-slate-100">ตั้งค่าไดรเวอร์และกระดาษพิมพ์ใบเสร็จ</h3>
+        
+        <div class="p-4 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 text-xs leading-relaxed">
+          <b>ℹ️ ข้อแนะนำการพิมพ์ใบเสร็จออโต้แบบเงียบ (Kiosk Printing):</b><br>
+          เว็บเบราว์เซอร์ไม่สามารถบังคับไดรเวอร์เครื่องพิมพ์ข้ามระดับ OS ได้เอง กรุณาตั้งเครื่องพิมพ์ใบเสร็จเป็น <b>Default Printer</b> ใน Windows แล้วเปิด Chrome ด้วยพารามิเตอร์ <code>--kiosk-printing</code> จะพิมพ์เงียบอัตโนมัติทันที
+        </div>
+
+        <div class="space-y-3">
+          <div>
+            <label class="block text-xs font-bold text-slate-700 mb-1">ชื่อไดรเวอร์/เครื่องพิมพ์อ้างอิง</label>
+            <input type="text" id="printerNameInput" value="XP-58 / Thermal 58mm" class="w-full px-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-bold">
+          </div>
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="block text-xs font-bold text-slate-700 mb-1">ประเภทกระดาษ</label>
+              <select id="printerPaperTypeSelect" onchange="AdminModule.onPaperTypeChange(this.value)" class="w-full px-3 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-bold">
+                <option value="58mm">กระดาษความร้อนม้วน 58 มม. (พิมพ์ต่อเนื่อง)</option>
+                <option value="80mm">กระดาษความร้อนม้วน 80 มม. (พิมพ์ต่อเนื่อง)</option>
+                <option value="A5">กระดาษแผ่นขนาด A5</option>
+                <option value="A4">กระดาษแผ่นขนาด A4</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-xs font-bold text-slate-700 mb-1">ความกว้างกระดาษ (มม.)</label>
+              <input type="number" id="printerWidthInput" value="58" class="w-full px-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-bold text-right">
+            </div>
+          </div>
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="block text-xs font-bold text-slate-700 mb-1">ระยะขอบกระดาษ Margin (มม.)</label>
+              <input type="number" id="printerMarginInput" value="2" class="w-full px-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-bold text-right">
+            </div>
+            <div>
+              <label class="block text-xs font-bold text-slate-700 mb-1">ขนาดฟอนต์ใบเสร็จ (px)</label>
+              <input type="number" id="printerFontSizeInput" value="11" class="w-full px-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-bold text-right">
+            </div>
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-slate-700 mb-1">ข้อความท้ายใบเสร็จ (Footer)</label>
+            <input type="text" id="printerFooterInput" value="ขอบคุณที่ใช้บริการ / Thank you!" class="w-full px-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs">
+          </div>
+          <label class="flex items-center gap-2 text-xs font-bold text-slate-800 cursor-pointer pt-1">
+            <input type="checkbox" id="printerAutoPrintCheck" checked class="rounded text-blue-600">
+            <span>พิมพ์ใบเสร็จอัตโนมัติทันทีหลังชำระเงินสำเร็จ</span>
+          </label>
+          <div class="grid grid-cols-2 gap-3 pt-3">
+            <button onclick="AdminModule.testPrintReceipt()" class="py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs border border-slate-200 transition">
+              🖨️ พิมพ์ทดสอบ / ดูตัวอย่าง
+            </button>
+            <button onclick="AdminModule.savePrinterSettings()" class="py-2.5 rounded-xl bg-slate-900 text-white font-extrabold text-xs hover:bg-slate-800 transition">
+              บันทึกการตั้งค่า
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tab Content 5: Voice & Speech Settings (Face-recognition style) -->
+      <div id="adminTab_voice" class="admin-tab-content hidden bg-white rounded-3xl p-6 border border-slate-200/80 shadow-sm space-y-5 max-w-2xl">
+        <div class="flex items-center justify-between pb-2 border-b border-slate-100">
+          <h3 class="font-bold text-base text-slate-900">ตั้งค่าระบบเสียงพูด (Speech Synthesis)</h3>
+          <label class="flex items-center gap-2 text-xs font-bold cursor-pointer">
+            <input type="checkbox" id="adminSoundMasterToggle" onchange="AdminModule.toggleSoundMaster(this.checked)" checked class="rounded text-blue-600">
+            <span>เปิดใช้งานเสียงระบบ</span>
+          </label>
+        </div>
+
+        <div class="space-y-4">
+          <!-- Voice Selector Dropdown with Presets and Device Voices -->
+          <div>
+            <label class="block text-xs font-bold text-slate-700 mb-1">เลือกรูปแบบเสียงพูด</label>
+            <select id="adminVoiceSelectDropdown" onchange="AdminModule.handleVoiceChange(this.value)"
+                    class="w-full px-4 py-3 rounded-2xl bg-slate-50 border border-slate-200 text-sm font-bold text-slate-900 focus:outline-none focus:border-blue-600 cursor-pointer shadow-sm">
+              <optgroup label="✨ รูปแบบโทนเสียงมาตรฐาน (Presets)">
+                <option value="preset:female_polite">👩 เสียงหญิงแท้ (สุภาพ - ค่ะ)</option>
+                <option value="preset:female_bright">✨ เสียงประชาสัมพันธ์หญิง (สดใส - ค่ะ)</option>
+                <option value="preset:female_formal">🏢 เสียงหญิงทางการ (สุขุม - ค่ะ)</option>
+                <option value="preset:male_polite">👨 เสียงชายสุภาพ (ครับ)</option>
+                <option value="preset:male_formal">👔 เสียงชายทางการ (ครับ)</option>
+                <option value="preset:child_bright">👧 เสียงน้องต้อนรับ (สดใส - ค่ะ)</option>
+              </optgroup>
+              <optgroup id="adminDeviceVoicesGroup" label="🔊 เสียงในอุปกรณ์ของคุณ (System Voices)">
+              </optgroup>
+            </select>
+          </div>
+
+          <!-- Particle and Sliders -->
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div>
+              <label class="block text-xs font-bold text-slate-700 mb-1">คำลงท้าย (Particle)</label>
+              <select id="adminVoiceParticleSelect" onchange="AdminModule.handleParticleChange(this.value)" class="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs font-bold">
+                <option value="ค่ะ">ค่ะ</option>
+                <option value="ครับ">ครับ</option>
+              </select>
+            </div>
+            <div>
+              <div class="flex justify-between text-xs font-bold text-slate-700 mb-1">
+                <span>ความเร็ว (Rate)</span>
+                <span id="adminVoiceRateLabel" class="font-mono text-blue-600">1.00x</span>
+              </div>
+              <input type="range" id="adminVoiceRateSlider" min="0.7" max="1.5" step="0.05" value="1.0"
+                     oninput="AdminModule.handleSliderChange('rate', this.value)" class="w-full accent-blue-600">
+            </div>
+            <div>
+              <div class="flex justify-between text-xs font-bold text-slate-700 mb-1">
+                <span>ระดับเสียง (Pitch)</span>
+                <span id="adminVoicePitchLabel" class="font-mono text-blue-600">1.00x</span>
+              </div>
+              <input type="range" id="adminVoicePitchSlider" min="0.7" max="1.5" step="0.05" value="1.0"
+                     oninput="AdminModule.handleSliderChange('pitch', this.value)" class="w-full accent-blue-600">
+            </div>
+          </div>
+
+          <!-- Sound Preview Buttons -->
+          <div class="space-y-2 pt-2 border-t border-slate-100">
+            <span class="block text-xs font-bold text-slate-500">ทดสอบเสียงเหตุการณ์ในระบบขาย:</span>
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              <button onclick="AdminModule.testVoicePhrase('total')" class="py-2 px-3 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-bold border border-blue-200 transition">
+                🗣️ ยอดรวมบิล
+              </button>
+              <button onclick="AdminModule.testVoicePhrase('received')" class="py-2 px-3 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-xs font-bold border border-emerald-200 transition">
+                🗣️ ยอดรับเงิน
+              </button>
+              <button onclick="AdminModule.testVoicePhrase('change')" class="py-2 px-3 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-700 text-xs font-bold border border-amber-200 transition">
+                🗣️ เงินทอน
+              </button>
+              <button onclick="AdminModule.testVoicePhrase('void')" class="py-2 px-3 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-bold border border-rose-200 transition">
+                🗣️ ยกเลิกบิล
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tab Content 6: Audit Logs -->
+      <div id="adminTab_audit" class="admin-tab-content hidden bg-white rounded-3xl p-5 border border-slate-200/80 shadow-sm space-y-3">
+        <h3 class="font-bold text-sm text-slate-900">ประวัติการดำเนินงานในระบบ (Audit Logs)</h3>
+        <div class="max-h-96 overflow-y-auto">
+          <table class="w-full text-left text-xs">
+            <thead>
+              <tr class="border-b border-slate-200 text-slate-400 uppercase font-bold sticky top-0 bg-white">
+                <th class="py-2 px-3">วัน-เวลา</th>
+                <th class="py-2 px-3">ผู้ทำ</th>
+                <th class="py-2 px-3">การกระทำ (Action)</th>
+                <th class="py-2 px-3">เป้าหมาย</th>
+                <th class="py-2 px-3">รายละเอียด</th>
+              </tr>
+            </thead>
+            <tbody id="adminAuditTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Tab Content 7: API URL Setting -->
+      <div id="adminTab_api" class="admin-tab-content hidden bg-white rounded-3xl p-6 border border-slate-200/80 shadow-sm space-y-4 max-w-xl">
+        <h3 class="font-bold text-base text-slate-900 pb-2 border-b border-slate-100">กำหนด URL ของ Google Apps Script Web App</h3>
+        <p class="text-xs text-slate-500">ใส่ URL ที่ได้จากการกด Deploy -> New deployment -> Web app ใน Google Apps Script</p>
+        <input type="url" id="adminApiUrlInput" placeholder="https://script.google.com/macros/s/.../exec" class="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-xs font-mono">
+        <button onclick="AdminModule.testAndSaveApiUrl()" class="px-6 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-md">
+          ทดสอบการเชื่อมต่อและบันทึก
+        </button>
+      </div>
+
+    </section>
+
+  </main>
+
+  <!-- ================= MODALS & POPUPS ================= -->
+
+  <!-- 1. Payment Modal -->
+  <div id="paymentModal" class="hidden fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-4">
+      <div class="flex items-center justify-between pb-3 border-b border-slate-100">
+        <h3 class="font-black text-lg text-slate-900">ชำระเงิน</h3>
+        <button onclick="UI.closeModal('paymentModal')" class="text-slate-400 hover:text-slate-700 text-lg">✕</button>
+      </div>
+      
+      <div class="text-center p-4 rounded-2xl bg-blue-50 border border-blue-200">
+        <div class="text-xs font-bold text-blue-900 uppercase">ยอดที่ต้องชำระ</div>
+        <div id="payModalGrandTotal" class="text-3xl font-black font-mono text-blue-700">฿0.00</div>
+      </div>
+
+      <!-- Payment Method -->
+      <div class="grid grid-cols-2 gap-2 text-xs font-bold">
+        <label class="flex items-center justify-center gap-2 p-2.5 rounded-xl border border-slate-200 hover:bg-slate-50 cursor-pointer">
+          <input type="radio" name="payMethodOption" value="CASH" checked> 💵 เงินสด
+        </label>
+        <label class="flex items-center justify-center gap-2 p-2.5 rounded-xl border border-slate-200 hover:bg-slate-50 cursor-pointer">
+          <input type="radio" name="payMethodOption" value="TRANSFER"> 📱 โอน / QR Code
+        </label>
+      </div>
+
+      <!-- Received Cash Input -->
+      <div>
+        <label class="block text-xs font-bold text-slate-700 mb-1">รับเงินมา (บาท)</label>
+        <input type="number" step="0.25" id="payReceivedInput" oninput="SalesModule.calculateChange()"
+               class="w-full px-4 py-3 text-2xl font-black font-mono text-right rounded-2xl bg-slate-50 border border-slate-200 focus:outline-none focus:border-blue-600 focus:bg-white">
+      </div>
+
+      <!-- Quick Cash Buttons -->
+      <div class="grid grid-cols-3 gap-2">
+        <button onclick="SalesModule.setQuickCash('EXACT')" class="py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-xs font-bold">พอดี</button>
+        <button onclick="SalesModule.setQuickCash(50)" class="py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-xs font-bold font-mono">฿50</button>
+        <button onclick="SalesModule.setQuickCash(100)" class="py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-xs font-bold font-mono">฿100</button>
+        <button onclick="SalesModule.setQuickCash(500)" class="py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-xs font-bold font-mono">฿500</button>
+        <button onclick="SalesModule.setQuickCash(1000)" class="py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-xs font-bold font-mono">฿1,000</button>
+        <button onclick="SalesModule.setQuickCash(2000)" class="py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-xs font-bold font-mono">฿2,000</button>
+      </div>
+
+      <!-- Change Calculation Display -->
+      <div class="flex items-baseline justify-between p-3.5 rounded-2xl bg-emerald-50 border border-emerald-200">
+        <span class="text-xs font-bold text-emerald-900 uppercase">เงินทอน (Change)</span>
+        <span id="payModalChange" class="text-2xl font-black font-mono text-emerald-700">฿0.00</span>
+      </div>
+
+      <button id="payModalConfirmBtn" onclick="SalesModule.confirmPayment()"
+              class="w-full py-4 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-700 hover:to-teal-800 text-white font-black text-base shadow-lg transition cursor-pointer">
+        ยืนยันการชำระเงิน
+      </button>
+    </div>
+  </div>
+
+  <!-- 2. Void Receipt Modal -->
+  <div id="voidReceiptModal" class="hidden fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-4">
+      <div class="flex items-center justify-between pb-3 border-b border-slate-100">
+        <h3 class="font-black text-lg text-rose-700">ยกเลิกใบเสร็จรับเงิน (Void)</h3>
+        <button onclick="UI.closeModal('voidReceiptModal')" class="text-slate-400 hover:text-slate-700">✕</button>
+      </div>
+
+      <div class="flex gap-2">
+        <input type="text" id="voidSearchReceiptNo" placeholder="กรอกเลขที่ใบเสร็จ..." class="flex-1 px-4 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs font-mono font-bold">
+        <button onclick="SalesModule.searchReceiptForVoid()" class="px-4 py-2 rounded-xl bg-slate-900 text-white font-bold text-xs">ค้นหา</button>
+      </div>
+
+      <div id="voidReceiptDetailContainer" class="min-h-24"></div>
+
+      <div>
+        <label class="block text-xs font-bold text-slate-700 mb-1">เหตุผลในการยกเลิก (บังคับ)</label>
+        <input type="text" id="voidReasonInput" placeholder="เช่น ลูกค้าเปลี่ยนใจ, สแกนสินค้าผิดชิ้น..." class="w-full px-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs">
+      </div>
+
+      <button id="voidConfirmBtn" disabled onclick="SalesModule.confirmVoidReceipt()" class="w-full py-3 rounded-2xl bg-rose-600 hover:bg-rose-700 disabled:opacity-50 text-white font-bold text-xs shadow-md">
+        ยืนยันการยกเลิกใบเสร็จ (คืนสต๊อก)
+      </button>
+    </div>
+  </div>
+
+  <!-- 3. Receipt Preview Modal -->
+  <div id="receiptPreviewModal" class="hidden fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-white rounded-3xl max-w-sm w-full p-6 shadow-2xl border border-slate-200 space-y-4 max-h-[90vh] flex flex-col">
+      <div class="flex items-center justify-between pb-2 border-b border-slate-100">
+        <h3 class="font-bold text-sm text-slate-800">ตัวอย่างใบเสร็จ</h3>
+        <button onclick="UI.closeModal('receiptPreviewModal')" class="text-slate-400 hover:text-slate-700">✕</button>
+      </div>
+      <div id="receiptPreviewModalContent" class="flex-1 overflow-y-auto p-2 border border-slate-100 rounded-xl bg-slate-50"></div>
+      <div class="grid grid-cols-2 gap-2 pt-2">
+        <button onclick="UI.closeModal('receiptPreviewModal')" class="py-2.5 rounded-xl bg-slate-100 text-xs font-bold">ปิด</button>
+        <button onclick="window.print()" class="py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-sm">สั่งพิมพ์</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 4. Product Edit Modal -->
+  <div id="productEditModal" class="hidden fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-4">
+      <div class="flex items-center justify-between pb-3 border-b border-slate-100">
+        <h3 id="productModalTitle" class="font-bold text-base text-slate-900">เพิ่ม/แก้ไขสินค้า</h3>
+        <button onclick="UI.closeModal('productEditModal')" class="text-slate-400 hover:text-slate-700">✕</button>
+      </div>
+      <div class="space-y-3 text-xs">
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block font-bold text-slate-700 mb-1">รหัสสินค้า (SKU)</label>
+            <input type="text" id="prodModalSku" class="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 font-mono font-bold">
+          </div>
+          <div>
+            <label class="block font-bold text-slate-700 mb-1">บาร์โค้ด (Barcode)</label>
+            <input type="text" id="prodModalBarcode" class="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 font-mono">
+          </div>
+        </div>
+        <div>
+          <label class="block font-bold text-slate-700 mb-1">ชื่อสินค้า</label>
+          <input type="text" id="prodModalName" class="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 font-bold">
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block font-bold text-slate-700 mb-1">หมวดหมู่</label>
+            <select id="prodModalCategory" class="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 font-bold"></select>
+          </div>
+          <div>
+            <label class="block font-bold text-slate-700 mb-1">หน่วยนับ</label>
+            <select id="prodModalUnit" class="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 font-bold"></select>
+          </div>
+        </div>
+        <div class="grid grid-cols-3 gap-2">
+          <div>
+            <label class="block font-bold text-slate-700 mb-1">ราคาทุน (฿)</label>
+            <input type="number" step="0.5" id="prodModalCost" class="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-right font-mono">
+          </div>
+          <div>
+            <label class="block font-bold text-slate-700 mb-1">ราคาขาย (฿)</label>
+            <input type="number" step="0.5" id="prodModalPrice" class="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-right font-mono font-bold text-blue-600">
+          </div>
+          <div>
+            <label class="block font-bold text-slate-700 mb-1">จุดเตือนหมด (Min)</label>
+            <input type="number" id="prodModalMin" class="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-right font-mono">
+          </div>
+        </div>
+        <button onclick="StockModule.saveProductModal()" class="w-full py-3 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs shadow-md mt-2">
+          บันทึกสินค้า
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 5. User Edit Modal -->
+  <div id="userEditModal" class="hidden fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-4">
+      <div class="flex items-center justify-between pb-3 border-b border-slate-100">
+        <h3 id="userModalTitle" class="font-bold text-base text-slate-900">ผู้ใช้งาน</h3>
+        <button onclick="UI.closeModal('userEditModal')" class="text-slate-400 hover:text-slate-700">✕</button>
+      </div>
+      <div class="space-y-3 text-xs">
+        <input type="hidden" id="userModalUserId">
+        <div>
+          <label class="block font-bold text-slate-700 mb-1">ชื่อผู้ใช้ (Username)</label>
+          <input type="text" id="userModalUsername" class="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 font-mono font-bold">
+        </div>
+        <div>
+          <label class="block font-bold text-slate-700 mb-1">ชื่อ-นามสกุล</label>
+          <input type="text" id="userModalName" class="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 font-bold">
+        </div>
+        <div>
+          <label class="block font-bold text-slate-700 mb-1">รหัสผ่าน</label>
+          <input type="password" id="userModalPassword" class="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200">
+        </div>
+        <div>
+          <label class="block font-bold text-slate-700 mb-1">บทบาท (Role)</label>
+          <select id="userModalRoleSelect" class="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 font-bold"></select>
+        </div>
+        <label class="flex items-center gap-2 pt-1 font-bold cursor-pointer">
+          <input type="checkbox" id="userModalActiveCheck" checked class="rounded text-blue-600">
+          <span>เปิดใช้งานบัญชีนี้</span>
+        </label>
+        <button onclick="AdminModule.saveUserModal()" class="w-full py-3 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-xs shadow-md mt-2">
+          บันทึกข้อมูลผู้ใช้
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 6. Confirmation Modal -->
+  <div id="confirmModal" class="hidden fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-white rounded-3xl max-w-sm w-full p-6 shadow-2xl border border-slate-200 space-y-4">
+      <h3 id="confirmModalTitle" class="font-extrabold text-base text-slate-900">ยืนยัน</h3>
+      <p id="confirmModalMessage" class="text-xs text-slate-600 leading-relaxed"></p>
+      <div class="grid grid-cols-2 gap-2 pt-2">
+        <button id="confirmModalCancelBtn" class="py-2.5 rounded-xl bg-slate-100 text-slate-700 font-bold text-xs">ยกเลิก</button>
+        <button id="confirmModalOkBtn" class="py-2.5 rounded-xl bg-blue-600 text-white font-bold text-xs shadow-sm">ตกลง</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 7. API URL Quick Setup Modal -->
+  <div id="apiUrlModal" class="hidden fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-4">
+      <div class="flex items-center justify-between pb-2 border-b border-slate-100">
+        <h3 class="font-bold text-base text-slate-900">กำหนด URL ของ Google Apps Script</h3>
+        <button onclick="UI.closeModal('apiUrlModal')" class="text-slate-400 hover:text-slate-700">✕</button>
+      </div>
+      <p class="text-xs text-slate-500">ใส่ Web App URL ที่ได้จากการ Deploy ใน Google Apps Script:</p>
+      <input type="url" id="quickApiUrlInput" placeholder="https://script.google.com/macros/s/.../exec" class="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-xs font-mono">
+      <div class="flex justify-end gap-2 pt-2">
+        <button onclick="UI.closeModal('apiUrlModal')" class="px-4 py-2 rounded-xl bg-slate-100 text-xs font-bold">ยกเลิก</button>
+        <button onclick="Api.setApiUrl(document.getElementById('quickApiUrlInput').value); UI.closeModal('apiUrlModal');" class="px-5 py-2 rounded-xl bg-blue-600 text-white font-bold text-xs">บันทึก</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Global Toast Notifications Container -->
+  <div id="toastContainer" class="fixed top-5 right-5 z-50 flex flex-col gap-2 max-w-sm w-full pointer-events-none"></div>
+
+  <!-- Global Loading Spinner Overlay -->
+  <div id="globalLoadingOverlay" class="hidden fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center">
+    <div class="bg-white rounded-3xl p-6 shadow-2xl border border-slate-200 flex items-center gap-4">
+      <div class="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+      <span id="globalLoadingText" class="text-sm font-extrabold text-slate-800">กำลังประมวลผล...</span>
+    </div>
+  </div>
+
+  <!-- Hidden iframe for silent printing -->
+  <iframe id="receiptPrintIframe" class="hidden"></iframe>
+
+  <!-- ================= SCRIPTS ================= -->
+  <script src="config.js"></script>
+  <script src="js/numberToThai.js"></script>
+  <script src="js/sound.js"></script>
+  <script src="js/print.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/modules/launcher.js"></script>
+  <script src="js/modules/sales.js"></script>
+  <script src="js/modules/stock.js"></script>
+  <script src="js/modules/reports.js"></script>
+  <script src="js/modules/admin.js"></script>
+  <script src="js/router.js"></script>
+
+  <script>
+    // System Startup
+    window.addEventListener('DOMContentLoaded', () => {
+      SoundManager.init();
+      Auth.init();
+      Router.init();
+    });
+  </script>
+</body>
+</html>
