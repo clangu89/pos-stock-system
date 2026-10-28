@@ -40,8 +40,17 @@
         </span>
       </div>
 
-      <!-- Right Controls: User Profile & Logout -->
-      <div class="flex items-center gap-3">
+      <!-- Right Controls: Branch Switcher, User Profile & Logout -->
+      <div class="flex items-center gap-2.5">
+        <!-- Active Branch Badge / Switcher -->
+        <div id="headerBranchContainer" class="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-2xl bg-slate-100 hover:bg-blue-50 text-slate-700 hover:text-blue-700 font-bold text-xs border border-slate-200 hover:border-blue-300 transition cursor-pointer select-none"
+             onclick="Auth.openBranchSwitcherModal()" title="คลิกเพื่อสลับสาขาที่เข้าใช้งาน">
+          <span>🏢</span>
+          <span id="headerBranchName">สาขาหลัก</span>
+          <span class="text-[10px] text-slate-400 font-mono" id="headerBranchCode">(MAIN)</span>
+          <span class="text-[10px] text-slate-400">▾</span>
+        </div>
+
         <div class="text-right hidden sm:block">
           <div id="headerUserName" class="text-xs font-extrabold text-slate-900 leading-tight">User</div>
           <div id="headerUserRole" class="text-[10px] font-bold text-blue-600 uppercase">Role</div>
@@ -68,7 +77,17 @@
         <h2 class="text-2xl font-black text-center text-slate-900 mb-1">ยินดีต้อนรับ</h2>
         <p class="text-xs text-center text-slate-500 mb-6">ระบบขายสินค้าและสต๊อก (Google Apps Script + GitHub Pages)</p>
 
-        <form onsubmit="event.preventDefault(); Auth.login(document.getElementById('loginUsername').value, document.getElementById('loginPassword').value);" class="space-y-4">
+        <form onsubmit="event.preventDefault(); Auth.login(document.getElementById('loginUsername').value, document.getElementById('loginPassword').value, document.getElementById('loginBranchSelect').value);" class="space-y-4">
+          <div>
+            <label class="block text-xs font-bold text-slate-700 mb-1">สาขาที่เข้าใช้งาน (Branch)</label>
+            <div class="relative">
+              <span class="absolute inset-y-0 left-3 flex items-center text-slate-400 pointer-events-none">🏢</span>
+              <select id="loginBranchSelect" required
+                      class="w-full pl-9 pr-4 py-3 rounded-2xl bg-slate-50 border border-slate-200 focus:outline-none focus:border-blue-600 focus:bg-white text-sm font-semibold transition cursor-pointer">
+                <option value="B01">🏢 สาขาหลัก (สำนักงานใหญ่)</option>
+              </select>
+            </div>
+          </div>
           <div>
             <label class="block text-xs font-bold text-slate-700 mb-1">ชื่อผู้ใช้งาน (Username)</label>
             <input type="text" id="loginUsername" required placeholder="กรอกชื่อผู้ใช้งาน" autocomplete="username"
@@ -512,7 +531,8 @@
                 <option value="roles">🛡️ สิทธิ์การใช้งาน</option>
                 <option value="audit">📋 Audit Logs</option>
               </optgroup>
-              <optgroup label="📦 ข้อมูลหลักสินค้า">
+              <optgroup label="🏢 ข้อมูลหลักและสาขา">
+                <option value="branches">🏢 จัดการสาขา</option>
                 <option value="categories">🗂️ หมวดสินค้า</option>
                 <option value="units">📏 หน่วยนับ</option>
               </optgroup>
@@ -549,12 +569,15 @@
               </div>
             </div>
 
-            <!-- Group 2: Master Data -->
+            <!-- Group 2: Master Data & Branches -->
             <div class="pt-3 border-t border-slate-100">
               <div class="px-3 pb-1.5 text-[10px] font-black text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
-                <span>📦</span> <span>ข้อมูลหลักสินค้า</span>
+                <span>🏢</span> <span>ข้อมูลหลักและสาขา</span>
               </div>
               <div class="space-y-1">
+                <button data-tab="branches" class="admin-tab-btn w-full px-3.5 py-2.5 rounded-2xl font-bold text-xs flex items-center gap-2.5 transition text-left cursor-pointer text-slate-600 hover:text-slate-900 hover:bg-slate-100/80">
+                  <span class="text-sm">🏢</span> <span class="flex-1">จัดการสาขา</span>
+                </button>
                 <button data-tab="categories" class="admin-tab-btn w-full px-3.5 py-2.5 rounded-2xl font-bold text-xs flex items-center gap-2.5 transition text-left cursor-pointer text-slate-600 hover:text-slate-900 hover:bg-slate-100/80">
                   <span class="text-sm">🗂️</span> <span class="flex-1">หมวดสินค้า</span>
                 </button>
@@ -1140,6 +1163,46 @@
         </div>
       </div>
 
+      <!-- Tab Content: Branch Management -->
+      <div id="adminTab_branches" class="admin-tab-content hidden bg-white rounded-3xl p-6 border border-slate-200/80 shadow-sm space-y-4">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-slate-100 gap-3">
+          <div>
+            <h3 class="font-bold text-base text-slate-900 flex items-center gap-2">
+              <span>🏢</span> <span>รายชื่อสาขาทั้งหมด (Branches Management)</span>
+            </h3>
+            <p class="text-xs text-slate-500">จัดการสาขา ตัวย่อสำหรับรันบิล ({BRANCH}) เบอร์โทร ที่อยู่ และสถานะเปิด/ปิด</p>
+          </div>
+          <div class="flex items-center gap-2">
+            <input type="text" id="branchSearchInput" oninput="AdminModule.filterBranchesTable(this.value)"
+                   placeholder="ค้นหาชื่อ/รหัสสาขา..."
+                   class="px-3.5 py-1.5 rounded-xl bg-slate-50 border border-slate-200 text-xs w-48 focus:bg-white focus:border-blue-600">
+            <button onclick="AdminModule.openBranchModal()" class="px-3.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-sm flex items-center gap-1 whitespace-nowrap cursor-pointer">
+              <span>+</span>
+              <span>เพิ่มสาขาใหม่</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-xs">
+            <thead>
+              <tr class="border-b border-slate-200 text-slate-400 uppercase font-bold text-[11px]">
+                <th class="py-2.5 px-3">รหัสสาขา</th>
+                <th class="py-2.5 px-3">ตัวย่อ (Code)</th>
+                <th class="py-2.5 px-3">ชื่อสาขา</th>
+                <th class="py-2.5 px-3">เบอร์โทรศัพท์</th>
+                <th class="py-2.5 px-3">เลขผู้เสียภาษี</th>
+                <th class="py-2.5 px-3 text-center">สถานะ</th>
+                <th class="py-2.5 px-3 text-right">จัดการ</th>
+              </tr>
+            </thead>
+            <tbody id="adminBranchesTableBody" class="divide-y divide-slate-100 font-medium">
+              <!-- Rendered by AdminModule.renderBranchesTable() -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
       <!-- Tab Content 5.2: Product Categories Management -->
       <div id="adminTab_categories" class="admin-tab-content hidden bg-white rounded-3xl p-6 border border-slate-200/80 shadow-sm space-y-4">
         <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-slate-100 gap-3">
@@ -1422,13 +1485,108 @@
           <label class="block font-bold text-slate-700 mb-1">บทบาท (Role)</label>
           <select id="userModalRoleSelect" class="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 font-bold"></select>
         </div>
+        <div>
+          <label class="block font-bold text-slate-700 mb-1">สาขาที่เข้าใช้งานได้</label>
+          <div id="userModalBranchCheckboxes" class="p-2.5 rounded-xl bg-slate-50 border border-slate-200 max-h-28 overflow-y-auto space-y-1.5 text-xs">
+            <!-- Populated dynamically by AdminModule -->
+          </div>
+          <span class="text-[10px] text-slate-400">ผู้ใช้จะเลือกเข้าใช้งานได้เฉพาะสาขาที่มีเครื่องหมายถูก</span>
+        </div>
         <label class="flex items-center gap-2 pt-1 font-bold cursor-pointer">
           <input type="checkbox" id="userModalActiveCheck" checked class="rounded text-blue-600">
           <span>เปิดใช้งานบัญชีนี้</span>
         </label>
-        <button onclick="AdminModule.saveUserModal()" class="w-full py-3 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-xs shadow-md mt-2">
+        <button onclick="AdminModule.saveUserModal()" class="w-full py-3 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-xs shadow-md mt-2 cursor-pointer">
           บันทึกข้อมูลผู้ใช้
         </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Branch Edit Modal -->
+  <div id="branchEditModal" class="hidden fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 space-y-4">
+      <div class="flex items-center justify-between pb-3 border-b border-slate-100">
+        <h3 id="branchModalTitle" class="text-base font-black text-slate-900 flex items-center gap-2">
+          <span>🏢</span> <span>เพิ่มสาขาใหม่</span>
+        </h3>
+        <button onclick="UI.closeModal('branchEditModal')" class="text-slate-400 hover:text-slate-600 font-bold p-1">✕</button>
+      </div>
+
+      <form id="branchEditForm" onsubmit="event.preventDefault(); AdminModule.saveBranch();" class="space-y-3.5 text-xs">
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block font-bold text-slate-700 mb-1">รหัสสาขา (Branch ID)</label>
+            <input type="text" id="branchModalIdInput" placeholder="เว้นว่างเพื่อรันอัตโนมัติ (เช่น B02)"
+                   class="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-mono font-bold focus:bg-white focus:border-blue-600">
+          </div>
+          <div>
+            <label class="block font-bold text-slate-700 mb-1">ตัวย่อสาขา (Code ในบิล) <span class="text-rose-500">*</span></label>
+            <input type="text" id="branchModalCodeInput" required placeholder="เช่น MAIN, B02"
+                   class="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-mono font-bold focus:bg-white focus:border-blue-600 uppercase">
+          </div>
+        </div>
+
+        <div>
+          <label class="block font-bold text-slate-700 mb-1">ชื่อสาขา <span class="text-rose-500">*</span></label>
+          <input type="text" id="branchModalNameInput" required placeholder="เช่น สาขา 2 (เซ็นทรัลบางนา)"
+                 class="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-bold focus:bg-white focus:border-blue-600">
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block font-bold text-slate-700 mb-1">เบอร์โทรศัพท์</label>
+            <input type="text" id="branchModalPhoneInput" placeholder="02-xxx-xxxx"
+                   class="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs focus:bg-white focus:border-blue-600">
+          </div>
+          <div>
+            <label class="block font-bold text-slate-700 mb-1">เลขประจำตัวผู้เสียภาษี</label>
+            <input type="text" id="branchModalTaxIdInput" placeholder="01055xxxxxxxx"
+                   class="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-mono focus:bg-white focus:border-blue-600">
+          </div>
+        </div>
+
+        <div>
+          <label class="block font-bold text-slate-700 mb-1">ที่อยู่สาขา (แสดงบนหัวใบเสร็จ)</label>
+          <textarea id="branchModalAddressInput" rows="2" placeholder="ที่อยู่สาขา ถนน แขวง/ตำบล เขต/อำเภอ จังหวัด รหัสไปรษณีย์"
+                    class="w-full px-3.5 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs focus:bg-white focus:border-blue-600 resize-none"></textarea>
+        </div>
+
+        <div class="pt-2 flex items-center justify-between border-t border-slate-100">
+          <label class="flex items-center gap-2 cursor-pointer font-bold text-slate-700 select-none">
+            <input type="checkbox" id="branchModalActiveCheck" checked class="w-4 h-4 text-blue-600 rounded">
+            <span>เปิดใช้งานสาขานี้ (Active)</span>
+          </label>
+        </div>
+
+        <div class="pt-3 border-t border-slate-100 flex items-center justify-end gap-2">
+          <button type="button" onclick="UI.closeModal('branchEditModal')"
+                  class="px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold transition">
+            ยกเลิก
+          </button>
+          <button type="submit"
+                  class="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold shadow-md transition cursor-pointer">
+            บันทึกข้อมูลสาขา
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Branch Switcher Modal (Top Navbar) -->
+  <div id="branchSwitcherModal" class="hidden fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-white rounded-3xl max-w-sm w-full p-6 shadow-2xl border border-slate-200 space-y-4">
+      <div class="flex items-center justify-between pb-2 border-b border-slate-100">
+        <h3 class="text-base font-black text-slate-900 flex items-center gap-2">
+          <span>🏢</span> <span>สลับสาขาที่ใช้งาน</span>
+        </h3>
+        <button onclick="UI.closeModal('branchSwitcherModal')" class="text-slate-400 hover:text-slate-600 font-bold p-1">✕</button>
+      </div>
+
+      <p class="text-xs text-slate-500">เลือกสาขาที่คุณต้องการเข้าทำงาน ระบบจะปรับปรุงข้อมูลสต๊อกและยอดขายให้ทันที:</p>
+
+      <div id="branchSwitcherList" class="space-y-2 max-h-60 overflow-y-auto">
+        <!-- Rendered by Auth.openBranchSwitcherModal() -->
       </div>
     </div>
   </div>

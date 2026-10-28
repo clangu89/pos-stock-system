@@ -143,12 +143,32 @@ function getBranchesList() {
 }
 
 function saveBranchData(branchData, sessionUser) {
-  const branchId = String(branchData.branchId || '').trim();
+  let branchId = String(branchData.branchId || '').trim();
   const code = String(branchData.code || '').trim().toUpperCase();
   const name = String(branchData.name || '').trim();
 
-  if (!branchId || !name || !code) {
-    throw new Error('กรุณาระบุรหัสสาขา ตัวย่อสาขา และชื่อสาขา');
+  if (!name || !code) {
+    throw new Error('กรุณาระบุตัวย่อสาขาและชื่อสาขา');
+  }
+
+  // If no branchId provided (new branch), auto-generate B01, B02...
+  if (!branchId) {
+    const all = getTable(SHEETS.BRANCHES).rows;
+    let maxNum = 0;
+    all.forEach(b => {
+      const match = String(b.branchId).match(/^B(\d+)$/i);
+      if (match) {
+        const num = parseInt(match[1], 10);
+        if (num > maxNum) maxNum = num;
+      }
+    });
+    branchId = 'B' + String(maxNum + 1).padStart(2, '0');
+  }
+
+  // Check duplicate code with other branches
+  const dupCode = findRow(SHEETS.BRANCHES, r => r.code === code && r.branchId !== branchId);
+  if (dupCode) {
+    throw new Error(`ตัวย่อสาขา "${code}" ถูกใช้งานโดย "${dupCode.name}" แล้ว กรุณาระบุตัวย่ออื่น`);
   }
 
   const existing = findRow(SHEETS.BRANCHES, r => r.branchId === branchId);
@@ -175,6 +195,59 @@ function saveBranchData(branchData, sessionUser) {
   }
 
   return { ok: true, branch: record };
+}
+
+function deleteBranchData(branchId, sessionUser) {
+  const cleanId = String(branchId || '').trim();
+  if (!cleanId) {
+    throw new Error('ไม่ระบุรหัสสาขา');
+  }
+
+  const allBranches = getTable(SHEETS.BRANCHES).rows;
+  if (allBranches.length <= 1) {
+    throw new Error('ไม่สามารถลบสาขาสุดท้ายของระบบได้ (ระบบต้องมีอย่างน้อย 1 สาขา)');
+  }
+
+  const target = allBranches.find(b => b.branchId === cleanId);
+  if (!target) {
+    throw new Error(`ไม่พบสาขารหัส: ${cleanId}`);
+  }
+
+  // Delete Protection Checks:
+  // 1. Check Sales history
+  const sales = findRows(SHEETS.SALES, r => r.branchId === cleanId);
+  if (sales.length > 0) {
+    throw new Error(`ไม่สามารถลบสาขาได้เนื่องจากมีประวัติการขาย ${sales.length} รายการแล้ว กรุณาเลือกปิดการใช้งาน (Deactivate) แทน`);
+  }
+
+  // 2. Check Stock Balances > 0
+  const balances = findRows(SHEETS.STOCK_BALANCE, r => r.branchId === cleanId && (parseFloat(r.qty) || 0) > 0);
+  if (balances.length > 0) {
+    throw new Error(`ไม่สามารถลบสาขาได้เนื่องจากยังมีสินค้าคงเหลือในสต๊อกสาขานี้ ${balances.length} รายการ`);
+  }
+
+  // 3. Check Stock Movements
+  const movements = findRows(SHEETS.STOCK_MOVEMENTS, r => r.branchId === cleanId);
+  if (movements.length > 0) {
+    throw new Error(`ไม่สามารถลบสาขาได้เนื่องจากมีประวัติความเคลื่อนไหวสต๊อกในสาขานี้แล้ว กรุณาเลือกปิดการใช้งานแทน`);
+  }
+
+  // 4. Check Users assigned exclusively to this branch
+  const users = findRows(SHEETS.USERS, r => {
+    const uBranches = String(r.branchIds || '').split(',').map(b => b.trim());
+    return uBranches.includes(cleanId) && uBranches.length === 1;
+  });
+  if (users.length > 0) {
+    throw new Error(`ไม่สามารถลบสาขาได้เนื่องจากมีผู้ใช้งาน ${users.length} คนผูกกับสาขานี้เท่านั้น (${users.map(u => u.username).join(', ')})`);
+  }
+
+  // Clean to delete
+  deleteRows(SHEETS.BRANCHES, r => r.branchId === cleanId);
+  deleteRows(SHEETS.STOCK_BALANCE, r => r.branchId === cleanId);
+
+  logAudit(sessionUser.userId, 'DELETE_BRANCH', 'Branches', { branchId: cleanId, name: target.name });
+
+  return { ok: true, message: `ลบสาขา "${target.name}" เรียบร้อยแล้ว` };
 }
 
 function getAllConfigs() {

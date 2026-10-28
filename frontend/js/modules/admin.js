@@ -62,6 +62,7 @@ const AdminModule = {
 
     if (tabName === 'users') this.renderUsersTable();
     else if (tabName === 'roles') this.renderRolesMatrix();
+    else if (tabName === 'branches') this.loadBranchesUI();
     else if (tabName === 'receipt') this.renderReceiptSettings();
     else if (tabName === 'receiptText') this.loadReceiptTextsUI();
     else if (tabName === 'printer') this.renderPrinterSettings();
@@ -136,6 +137,26 @@ const AdminModule = {
       roleSelect.innerHTML = this.roles.map(r => `<option value="${r.roleId}">${r.roleName}</option>`).join('');
     }
 
+    const branchContainer = document.getElementById('userModalBranchCheckboxes');
+    if (branchContainer) {
+      const uBranches = isEdit ? (this.users.find(x => x.userId === userId)?.branchIds || ['B01']) : ['B01'];
+      const hasAll = uBranches.includes('*');
+      branchContainer.innerHTML = `
+        <label class="flex items-center gap-2 font-bold cursor-pointer text-blue-700 pb-1 border-b border-slate-100">
+          <input type="checkbox" id="userBranch_all" value="*" ${hasAll ? 'checked' : ''} onchange="AdminModule.toggleAllUserBranches(this.checked)" class="rounded text-blue-600">
+          <span>ทุกสาขา (*)</span>
+        </label>
+      ` + this.branches.map(b => {
+        const isChecked = hasAll || uBranches.includes(b.branchId);
+        return `
+          <label class="flex items-center gap-2 font-medium cursor-pointer text-slate-700">
+            <input type="checkbox" name="userBranchItem" value="${b.branchId}" ${isChecked ? 'checked' : ''} class="rounded text-blue-600">
+            <span>${b.name} (${b.code || b.branchId})</span>
+          </label>
+        `;
+      }).join('');
+    }
+
     if (isEdit) {
       const u = this.users.find(x => x.userId === userId);
       if (!u) return;
@@ -160,6 +181,12 @@ const AdminModule = {
     UI.openModal('userEditModal');
   },
 
+  toggleAllUserBranches(isChecked) {
+    document.querySelectorAll('input[name="userBranchItem"]').forEach(cb => {
+      cb.checked = isChecked;
+    });
+  },
+
   async saveUserModal() {
     const userId = document.getElementById('userModalUserId').value;
     const username = document.getElementById('userModalUsername').value.trim();
@@ -178,13 +205,26 @@ const AdminModule = {
       return;
     }
 
+    const allChecked = document.getElementById('userBranch_all')?.checked;
+    let selectedBranches = [];
+    if (allChecked) {
+      selectedBranches = ['*'];
+    } else {
+      document.querySelectorAll('input[name="userBranchItem"]:checked').forEach(cb => {
+        selectedBranches.push(cb.value);
+      });
+    }
+    if (selectedBranches.length === 0) {
+      selectedBranches = [this.branches[0] ? this.branches[0].branchId : 'B01'];
+    }
+
     const payload = {
       userId,
       username,
       name,
       password: password || undefined,
       roleId,
-      branchIds: ['B01'],
+      branchIds: selectedBranches,
       active
     };
 
@@ -200,6 +240,194 @@ const AdminModule = {
       this.renderUsersTable();
     } else {
       UI.showToast(`บันทึกไม่สำเร็จ: ${res.error || res.message}`, 'error');
+    }
+  },
+
+  // --- Branches Management ---
+  loadBranchesUI() {
+    this.renderBranchesTable();
+  },
+
+  filterBranchesTable(query) {
+    const q = (query || '').trim().toLowerCase();
+    if (!q) {
+      this.renderBranchesTable();
+      return;
+    }
+    const filtered = this.branches.filter(b =>
+      (b.branchId && b.branchId.toLowerCase().includes(q)) ||
+      (b.code && b.code.toLowerCase().includes(q)) ||
+      (b.name && b.name.toLowerCase().includes(q)) ||
+      (b.phone && b.phone.toLowerCase().includes(q)) ||
+      (b.address && b.address.toLowerCase().includes(q))
+    );
+    this.renderBranchesTable(filtered);
+  },
+
+  renderBranchesTable(listToRender) {
+    const tbody = document.getElementById('adminBranchesTableBody');
+    if (!tbody) return;
+
+    const branches = listToRender || this.branches;
+    if (branches.length === 0) {
+      tbody.innerHTML = `
+        <tr>
+          <td colspan="7" class="py-8 text-center text-slate-400">
+            <div class="text-3xl mb-1">🏢</div>
+            <div>ไม่พบข้อมูลสาขา</div>
+          </td>
+        </tr>
+      `;
+      return;
+    }
+
+    tbody.innerHTML = branches.map(b => {
+      const isActive = b.active !== false && String(b.active) !== 'false';
+      return `
+        <tr class="hover:bg-slate-50/80 transition">
+          <td class="py-3 px-3 font-mono font-bold text-slate-900">${b.branchId}</td>
+          <td class="py-3 px-3">
+            <span class="px-2 py-0.5 rounded-lg bg-blue-50 text-blue-700 font-mono font-bold text-[11px] border border-blue-200">
+              ${b.code || b.branchId}
+            </span>
+          </td>
+          <td class="py-3 px-3">
+            <div class="font-bold text-slate-800">${b.name}</div>
+            ${b.address ? `<div class="text-[11px] text-slate-400 truncate max-w-xs">${b.address}</div>` : ''}
+          </td>
+          <td class="py-3 px-3 text-slate-600">${b.phone || '-'}</td>
+          <td class="py-3 px-3 font-mono text-slate-500">${b.taxId || '-'}</td>
+          <td class="py-3 px-3 text-center">
+            <span class="px-2 py-0.5 rounded-full text-[10px] font-bold ${isActive ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-500'}">
+              ${isActive ? '🟢 ใช้งาน' : '⚪ ปิดใช้งาน'}
+            </span>
+          </td>
+          <td class="py-3 px-3 text-right">
+            <div class="flex items-center justify-end gap-1.5">
+              <button onclick="AdminModule.openBranchModal('${b.branchId}')"
+                      title="แก้ไขข้อมูลสาขา"
+                      class="p-1.5 rounded-xl hover:bg-blue-50 text-slate-500 hover:text-blue-600 transition cursor-pointer">
+                ✏️
+              </button>
+              <button onclick="AdminModule.deleteBranch('${b.branchId}')"
+                      title="ลบสาขา"
+                      class="p-1.5 rounded-xl hover:bg-rose-50 text-slate-400 hover:text-rose-600 transition cursor-pointer">
+                🗑️
+              </button>
+            </div>
+          </td>
+        </tr>
+      `;
+    }).join('');
+  },
+
+  openBranchModal(branchId) {
+    const isEdit = !!branchId;
+    const titleEl = document.getElementById('branchModalTitle');
+    const idInput = document.getElementById('branchModalIdInput');
+    const codeInput = document.getElementById('branchModalCodeInput');
+    const nameInput = document.getElementById('branchModalNameInput');
+    const phoneInput = document.getElementById('branchModalPhoneInput');
+    const taxIdInput = document.getElementById('branchModalTaxIdInput');
+    const addressInput = document.getElementById('branchModalAddressInput');
+    const activeCheck = document.getElementById('branchModalActiveCheck');
+
+    if (isEdit) {
+      const b = this.branches.find(x => x.branchId === branchId);
+      if (!b) return;
+      if (titleEl) titleEl.innerHTML = `<span>🏢</span> <span>แก้ไขข้อมูลสาขา (${b.name})</span>`;
+      if (idInput) {
+        idInput.value = b.branchId;
+        idInput.disabled = true;
+      }
+      if (codeInput) codeInput.value = b.code || '';
+      if (nameInput) nameInput.value = b.name || '';
+      if (phoneInput) phoneInput.value = b.phone || '';
+      if (taxIdInput) taxIdInput.value = b.taxId || '';
+      if (addressInput) addressInput.value = b.address || '';
+      if (activeCheck) activeCheck.checked = b.active !== false && String(b.active) !== 'false';
+    } else {
+      if (titleEl) titleEl.innerHTML = `<span>🏢</span> <span>เพิ่มสาขาใหม่</span>`;
+      if (idInput) {
+        idInput.value = '';
+        idInput.disabled = false;
+      }
+      if (codeInput) codeInput.value = '';
+      if (nameInput) nameInput.value = '';
+      if (phoneInput) phoneInput.value = '';
+      if (taxIdInput) taxIdInput.value = '';
+      if (addressInput) addressInput.value = '';
+      if (activeCheck) activeCheck.checked = true;
+    }
+
+    UI.openModal('branchEditModal');
+  },
+
+  async saveBranch() {
+    const branchId = document.getElementById('branchModalIdInput').value.trim();
+    const code = document.getElementById('branchModalCodeInput').value.trim().toUpperCase();
+    const name = document.getElementById('branchModalNameInput').value.trim();
+    const phone = document.getElementById('branchModalPhoneInput').value.trim();
+    const taxId = document.getElementById('branchModalTaxIdInput').value.trim();
+    const address = document.getElementById('branchModalAddressInput').value.trim();
+    const active = document.getElementById('branchModalActiveCheck').checked;
+
+    if (!code || !name) {
+      UI.showToast('กรุณากรอกตัวย่อสาขาและชื่อสาขา', 'warning');
+      return;
+    }
+
+    const payload = {
+      branchId: branchId || undefined,
+      code,
+      name,
+      phone,
+      taxId,
+      address,
+      active
+    };
+
+    UI.showLoading('กำลังบันทึกข้อมูลสาขา...');
+    const res = await Api.call('admin:saveBranch', payload);
+    UI.hideLoading();
+
+    if (res && res.ok) {
+      UI.closeModal('branchEditModal');
+      UI.showToast(res.message || 'บันทึกข้อมูลสาขาสำเร็จ', 'success');
+
+      // Refresh branches list
+      const bRes = await Api.call('admin:branches');
+      if (bRes && bRes.ok && Array.isArray(bRes.branches)) {
+        this.branches = bRes.branches;
+        localStorage.setItem('pos_cached_branches', JSON.stringify(this.branches));
+        this.renderBranchesTable();
+      }
+    } else {
+      UI.showToast(`บันทึกไม่สำเร็จ: ${res.error || res.message}`, 'error');
+    }
+  },
+
+  async deleteBranch(branchId) {
+    const b = this.branches.find(x => x.branchId === branchId);
+    if (!b) return;
+
+    const ok = await UI.confirmDialog('ยืนยันลบสาขา', `คุณต้องการลบสาขา "${b.name}" (${b.branchId}) ใช่หรือไม่?`);
+    if (!ok) return;
+
+    UI.showLoading('กำลังตรวจสอบและลบสาขา...');
+    const res = await Api.call('admin:deleteBranch', { branchId });
+    UI.hideLoading();
+
+    if (res && res.ok) {
+      UI.showToast(res.message || 'ลบสาขาสำเร็จ', 'success');
+      const bRes = await Api.call('admin:branches');
+      if (bRes && bRes.ok && Array.isArray(bRes.branches)) {
+        this.branches = bRes.branches;
+        localStorage.setItem('pos_cached_branches', JSON.stringify(this.branches));
+        this.renderBranchesTable();
+      }
+    } else {
+      UI.showToast(`ลบสาขาไม่สำเร็จ: ${res.error || res.message}`, 'error');
     }
   },
 

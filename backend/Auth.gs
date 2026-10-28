@@ -105,6 +105,40 @@ function loginUser(username, password, clientInfo = {}) {
     permissions = {};
   }
 
+  // Branches authorization
+  const userBranchIds = String(user.branchIds || '').split(',').map(b => b.trim()).filter(Boolean);
+  const hasAllBranches = userBranchIds.includes('*') || user.roleId === 'admin';
+  const allBranches = getTable(SHEETS.BRANCHES).rows;
+
+  let activeBranchId = String(clientInfo.branchId || '').trim();
+  if (activeBranchId) {
+    if (!hasAllBranches && !userBranchIds.includes(activeBranchId)) {
+      logAudit(user.userId, 'LOGIN_FAIL_BRANCH_UNAUTHORIZED', 'Users', { username: cleanUsername, requestedBranch: activeBranchId });
+      throw new Error(`คุณไม่มีสิทธิ์เข้าใช้งานสาขาที่เลือก (${activeBranchId})`);
+    }
+  } else {
+    activeBranchId = hasAllBranches ? (allBranches[0] ? allBranches[0].branchId : 'B01') : (userBranchIds[0] || 'B01');
+  }
+
+  // Verify branch exists and is active
+  const branchRecord = allBranches.find(b => b.branchId === activeBranchId);
+  if (!branchRecord) {
+    throw new Error(`ไม่พบข้อมูลสาขา: ${activeBranchId}`);
+  }
+  if (branchRecord.active === false || String(branchRecord.active) === 'false') {
+    throw new Error(`สาขา "${branchRecord.name}" ถูกปิดใช้งานชั่วคราว ไม่สามารถเข้าสู่ระบบได้`);
+  }
+
+  // Filter accessible branches for user
+  const accessibleBranches = allBranches
+    .filter(b => b.active !== false && String(b.active) !== 'false')
+    .filter(b => hasAllBranches || userBranchIds.includes(b.branchId))
+    .map(b => ({
+      branchId: b.branchId,
+      code: b.code,
+      name: b.name
+    }));
+
   // Cache session data in CacheService for 6 hours (GAS CacheService limit is 6 hrs)
   try {
     const cache = CacheService.getScriptCache();
@@ -115,7 +149,8 @@ function loginUser(username, password, clientInfo = {}) {
       roleId: user.roleId,
       roleName: role.roleName,
       permissions: permissions,
-      branchIds: String(user.branchIds || '').split(',').map(b => b.trim()).filter(Boolean),
+      branchIds: userBranchIds,
+      activeBranchId: activeBranchId,
       expiresAt: expiresAt
     };
     cache.put('sess_' + token, JSON.stringify(sessionPayload), 21600);
@@ -123,15 +158,19 @@ function loginUser(username, password, clientInfo = {}) {
     console.warn('Cache error:', e);
   }
 
-  logAudit(user.userId, 'LOGIN_SUCCESS', 'Users', { username: cleanUsername });
-
-  // Branches
-  const userBranchIds = String(user.branchIds || '').split(',').map(b => b.trim()).filter(Boolean);
+  logAudit(user.userId, 'LOGIN_SUCCESS', 'Users', { username: cleanUsername, branchId: activeBranchId });
 
   return {
     ok: true,
     token: token,
     expiresAt: expiresAt,
+    activeBranchId: activeBranchId,
+    activeBranch: {
+      branchId: branchRecord.branchId,
+      code: branchRecord.code,
+      name: branchRecord.name
+    },
+    accessibleBranches: accessibleBranches,
     user: {
       userId: user.userId,
       username: user.username,
@@ -140,6 +179,50 @@ function loginUser(username, password, clientInfo = {}) {
       roleName: role.roleName,
       branchIds: userBranchIds,
       permissions: permissions
+    }
+  };
+}
+
+function switchActiveBranch(token, newBranchId) {
+  const session = verifySession(token);
+  if (!session) {
+    throw new Error('เซสชันหมดอายุหรือไม่ถูกต้อง');
+  }
+
+  const cleanBranchId = String(newBranchId || '').trim();
+  const userBranchIds = session.branchIds || [];
+  const hasAllBranches = userBranchIds.includes('*') || session.roleId === 'admin';
+
+  if (!hasAllBranches && !userBranchIds.includes(cleanBranchId)) {
+    throw new Error(`คุณไม่มีสิทธิ์เข้าใช้งานสาขานี้ (${cleanBranchId})`);
+  }
+
+  const allBranches = getTable(SHEETS.BRANCHES).rows;
+  const branchRecord = allBranches.find(b => b.branchId === cleanBranchId);
+  if (!branchRecord) {
+    throw new Error(`ไม่พบข้อมูลสาขา: ${cleanBranchId}`);
+  }
+  if (branchRecord.active === false || String(branchRecord.active) === 'false') {
+    throw new Error(`สาขา "${branchRecord.name}" ถูกปิดใช้งานชั่วคราว`);
+  }
+
+  session.activeBranchId = cleanBranchId;
+
+  // Update cache
+  try {
+    const cache = CacheService.getScriptCache();
+    cache.put('sess_' + token, JSON.stringify(session), 21600);
+  } catch (e) {}
+
+  logAudit(session.userId, 'SWITCH_BRANCH', 'Branches', { activeBranchId: cleanBranchId });
+
+  return {
+    ok: true,
+    activeBranchId: cleanBranchId,
+    activeBranch: {
+      branchId: branchRecord.branchId,
+      code: branchRecord.code,
+      name: branchRecord.name
     }
   };
 }

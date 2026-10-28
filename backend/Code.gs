@@ -58,10 +58,22 @@ function routeAction(action, token, data, reqContext) {
     return setupDatabase();
   }
 
+  if (action === 'public:branches') {
+    const branches = getTable(SHEETS.BRANCHES).rows
+      .filter(b => b.active !== false && String(b.active) !== 'false')
+      .map(b => ({
+        branchId: b.branchId,
+        code: b.code,
+        name: b.name
+      }));
+    return { ok: true, branches: branches };
+  }
+
   if (action === 'login') {
     return loginUser(data.username, data.password, {
       userAgent: data.userAgent || '',
-      ip: data.ip || ''
+      ip: data.ip || '',
+      branchId: data.branchId || ''
     });
   }
 
@@ -83,6 +95,10 @@ function routeAction(action, token, data, reqContext) {
   if (action === 'auth:logout') {
     logoutUser(token);
     return { ok: true };
+  }
+
+  if (action === 'auth:switchBranch') {
+    return switchActiveBranch(token, data.branchId);
   }
 
   // --- High-Speed Initial POS Load (Products + Branches + Config + Profiles in 1 Call) ---
@@ -198,6 +214,11 @@ function routeAction(action, token, data, reqContext) {
   if (action === 'admin:saveBranch') {
     requireAuth(token, 'admin', 'config');
     return saveBranchData(data, session);
+  }
+
+  if (action === 'admin:deleteBranch') {
+    requireAuth(token, 'admin', 'config');
+    return deleteBranchData(data.branchId, session);
   }
 
   if (action === 'admin:configs') {

@@ -421,3 +421,69 @@ test('GAS Mock: Categories, Units, and Configs CRUD with Delete Protection', () 
   assert.strictEqual(delConfRes.ok, true);
   assert.strictEqual(sandbox.getConfig('CUSTOM_BANNER_TEXT', 'NOT_FOUND'), 'NOT_FOUND');
 });
+
+test('GAS Mock: Branch Management CRUD, Login Branch Selection, Delete Protection, and Isolation', () => {
+  const { sandbox } = createGasMockContext();
+
+  // Setup database
+  sandbox.setupDatabase();
+
+  // 1. Public branches endpoint
+  const pubRes = sandbox.routeAction('public:branches', null, {});
+  assert.strictEqual(pubRes.ok, true);
+  assert.ok(pubRes.branches.some(b => b.branchId === 'B01'), 'Public branches should contain B01');
+
+  // 2. Admin creates a new branch B02
+  const adminLogin = sandbox.routeAction('login', null, { username: 'admin', password: 'Admin1234!', branchId: 'B01' });
+  assert.strictEqual(adminLogin.ok, true);
+  assert.strictEqual(adminLogin.activeBranchId, 'B01');
+  assert.strictEqual(adminLogin.activeBranch.code, 'MAIN');
+
+  // Save new branch B02
+  const b02Res = sandbox.routeAction('admin:saveBranch', adminLogin.token, {
+    branchId: 'B02',
+    code: 'BANGNA',
+    name: 'สาขา 2 (เซ็นทรัลบางนา)',
+    phone: '02-777-8888',
+    address: 'บางนา-ตราด กม.3',
+    taxId: '0105500000002',
+    active: 'true'
+  });
+  assert.strictEqual(b02Res.ok, true);
+  assert.strictEqual(b02Res.branch.branchId, 'B02');
+  assert.strictEqual(b02Res.branch.code, 'BANGNA');
+
+  // Check duplicate branch code rejection
+  assert.throws(() => {
+    sandbox.saveBranchData({ branchId: 'B03', code: 'BANGNA', name: 'สาขาซ้ำ' }, adminLogin.user);
+  }, /ตัวย่อสาขา "BANGNA" ถูกใช้งานโดย/);
+
+  // 3. User branch authorization at login
+  // Cashier has branchIds: 'B01' only
+  const cashierLoginB01 = sandbox.routeAction('login', null, { username: 'cashier', password: 'Cashier1234!', branchId: 'B01' });
+  assert.strictEqual(cashierLoginB01.ok, true);
+  assert.strictEqual(cashierLoginB01.activeBranchId, 'B01');
+
+  // Cashier attempts to log in to B02 (unauthorized)
+  assert.throws(() => {
+    sandbox.loginUser('cashier', 'Cashier1234!', { branchId: 'B02' });
+  }, /คุณไม่มีสิทธิ์เข้าใช้งานสาขาที่เลือก \(B02\)/);
+
+  // 4. Branch switching for authorized user (Admin)
+  const switchRes = sandbox.routeAction('auth:switchBranch', adminLogin.token, { branchId: 'B02' });
+  assert.strictEqual(switchRes.ok, true);
+  assert.strictEqual(switchRes.activeBranchId, 'B02');
+  assert.strictEqual(switchRes.activeBranch.code, 'BANGNA');
+
+  // 5. Delete protection: B01 has seeded stock and sales
+  assert.throws(() => {
+    sandbox.deleteBranchData('B01', adminLogin.user);
+  }, /ไม่สามารถลบสาขาได้/);
+
+  // 6. Clean deletion: B02 has no sales or stock -> delete succeeds
+  const delB02 = sandbox.routeAction('admin:deleteBranch', adminLogin.token, { branchId: 'B02' });
+  assert.strictEqual(delB02.ok, true);
+
+  const finalBranches = sandbox.getBranchesList();
+  assert.ok(!finalBranches.some(b => b.branchId === 'B02'), 'B02 should be removed');
+});
