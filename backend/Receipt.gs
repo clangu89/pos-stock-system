@@ -126,6 +126,8 @@ function getReceiptStoreInfo(branchId = '') {
   ensureReceiptTextsSheet_();
 
   let defaultRow = findRow(SHEETS.RECEIPT_TEXTS, r => r.scopeId === 'DEFAULT' || r.branchId === '*');
+  // ถ้ามีแถวค่ากลางจริง ช่องที่ผู้ใช้ "เว้นว่างโดยตั้งใจ" ต้องถูกเคารพ (ไม่ถูกแทนด้วยค่าเริ่มต้น)
+  const hasDefaultRow = !!defaultRow;
   if (!defaultRow) {
     defaultRow = {
       scopeId: 'DEFAULT',
@@ -155,12 +157,19 @@ function getReceiptStoreInfo(branchId = '') {
     branchMeta = findRow(SHEETS.BRANCHES, r => r.branchId === branchId);
   }
 
-  function pick(field, fallback = '') {
+  // allowBlank = true: ค่ากลางที่ว่างหมายถึง "ไม่แสดงบรรทัดนี้" (ไม่ fallback)
+  // แถวเฉพาะสาขาที่ว่างหมายถึง "ใช้ค่ากลาง" เสมอ
+  function pick(field, fallback = '', allowBlank = false) {
     if (branchRow && branchRow[field] !== undefined && String(branchRow[field]).trim() !== '') {
       return String(branchRow[field]);
     }
-    if (defaultRow && defaultRow[field] !== undefined && String(defaultRow[field]).trim() !== '') {
-      return String(defaultRow[field]);
+    if (defaultRow && defaultRow[field] !== undefined) {
+      if (String(defaultRow[field]).trim() !== '') {
+        return String(defaultRow[field]);
+      }
+      if (allowBlank && hasDefaultRow) {
+        return '';
+      }
     }
     return fallback;
   }
@@ -177,25 +186,28 @@ function getReceiptStoreInfo(branchId = '') {
     return defaultVal;
   }
 
-  const storeName = pick('storeName', getConfig('STORE_NAME', 'POS Store'));
-  const receiptTitle = pick('receiptTitle', 'ใบเสร็จรับเงิน / ใบกำกับภาษีอย่างย่อ');
-  const subHeader = pick('subHeader', '');
+  const storeName = pick('storeName', '') || String(getConfig('STORE_NAME', '') || '') || 'POS Store';
+  const receiptTitle = pick('receiptTitle', 'ใบเสร็จรับเงิน / ใบกำกับภาษีอย่างย่อ', true);
+  const subHeader = pick('subHeader', '', true);
 
   const fallbackAddress = (branchMeta && branchMeta.address) ? branchMeta.address : getConfig('STORE_ADDRESS', '');
   const address = pick('address', fallbackAddress);
 
   const fallbackPhone = (branchMeta && branchMeta.phone) ? branchMeta.phone : getConfig('STORE_PHONE', '');
-  const phone = pick('phone', fallbackPhone);
+  const phone = normalizeThaiPhone_(pick('phone', fallbackPhone));
 
   const fallbackTaxId = (branchMeta && branchMeta.taxId) ? branchMeta.taxId : getConfig('STORE_TAX_ID', '');
-  const taxId = pick('taxId', fallbackTaxId);
+  const taxId = normalizeThaiTaxId_(pick('taxId', fallbackTaxId));
 
-  const footer = pick('footer', getConfig('RECEIPT_FOOTER', 'ขอบคุณที่ใช้บริการ / Thank you!\nสินค้าซื้อแล้วไม่รับเปลี่ยนคืน'));
+  const footer = pick('footer', getConfig('RECEIPT_FOOTER', 'ขอบคุณที่ใช้บริการ / Thank you!\nสินค้าซื้อแล้วไม่รับเปลี่ยนคืน'), true);
 
   return {
     receiptTitle: receiptTitle,
     storeName: storeName,
     name: storeName, // For backward compatibility
+    branchId: branchMeta ? String(branchMeta.branchId) : String(branchId || ''),
+    branchCode: branchMeta ? String(branchMeta.code || '') : '',
+    branchName: branchMeta ? String(branchMeta.name || '') : '',
     subHeader: subHeader,
     address: address,
     phone: phone,
@@ -211,8 +223,13 @@ function getReceiptStoreInfo(branchId = '') {
 
 function getReceiptTextsList() {
   ensureReceiptTextsSheet_();
-  const rows = getTable(SHEETS.RECEIPT_TEXTS).rows;
-  const branches = getTable(SHEETS.BRANCHES).rows;
+  // ซ่อมค่าเลขผู้เสียภาษี/เบอร์โทรที่ Sheets แปลงเป็นตัวเลข (เลข 0 นำหน้าหาย) ก่อนส่งให้หน้า Admin
+  const rows = getTable(SHEETS.RECEIPT_TEXTS).rows.map(r => {
+    r.taxId = normalizeThaiTaxId_(r.taxId);
+    r.phone = normalizeThaiPhone_(r.phone);
+    return r;
+  });
+  const branches = getBranchesList();
   return {
     items: rows,
     branches: branches
@@ -221,6 +238,8 @@ function getReceiptTextsList() {
 
 function saveReceiptTexts(data, sessionUser) {
   ensureReceiptTextsSheet_();
+  // ล็อกคอลัมน์เบอร์โทร/เลขผู้เสียภาษีเป็นข้อความ ก่อนเขียนค่า (กันเลข 0 นำหน้าหาย)
+  setTextColumns_(SHEETS.RECEIPT_TEXTS, ['phone', 'taxId']);
 
   const isDefault = data.scopeId === 'DEFAULT' || data.branchId === '*';
   const branchId = isDefault ? '*' : String(data.branchId || '').trim();
@@ -249,6 +268,24 @@ function saveReceiptTexts(data, sessionUser) {
     updatedAt: new Date().toISOString()
   };
 
+  // แถวเฉพาะสาขา: เก็บเฉพาะช่องที่ "ต่างจากค่ากลาง" ช่องที่เหมือนกันเก็บเป็นว่าง (= สืบทอดค่ากลาง)
+  // เพื่อให้เมื่อแก้ค่ากลางภายหลัง สาขาจะเปลี่ยนตามอัตโนมัติ
+  if (!isDefault) {
+    const defRow = findRow(SHEETS.RECEIPT_TEXTS, r => r.scopeId === 'DEFAULT' || r.branchId === '*');
+    if (defRow) {
+      const sameAsDefault = (field) => {
+        const a = String(record[field] === undefined || record[field] === null ? '' : record[field]).trim();
+        let b = String(defRow[field] === undefined || defRow[field] === null ? '' : defRow[field]).trim();
+        if (field === 'taxId') b = normalizeThaiTaxId_(b);
+        if (field === 'phone') b = normalizeThaiPhone_(b);
+        return a === b;
+      };
+      ['receiptTitle', 'storeName', 'subHeader', 'address', 'phone', 'taxId', 'footer'].forEach(f => {
+        if (sameAsDefault(f)) record[f] = '';
+      });
+    }
+  }
+
   const existing = findRow(SHEETS.RECEIPT_TEXTS, r => r.scopeId === scopeId);
   if (existing) {
     updateRows(SHEETS.RECEIPT_TEXTS, r => r.scopeId === scopeId, r => {
@@ -261,13 +298,13 @@ function saveReceiptTexts(data, sessionUser) {
     logAudit(sessionUser.userId, 'CREATE_RECEIPT_TEXTS', 'ReceiptTexts', { scopeId, branchId });
   }
 
-  // If saving DEFAULT template, keep legacy Config in sync
+  // If saving DEFAULT template, keep legacy Config in sync (รวมถึงกรณีลบข้อความให้ว่างโดยตั้งใจ)
   if (isDefault) {
-    if (record.storeName) setConfig('STORE_NAME', record.storeName);
-    if (record.address) setConfig('STORE_ADDRESS', record.address);
-    if (record.phone) setConfig('STORE_PHONE', record.phone);
-    if (record.taxId) setConfig('STORE_TAX_ID', record.taxId);
-    if (record.footer) setConfig('RECEIPT_FOOTER', record.footer);
+    if (data.storeName !== undefined) setConfig('STORE_NAME', record.storeName);
+    if (data.address !== undefined) setConfig('STORE_ADDRESS', record.address);
+    if (data.phone !== undefined) setConfig('STORE_PHONE', record.phone);
+    if (data.taxId !== undefined) setConfig('STORE_TAX_ID', record.taxId);
+    if (data.footer !== undefined) setConfig('RECEIPT_FOOTER', record.footer);
   }
 
   return {

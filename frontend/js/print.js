@@ -64,8 +64,10 @@ const PrintManager = {
     const itemsHtml = items.map(it => {
       const q = parseFloat(it.qty) || 0;
       const p = parseFloat(it.unitPrice) || 0;
-      const amt = parseFloat(it.amount) || (q * p);
       const disc = parseFloat(it.discount) || 0;
+      // ยอดรายการที่เป็น 0 (ของแถม/ลดเต็ม) ต้องพิมพ์เป็น 0.00 ห้าม fallback เป็นราคาเต็ม
+      const parsedAmt = parseFloat(it.amount);
+      const amt = isNaN(parsedAmt) ? Math.max(0, (q * p) - disc) : parsedAmt;
       const itemName = escapeHtml(it.name || it.sku);
 
       return `
@@ -89,8 +91,15 @@ const PrintManager = {
       sale.payMethod === 'QR' ? 'QR Code' : escapeHtml(sale.payMethod || 'เงินสด');
 
     const storeName = multilineHtml(store.storeName || store.name || 'POS Store');
-    const receiptTitle = escapeHtml(store.receiptTitle || 'ใบเสร็จรับเงิน / ใบกำกับภาษีอย่างย่อ');
-    const subHeader = store.subHeader ? `<div style="font-size: 0.85em; color: #444; margin-top: 1px;">${multilineHtml(store.subHeader)}</div>` : '';
+    // ฟิลด์ที่ Backend ส่งมาเป็นสตริงว่าง = ผู้ใช้ตั้งใจให้ไม่แสดง (ไม่ fallback เป็นข้อความเริ่มต้น)
+    // fallback ใช้เฉพาะกรณีไม่มีฟิลด์นั้นส่งมาเลย (undefined)
+    const titleText = store.receiptTitle !== undefined && store.receiptTitle !== null
+      ? String(store.receiptTitle)
+      : 'ใบเสร็จรับเงิน / ใบกำกับภาษีอย่างย่อ';
+    const receiptTitleHtml = titleText.trim()
+      ? `<div style="font-size: 0.9em; font-weight: 700; margin-top: 4px;">${escapeHtml(titleText)}</div>`
+      : '';
+    const subHeader = (store.subHeader && String(store.subHeader).trim()) ? `<div style="font-size: 0.85em; color: #444; margin-top: 1px;">${multilineHtml(store.subHeader)}</div>` : '';
 
     const showAddress = store.showAddress !== false && String(store.showAddress) !== 'false';
     const showPhone = store.showPhone !== false && String(store.showPhone) !== 'false';
@@ -102,9 +111,17 @@ const PrintManager = {
     const phoneHtml = (showPhone && store.phone) ? `<div style="font-size: 0.85em;">โทร: ${escapeHtml(store.phone)}</div>` : '';
     const taxIdHtml = (showTaxId && store.taxId) ? `<div style="font-size: 0.85em;">เลขผู้เสียภาษี: ${escapeHtml(store.taxId)}</div>` : '';
 
-    const footerHtml = store.footer
-      ? `<div style="margin-top: 6px; line-height: 1.35;">${multilineHtml(store.footer)}</div>`
-      : `<div style="margin-top: 6px;">ขอบคุณที่ใช้บริการ / Thank you!</div>`;
+    // ชื่อสาขาที่แสดงบนใบเสร็จ: ชื่อสาขา (ตัวย่อ) ไม่แสดงรหัสดิบ เช่น B01
+    const branchLabel = store.branchName
+      ? (store.branchCode ? `${store.branchName} (${store.branchCode})` : store.branchName)
+      : (store.branchCode || sale.branchId || 'MAIN');
+
+    const footerText = store.footer !== undefined && store.footer !== null
+      ? String(store.footer)
+      : 'ขอบคุณที่ใช้บริการ / Thank you!';
+    const footerHtml = footerText.trim()
+      ? `<div style="margin-top: 6px; line-height: 1.35;">${multilineHtml(footerText)}</div>`
+      : '';
 
     return `
       <!DOCTYPE html>
@@ -159,14 +176,14 @@ const PrintManager = {
             ${addressHtml}
             ${phoneHtml}
             ${taxIdHtml}
-            <div style="font-size: 0.9em; font-weight: 700; margin-top: 4px;">${receiptTitle}</div>
+            ${receiptTitleHtml}
           </div>
 
           <div class="divider"></div>
 
           <div class="meta-row">
             <span>เลขที่: <b style="font-family:monospace;">${escapeHtml(sale.receiptNo || '-')}</b></span>
-            ${showBranch ? `<span>สาขา: ${escapeHtml(sale.branchId || 'MAIN')}</span>` : '<span></span>'}
+            ${showBranch ? `<span>สาขา: ${escapeHtml(branchLabel)}</span>` : '<span></span>'}
           </div>
           <div class="meta-row">
             <span>วันที่: ${formattedDate}</span>
@@ -236,8 +253,57 @@ const PrintManager = {
     `;
   },
 
-  printReceiptDirect(sale, items, store, profile) {
-    const htmlContent = this.buildReceiptHtml(sale, items, store, profile);
+  /**
+   * เรนเดอร์ใบเสร็จเข้า container ด้วย <iframe srcdoc> (แยก CSS ออกจากหน้าเว็บหลัก ไม่ให้สไตล์รั่ว)
+   * ใช้ตัวสร้าง HTML ตัวเดียวกับใบเสร็จที่พิมพ์จริง (buildReceiptHtml) จึงเห็นผลตรงกับที่พิมพ์ 100%
+   */
+  renderPreviewInto(container, sale, items, store, profile) {
+    if (!container) return null;
+    const html = this.buildReceiptHtml(sale, items, store, profile);
+    const prof = profile || this.activeProfile || this.getDefaultProfile();
+    const widthMm = prof.widthMm || (prof.paperType === '80mm' ? 80 : 58);
+
+    let frame = container.querySelector('iframe[data-receipt-preview]');
+    if (!frame) {
+      container.innerHTML = '';
+      frame = document.createElement('iframe');
+      frame.setAttribute('data-receipt-preview', '1');
+      frame.style.border = '0';
+      frame.style.background = '#fff';
+      frame.style.display = 'block';
+      frame.style.margin = '0 auto';
+      container.appendChild(frame);
+    }
+    frame.style.width = `${Math.round(widthMm * 3.78)}px`;
+    frame.style.maxWidth = '100%';
+    frame.style.height = '480px';
+    frame.onload = () => {
+      try {
+        const h = frame.contentWindow.document.documentElement.scrollHeight;
+        if (h) frame.style.height = `${h + 8}px`;
+      } catch (e) { /* ignore */ }
+    };
+    frame.srcdoc = html;
+    this.lastPreviewHtml = html;
+    return frame;
+  },
+
+  previewReceiptModal(sale, items, store, profile) {
+    const container = document.getElementById('receiptPreviewModalContent');
+    if (!container) return;
+    this.renderPreviewInto(container, sale, items, store, profile);
+    UI.openModal('receiptPreviewModal');
+  },
+
+  /**
+   * พิมพ์ใบเสร็จที่เปิดพรีวิวอยู่ (ปุ่ม "สั่งพิมพ์" ในหน้าต่างพรีวิว) — พิมพ์เฉพาะใบเสร็จ ไม่พิมพ์ทั้งหน้าเว็บ
+   */
+  printLastPreview() {
+    if (!this.lastPreviewHtml) return;
+    this.printHtmlDocument(this.lastPreviewHtml);
+  },
+
+  printHtmlDocument(htmlContent) {
     let printFrame = document.getElementById('receiptPrintIframe');
     if (!printFrame) {
       printFrame = document.createElement('iframe');
@@ -266,11 +332,8 @@ const PrintManager = {
     }, 250);
   },
 
-  previewReceiptModal(sale, items, store, profile) {
-    const container = document.getElementById('receiptPreviewModalContent');
-    if (!container) return;
-    const html = this.buildReceiptHtml(sale, items, store, profile);
-    container.innerHTML = html;
-    UI.openModal('receiptPreviewModal');
+  printReceiptDirect(sale, items, store, profile) {
+    const htmlContent = this.buildReceiptHtml(sale, items, store, profile);
+    this.printHtmlDocument(htmlContent);
   }
 };

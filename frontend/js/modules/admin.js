@@ -644,19 +644,22 @@ const AdminModule = {
       if (branchItem) {
         if (bannerText) bannerText.textContent = `สาขา ${scopeVal} มีการปรับแต่งข้อความเฉพาะของตนเอง`;
       } else {
-        if (bannerText) bannerText.textContent = `สาขา ${scopeVal} กำลังใช้ค่ากลาง (เมื่อแก้ไขและบันทึก จะสร้างการตั้งค่าเฉพาะสาขา)`;
+        if (bannerText) bannerText.textContent = `สาขา ${scopeVal} กำลังใช้ค่ากลาง (เมื่อแก้ไขและบันทึก จะสร้างการตั้งค่าเฉพาะสาขา — ช่องที่ว่างหรือเหมือนค่ากลางจะใช้ค่ากลาง)`;
       }
     }
 
     const branchMeta = this.branches.find(b => b.branchId === scopeVal);
 
-    const getVal = (field, fallback = '') => {
+    // allowBlank=true: ถ้ามีค่ากลางอยู่ในชีตแล้ว ช่องที่ว่างหมายถึง "ตั้งใจเว้นว่าง" ห้ามเติมข้อความตัวอย่างทับ
+    const hasDefaultRow = !!(defaultItem && (defaultItem.scopeId || defaultItem.branchId));
+    const getVal = (field, fallback = '', allowBlank = false) => {
       if (branchItem && branchItem[field] !== undefined && String(branchItem[field]).trim() !== '') {
         return branchItem[field];
       }
       if (defaultItem && defaultItem[field] !== undefined && String(defaultItem[field]).trim() !== '') {
         return defaultItem[field];
       }
+      if (allowBlank && hasDefaultRow) return '';
       return fallback;
     };
 
@@ -672,9 +675,9 @@ const AdminModule = {
       return def;
     };
 
-    document.getElementById('receiptTextTitleInput').value = getVal('receiptTitle', 'ใบเสร็จรับเงิน / ใบกำกับภาษีอย่างย่อ');
+    document.getElementById('receiptTextTitleInput').value = getVal('receiptTitle', 'ใบเสร็จรับเงิน / ใบกำกับภาษีอย่างย่อ', true);
     document.getElementById('receiptTextStoreNameInput').value = getVal('storeName', this.configs.STORE_NAME || 'POS Store');
-    document.getElementById('receiptTextSubHeaderInput').value = getVal('subHeader', 'ยินดีต้อนรับ / Welcome');
+    document.getElementById('receiptTextSubHeaderInput').value = getVal('subHeader', 'ยินดีต้อนรับ / Welcome', true);
 
     const defAddress = (branchMeta && branchMeta.address) ? branchMeta.address : (this.configs.STORE_ADDRESS || '');
     document.getElementById('receiptTextAddressInput').value = getVal('address', defAddress);
@@ -685,7 +688,7 @@ const AdminModule = {
     const defTaxId = (branchMeta && branchMeta.taxId) ? branchMeta.taxId : (this.configs.STORE_TAX_ID || '');
     document.getElementById('receiptTextTaxIdInput').value = getVal('taxId', defTaxId);
 
-    document.getElementById('receiptTextFooterInput').value = getVal('footer', 'ขอบคุณที่ใช้บริการ / Thank you!\nสินค้าซื้อแล้วไม่รับเปลี่ยนคืน');
+    document.getElementById('receiptTextFooterInput').value = getVal('footer', 'ขอบคุณที่ใช้บริการ / Thank you!\nสินค้าซื้อแล้วไม่รับเปลี่ยนคืน', true);
 
     document.getElementById('receiptTextShowAddressCheck').checked = getBool('showAddress', true);
     document.getElementById('receiptTextShowPhoneCheck').checked = getBool('showPhone', true);
@@ -696,120 +699,92 @@ const AdminModule = {
     this.updateReceiptTextPreview();
   },
 
+  // ดึงค่าข้อความใบเสร็จจากฟอร์ม -> รูปแบบ store เดียวกับที่ Backend ส่งให้ตอนพิมพ์จริง
+  getReceiptStoreFromForm_() {
+    const val = (id) => document.getElementById(id)?.value || '';
+    const chk = (id) => !!document.getElementById(id)?.checked;
+    const scope = this.currentReceiptScope || 'DEFAULT';
+    const branchMeta = scope !== 'DEFAULT'
+      ? (this.branches || []).find(b => b.branchId === scope)
+      : (this.branches || [])[0];
+    return {
+      receiptTitle: val('receiptTextTitleInput'),
+      storeName: val('receiptTextStoreNameInput') || 'POS Store',
+      name: val('receiptTextStoreNameInput') || 'POS Store',
+      subHeader: val('receiptTextSubHeaderInput'),
+      address: val('receiptTextAddressInput'),
+      phone: val('receiptTextPhoneInput'),
+      taxId: val('receiptTextTaxIdInput'),
+      footer: val('receiptTextFooterInput'),
+      branchId: branchMeta ? branchMeta.branchId : '',
+      branchCode: branchMeta ? (branchMeta.code || '') : '',
+      branchName: branchMeta ? (branchMeta.name || '') : '',
+      showAddress: chk('receiptTextShowAddressCheck'),
+      showPhone: chk('receiptTextShowPhoneCheck'),
+      showTaxId: chk('receiptTextShowTaxIdCheck'),
+      showCashier: chk('receiptTextShowCashierCheck'),
+      showBranch: chk('receiptTextShowBranchCheck')
+    };
+  },
+
+  // ใบเสร็จตัวอย่าง (ยอดรวมต้องเท่ากับผลรวมรายการเสมอ)
+  getReceiptSampleData_(store) {
+    const items = [
+      { sku: 'P1001', name: 'น้ำดื่มสิงห์ 600 มล.', qty: 2, unitPrice: 10, discount: 0, amount: 20 },
+      { sku: 'P1004', name: 'ข้าวผัดกระเพราไก่ไข่ดาว', qty: 1, unitPrice: 55, discount: 0, amount: 55 }
+    ];
+    const subtotal = items.reduce((s, it) => s + it.amount, 0);
+    const sale = {
+      receiptNo: 'RC-PREVIEW-001',
+      ts: new Date().toISOString(),
+      branchId: (store && store.branchId) || 'B01',
+      cashierName: Auth.getUser()?.name || Auth.getUser()?.username || 'Admin',
+      subtotal: subtotal,
+      discount: 0,
+      vat: 0,
+      total: subtotal,
+      received: 100,
+      change: 100 - subtotal,
+      payMethod: 'CASH',
+      status: 'PAID'
+    };
+    return { sale, items };
+  },
+
   updateReceiptTextPreview() {
-    const title = document.getElementById('receiptTextTitleInput')?.value || 'ใบเสร็จรับเงิน / ใบกำกับภาษีอย่างย่อ';
-    const storeName = document.getElementById('receiptTextStoreNameInput')?.value || 'POS Store';
-    const subHeader = document.getElementById('receiptTextSubHeaderInput')?.value || '';
-    const address = document.getElementById('receiptTextAddressInput')?.value || '';
-    const phone = document.getElementById('receiptTextPhoneInput')?.value || '';
-    const taxId = document.getElementById('receiptTextTaxIdInput')?.value || '';
-    const footer = document.getElementById('receiptTextFooterInput')?.value || '';
+    const card = document.getElementById('receiptLivePreviewCard');
+    if (!card || typeof PrintManager === 'undefined') return;
 
-    const showAddress = document.getElementById('receiptTextShowAddressCheck')?.checked;
-    const showPhone = document.getElementById('receiptTextShowPhoneCheck')?.checked;
-    const showTaxId = document.getElementById('receiptTextShowTaxIdCheck')?.checked;
-    const showCashier = document.getElementById('receiptTextShowCashierCheck')?.checked;
-    const showBranch = document.getElementById('receiptTextShowBranchCheck')?.checked;
+    const store = this.getReceiptStoreFromForm_();
+    const { sale, items } = this.getReceiptSampleData_(store);
+    const is80 = this.previewPaperWidth === 80;
+    const prof = {
+      profileId: 'PREVIEW',
+      printerName: 'XP Thermal Printer',
+      paperType: is80 ? '80mm' : '58mm',
+      widthMm: is80 ? 80 : 58,
+      marginMm: 2,
+      fontSize: is80 ? 12 : 11
+    };
 
-    const elStoreName = document.getElementById('prevStoreName');
-    if (elStoreName) elStoreName.innerHTML = multilineHtml(storeName);
-
-    const elSubHeader = document.getElementById('prevSubHeader');
-    if (elSubHeader) {
-      if (subHeader.trim()) {
-        elSubHeader.innerHTML = multilineHtml(subHeader);
-        elSubHeader.classList.remove('hidden');
-      } else {
-        elSubHeader.classList.add('hidden');
-      }
-    }
-
-    const elAddress = document.getElementById('prevAddress');
-    if (elAddress) {
-      if (showAddress && address.trim()) {
-        elAddress.innerHTML = multilineHtml(address);
-        elAddress.classList.remove('hidden');
-      } else {
-        elAddress.classList.add('hidden');
-      }
-    }
-
-    const elPhone = document.getElementById('prevPhone');
-    if (elPhone) {
-      if (showPhone && phone.trim()) {
-        elPhone.textContent = `โทร: ${phone}`;
-        elPhone.classList.remove('hidden');
-      } else {
-        elPhone.classList.add('hidden');
-      }
-    }
-
-    const elTaxId = document.getElementById('prevTaxId');
-    if (elTaxId) {
-      if (showTaxId && taxId.trim()) {
-        elTaxId.textContent = `เลขผู้เสียภาษี: ${taxId}`;
-        elTaxId.classList.remove('hidden');
-      } else {
-        elTaxId.classList.add('hidden');
-      }
-    }
-
-    const elTitle = document.getElementById('prevTitle');
-    if (elTitle) elTitle.textContent = title;
-
-    const elBranch = document.getElementById('prevBranch');
-    if (elBranch) {
-      if (showBranch) {
-        elBranch.textContent = `สาขา: ${this.currentReceiptScope === 'DEFAULT' ? 'MAIN' : this.currentReceiptScope}`;
-        elBranch.classList.remove('hidden');
-      } else {
-        elBranch.classList.add('hidden');
-      }
-    }
-
-    const elCashier = document.getElementById('prevCashier');
-    if (elCashier) {
-      if (showCashier) {
-        elCashier.textContent = `แคชเชียร์: ${Auth.getUser()?.username || 'admin'}`;
-        elCashier.classList.remove('hidden');
-      } else {
-        elCashier.classList.add('hidden');
-      }
-    }
-
-    const elFooter = document.getElementById('prevFooter');
-    if (elFooter) {
-      elFooter.innerHTML = multilineHtml(footer || 'ขอบคุณที่ใช้บริการ / Thank you!');
-    }
+    // ใช้ตัวสร้างใบเสร็จตัวเดียวกับการพิมพ์จริง -> พรีวิวตรงกับใบเสร็จที่ออกมา 100%
+    PrintManager.renderPreviewInto(card, sale, items, store, prof);
+    card.style.width = 'auto';
   },
 
   setPreviewPaperWidth(width) {
     this.previewPaperWidth = width;
-    const card = document.getElementById('receiptLivePreviewCard');
     const btn58 = document.getElementById('previewWidth58Btn');
     const btn80 = document.getElementById('previewWidth80Btn');
 
-    if (card) {
-      if (width === 80) {
-        card.style.width = '350px';
-        card.style.fontSize = '12px';
-        if (btn80) {
-          btn80.className = 'px-2 py-0.5 rounded bg-white text-slate-900 shadow-xs';
-        }
-        if (btn58) {
-          btn58.className = 'px-2 py-0.5 rounded text-slate-600 hover:text-slate-900';
-        }
-      } else {
-        card.style.width = '260px';
-        card.style.fontSize = '11px';
-        if (btn58) {
-          btn58.className = 'px-2 py-0.5 rounded bg-white text-slate-900 shadow-xs';
-        }
-        if (btn80) {
-          btn80.className = 'px-2 py-0.5 rounded text-slate-600 hover:text-slate-900';
-        }
-      }
+    if (width === 80) {
+      if (btn80) btn80.className = 'px-2 py-0.5 rounded bg-white text-slate-900 shadow-xs';
+      if (btn58) btn58.className = 'px-2 py-0.5 rounded text-slate-600 hover:text-slate-900';
+    } else {
+      if (btn58) btn58.className = 'px-2 py-0.5 rounded bg-white text-slate-900 shadow-xs';
+      if (btn80) btn80.className = 'px-2 py-0.5 rounded text-slate-600 hover:text-slate-900';
     }
+    this.updateReceiptTextPreview();
   },
 
   async saveReceiptTextSettings() {
@@ -875,49 +850,18 @@ const AdminModule = {
   },
 
   testPrintFromTextSettings() {
-    const mockSale = {
-      receiptNo: 'RC-PREVIEW-001',
-      ts: new Date().toISOString(),
-      branchId: this.currentReceiptScope === 'DEFAULT' ? 'MAIN' : this.currentReceiptScope,
-      cashierName: Auth.getUser()?.name || 'Admin',
-      subtotal: 75,
-      discount: 0,
-      vat: 0,
-      total: 75,
-      received: 100,
-      change: 25,
-      payMethod: 'CASH',
-      status: 'PAID'
-    };
-
-    const mockItems = [
-      { sku: 'P1001', name: 'น้ำดื่มสิงห์ 600 มล.', qty: 2, unitPrice: 10, discount: 0, amount: 20 },
-      { sku: 'P1004', name: 'ข้าวผัดกระเพราไก่ไข่ดาว', qty: 1, unitPrice: 55, discount: 0, amount: 55 }
-    ];
-
-    const mockStore = {
-      receiptTitle: document.getElementById('receiptTextTitleInput')?.value || 'ใบเสร็จรับเงิน / ใบกำกับภาษีอย่างย่อ',
-      storeName: document.getElementById('receiptTextStoreNameInput')?.value || 'POS Store',
-      name: document.getElementById('receiptTextStoreNameInput')?.value || 'POS Store',
-      subHeader: document.getElementById('receiptTextSubHeaderInput')?.value || '',
-      address: document.getElementById('receiptTextAddressInput')?.value || '',
-      phone: document.getElementById('receiptTextPhoneInput')?.value || '',
-      taxId: document.getElementById('receiptTextTaxIdInput')?.value || '',
-      footer: document.getElementById('receiptTextFooterInput')?.value || 'ขอบคุณที่ใช้บริการ / Thank you!',
-      showAddress: document.getElementById('receiptTextShowAddressCheck')?.checked,
-      showPhone: document.getElementById('receiptTextShowPhoneCheck')?.checked,
-      showTaxId: document.getElementById('receiptTextShowTaxIdCheck')?.checked,
-      showCashier: document.getElementById('receiptTextShowCashierCheck')?.checked,
-      showBranch: document.getElementById('receiptTextShowBranchCheck')?.checked
-    };
+    // ใช้ค่าจากฟอร์มตรงๆ (ไม่แทนที่ช่องว่างด้วยข้อความตัวอย่าง) เพื่อให้ตรงกับที่จะพิมพ์จริง
+    const mockStore = this.getReceiptStoreFromForm_();
+    const { sale: mockSale, items: mockItems } = this.getReceiptSampleData_(mockStore);
+    const is80 = this.previewPaperWidth === 80;
 
     const prof = {
       profileId: 'PREVIEW',
       printerName: 'XP Thermal Printer',
-      paperType: this.previewPaperWidth === 80 ? '80mm' : '58mm',
-      widthMm: this.previewPaperWidth || 58,
+      paperType: is80 ? '80mm' : '58mm',
+      widthMm: is80 ? 80 : 58,
       marginMm: 2,
-      fontSize: this.previewPaperWidth === 80 ? 12 : 11
+      fontSize: is80 ? 12 : 11
     };
 
     PrintManager.previewReceiptModal(mockSale, mockItems, mockStore, prof);
@@ -980,10 +924,38 @@ const AdminModule = {
   },
 
   testPrintReceipt() {
+    // ข้อความใบเสร็จ: ใช้ค่ากลางที่บันทึกไว้จริง (ช่องที่ว่างโดยตั้งใจ = ไม่แสดง)
+    const defaultText = (this.receiptTextsList && this.receiptTextsList.find(r => r.scopeId === 'DEFAULT' || r.branchId === '*')) || null;
+    const branchMeta = (this.branches || [])[0] || {};
+    const txt = (field, fallback = '') => {
+      if (defaultText && defaultText[field] !== undefined && defaultText[field] !== null) return String(defaultText[field]);
+      return fallback;
+    };
+    const flag = (field) => !defaultText || (defaultText[field] !== false && String(defaultText[field]).toLowerCase() !== 'false');
+
+    const mockStore = {
+      receiptTitle: txt('receiptTitle', 'ใบเสร็จรับเงิน / ใบกำกับภาษีอย่างย่อ'),
+      storeName: txt('storeName', this.configs.STORE_NAME || 'POS & Stock Store'),
+      name: txt('storeName', this.configs.STORE_NAME || 'POS & Stock Store'),
+      subHeader: txt('subHeader'),
+      address: txt('address', this.configs.STORE_ADDRESS || ''),
+      phone: txt('phone', this.configs.STORE_PHONE || ''),
+      taxId: txt('taxId', this.configs.STORE_TAX_ID || ''),
+      footer: txt('footer', 'ขอบคุณที่ใช้บริการ / Thank you!'),
+      branchId: branchMeta.branchId || 'B01',
+      branchCode: branchMeta.code || '',
+      branchName: branchMeta.name || '',
+      showAddress: flag('showAddress'),
+      showPhone: flag('showPhone'),
+      showTaxId: flag('showTaxId'),
+      showCashier: flag('showCashier'),
+      showBranch: flag('showBranch')
+    };
+
     const mockSale = {
       receiptNo: 'RC-TEST-0001',
       ts: new Date().toISOString(),
-      branchId: 'B01',
+      branchId: mockStore.branchId,
       cashierName: Auth.getUser()?.name || 'Admin',
       subtotal: 100,
       discount: 10,
@@ -1000,23 +972,6 @@ const AdminModule = {
       { sku: 'P1004', name: 'ข้าวผัดกระเพราไก่ไข่ดาว', qty: 1, unitPrice: 55, discount: 0, amount: 55 },
       { sku: 'P1003', name: 'เลย์ มันฝรั่งแท้ รสคลาสสิค', qty: 1, unitPrice: 25, discount: 0, amount: 25 }
     ];
-
-    const defaultText = (this.receiptTextsList && this.receiptTextsList.find(r => r.scopeId === 'DEFAULT')) || {};
-    const mockStore = {
-      receiptTitle: defaultText.receiptTitle || 'ใบเสร็จรับเงิน / ใบกำกับภาษีอย่างย่อ',
-      storeName: defaultText.storeName || this.configs.STORE_NAME || 'POS & Stock Store',
-      name: defaultText.storeName || this.configs.STORE_NAME || 'POS & Stock Store',
-      subHeader: defaultText.subHeader || 'ยินดีต้อนรับ / Welcome',
-      address: defaultText.address || this.configs.STORE_ADDRESS || 'สำนักงานใหญ่',
-      phone: defaultText.phone || this.configs.STORE_PHONE || '02-123-4567',
-      taxId: defaultText.taxId || this.configs.STORE_TAX_ID || '0105500000000',
-      footer: defaultText.footer || 'ขอบคุณที่ใช้บริการ / Thank you!\nสินค้าซื้อแล้วไม่รับเปลี่ยนคืน',
-      showAddress: defaultText.showAddress !== false && String(defaultText.showAddress) !== 'false',
-      showPhone: defaultText.showPhone !== false && String(defaultText.showPhone) !== 'false',
-      showTaxId: defaultText.showTaxId !== false && String(defaultText.showTaxId) !== 'false',
-      showCashier: defaultText.showCashier !== false && String(defaultText.showCashier) !== 'false',
-      showBranch: defaultText.showBranch !== false && String(defaultText.showBranch) !== 'false'
-    };
 
     const prof = {
       profileId: 'TEST',

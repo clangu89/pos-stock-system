@@ -71,7 +71,7 @@ function checkoutSale(payload, sessionUser) {
       }
     }
 
-    // 4. Calculate Bill Totals
+    // 4. Calculate Bill Totals (ปัดเศษเงิน 2 ตำแหน่งทุกขั้น เพื่อให้ยอดในชีต/ใบเสร็จ/รายงานตรงกัน)
     let subtotal = 0;
     const preparedItems = [];
 
@@ -79,9 +79,9 @@ function checkoutSale(payload, sessionUser) {
       const it = items[i];
       const qty = parseFloat(it.qty) || 0;
       const unitPrice = parseFloat(it.unitPrice) || 0;
-      const discount = parseFloat(it.discount) || 0;
-      const amount = Math.max(0, (qty * unitPrice) - discount);
-      subtotal += amount;
+      const discount = round2_(Math.max(0, parseFloat(it.discount) || 0));
+      const amount = round2_(Math.max(0, (qty * unitPrice) - discount));
+      subtotal = round2_(subtotal + amount);
 
       const pInfo = productMap[it.sku] || {};
       const unitCost = parseFloat(pInfo.costPrice) || 0;
@@ -99,20 +99,29 @@ function checkoutSale(payload, sessionUser) {
       });
     }
 
-    const billDiscount = parseFloat(payload.discount) || 0;
-    const totalAfterDiscount = Math.max(0, subtotal - billDiscount);
+    // ส่วนลดท้ายบิลต้องไม่ติดลบ และไม่เกินยอดรวมรายการ
+    const billDiscount = round2_(Math.min(Math.max(0, parseFloat(payload.discount) || 0), subtotal));
+    const totalAfterDiscount = round2_(Math.max(0, subtotal - billDiscount));
 
     // VAT
     const vatRate = parseFloat(getConfig('VAT_RATE', '0')) || 0;
     let vatAmount = 0;
     let grandTotal = totalAfterDiscount;
     if (vatRate > 0) {
-      vatAmount = Math.round((grandTotal * (vatRate / (100 + vatRate))) * 100) / 100;
+      vatAmount = round2_(grandTotal * (vatRate / (100 + vatRate)));
     }
 
-    const received = parseFloat(payload.received) || grandTotal;
-    const change = Math.max(0, received - grandTotal);
     const payMethod = payload.payMethod || 'CASH'; // CASH, TRANSFER, QR, CARD
+    let received = round2_(parseFloat(payload.received) || grandTotal);
+    if (payMethod === 'CASH') {
+      if (received < grandTotal) {
+        throw new Error('ยอดเงินที่รับมาน้อยกว่ายอดที่ต้องชำระ');
+      }
+    } else {
+      // โอน / QR / บัตร: รับเงินเท่ายอดบิลเสมอ ไม่มีเงินทอน
+      received = grandTotal;
+    }
+    const change = round2_(Math.max(0, received - grandTotal));
 
     // 5. Generate Receipt Number
     const receiptNo = generateReceiptNo(branch.code || 'MAIN');

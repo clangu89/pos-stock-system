@@ -139,10 +139,17 @@ function saveRolePermissions(roleData, sessionUser) {
 }
 
 function getBranchesList() {
-  return getTable(SHEETS.BRANCHES).rows;
+  // ซ่อมค่าเบอร์โทร/เลขผู้เสียภาษีที่ Sheets แปลงเป็นตัวเลข (เลข 0 นำหน้าหาย)
+  return getTable(SHEETS.BRANCHES).rows.map(b => {
+    b.phone = normalizeThaiPhone_(b.phone);
+    b.taxId = normalizeThaiTaxId_(b.taxId);
+    return b;
+  });
 }
 
 function saveBranchData(branchData, sessionUser) {
+  getSheet(SHEETS.BRANCHES);
+  setTextColumns_(SHEETS.BRANCHES, ['phone', 'taxId']);
   let branchId = String(branchData.branchId || '').trim();
   const code = String(branchData.code || '').trim().toUpperCase();
   const name = String(branchData.name || '').trim();

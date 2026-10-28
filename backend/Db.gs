@@ -156,6 +156,48 @@ function deleteRows(sheetName, predicate) {
   return deletedCount;
 }
 
+/**
+ * ปัดเศษเงินเป็น 2 ตำแหน่ง (กันเศษทศนิยมลอย เช่น 3 x 0.1 = 0.30000000000000004)
+ */
+function round2_(n) {
+  const v = Number(n);
+  if (!isFinite(v)) return 0;
+  return Math.round((v + Number.EPSILON) * 100) / 100;
+}
+
+/**
+ * ล็อกคอลัมน์ที่ระบุให้เป็น "ข้อความ" (Plain Text) ป้องกัน Google Sheets แปลงเป็นตัวเลข
+ * จนเลข 0 นำหน้า (เลขผู้เสียภาษี / เบอร์โทร) หาย
+ */
+function setTextColumns_(sheetName, headerNames) {
+  const sheet = getSheet(sheetName);
+  const lastCol = Math.max(1, sheet.getLastColumn());
+  const headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0].map(h => String(h).trim());
+  const maxRows = typeof sheet.getMaxRows === 'function' ? sheet.getMaxRows() : Math.max(sheet.getLastRow(), 1000);
+  headerNames.forEach(h => {
+    const idx = headers.indexOf(h);
+    if (idx >= 0) {
+      sheet.getRange(1, idx + 1, maxRows, 1).setNumberFormat('@');
+    }
+  });
+}
+
+/**
+ * เลขประจำตัวผู้เสียภาษี: ตัวเลขล้วนที่สั้นกว่า 13 หลัก (เลข 0 นำหน้าหาย) -> เติม 0 ให้ครบ 13 หลัก
+ */
+function normalizeThaiTaxId_(v) {
+  const s = String(v === null || v === undefined ? '' : v).trim();
+  return /^\d+$/.test(s) && s.length < 13 ? s.padStart(13, '0') : s;
+}
+
+/**
+ * เบอร์โทร: ตัวเลขล้วน 8-10 หลักที่ไม่ขึ้นต้นด้วย 0 (เลข 0 นำหน้าหาย) -> เติม 0 นำหน้า
+ */
+function normalizeThaiPhone_(v) {
+  const s = String(v === null || v === undefined ? '' : v).trim();
+  return /^[1-9]\d{7,9}$/.test(s) ? '0' + s : s;
+}
+
 function getConfig(key, defaultValue = '') {
   const row = findRow(SHEETS.CONFIG, r => r.key === key);
   return row ? row.value : defaultValue;

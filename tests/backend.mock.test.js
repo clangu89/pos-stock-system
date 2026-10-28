@@ -4,7 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
 
-function createGasMockContext() {
+function createGasMockContext(options = {}) {
   const sheetsStore = new Map();
   const scriptProperties = new Map();
   const cacheStore = new Map();
@@ -14,6 +14,11 @@ function createGasMockContext() {
       this.name = name;
       this.data = []; // 2D array [row][col]
       this.frozenRows = 0;
+      this.textColumns = new Set(); // คอลัมน์ที่ตั้ง number format เป็น '@' (Plain Text)
+    }
+
+    getMaxRows() {
+      return 1000;
     }
 
     getDataRange() {
@@ -51,8 +56,20 @@ function createGasMockContext() {
               self.data[rowIndex] = [];
             }
             for (let c = 0; c < matrix[r].length; c++) {
-              self.data[rowIndex][col - 1 + c] = matrix[r][c];
+              let v = matrix[r][c];
+              // จำลองพฤติกรรม Google Sheets: สตริงตัวเลขล้วนถูกแปลงเป็น number (เลข 0 นำหน้าหาย)
+              // ยกเว้นคอลัมน์ที่ตั้งเป็น Plain Text ('@')
+              if (options.coerceNumeric && typeof v === 'string' && /^\d+$/.test(v) && !self.textColumns.has(col - 1 + c)) {
+                v = Number(v);
+              }
+              self.data[rowIndex][col - 1 + c] = v;
             }
+          }
+          return rangeObj;
+        },
+        setNumberFormat: (fmt) => {
+          if (fmt === '@') {
+            for (let c = 0; c < numCols; c++) self.textColumns.add(col - 1 + c);
           }
           return rangeObj;
         },
@@ -486,4 +503,121 @@ test('GAS Mock: Branch Management CRUD, Login Branch Selection, Delete Protectio
 
   const finalBranches = sandbox.getBranchesList();
   assert.ok(!finalBranches.some(b => b.branchId === 'B02'), 'B02 should be removed');
+});
+
+test('GAS Mock: Receipt texts keep leading zeros, honor blank fields, and expose branch name', () => {
+  // coerceNumeric: จำลอง Google Sheets ที่แปลงสตริงตัวเลขล้วนเป็น number
+  const { sandbox } = createGasMockContext({ coerceNumeric: true });
+  sandbox.setupDatabase();
+  const admin = sandbox.loginUser('admin', 'Admin1234!');
+
+  // ข้อมูลเดิมที่ถูกแปลงเป็น number แล้ว (เลข 0 นำหน้าหาย) ต้องถูกซ่อมตอนอ่าน
+  const raw = sandbox.getTable('ReceiptTexts').rows[0];
+  assert.strictEqual(typeof raw.taxId, 'number', 'ข้อมูลตั้งต้นในชีตจำลองต้องเป็น number (เลข 0 หาย)');
+  assert.strictEqual(sandbox.getReceiptStoreInfo('B01').taxId, '0105500000000');
+
+  // บันทึกใหม่: คอลัมน์ต้องเป็นข้อความ เลข 0 ไม่หาย และเว้นว่างหัวรอง/ท้ายใบเสร็จได้จริง
+  sandbox.saveReceiptTexts({
+    scopeId: 'DEFAULT', branchId: '*',
+    receiptTitle: 'ใบเสร็จรับเงิน', storeName: 'ร้านทดสอบ', subHeader: '',
+    address: 'กทม.', phone: '0812345678', taxId: '0105500000001', footer: '',
+    showAddress: true, showPhone: true, showTaxId: true, showCashier: true, showBranch: true
+  }, admin.user);
+
+  const saved = sandbox.getTable('ReceiptTexts').rows.find(r => r.scopeId === 'DEFAULT');
+  assert.strictEqual(saved.taxId, '0105500000001');
+  assert.strictEqual(saved.phone, '0812345678');
+
+  const info = sandbox.getReceiptStoreInfo('B01');
+  assert.strictEqual(info.taxId, '0105500000001');
+  assert.strictEqual(info.phone, '0812345678');
+  assert.strictEqual(info.subHeader, '', 'ช่องที่เว้นว่างโดยตั้งใจต้องไม่ถูกแทนด้วยค่าเริ่มต้น');
+  assert.strictEqual(info.footer, '', 'ท้ายใบเสร็จที่เว้นว่างต้องไม่ถูกแทนด้วยค่าเริ่มต้น');
+  assert.strictEqual(info.branchCode, 'MAIN');
+  assert.ok(info.branchName.length > 0, 'ต้องมีชื่อสาขาสำหรับพิมพ์บนใบเสร็จ');
+
+  // แถวเฉพาะสาขา: ช่องที่เหมือนค่ากลางถูกเก็บเป็นว่าง (สืบทอด) และเปลี่ยนตามเมื่อแก้ค่ากลาง
+  sandbox.saveReceiptTexts({
+    scopeId: 'BRANCH_B01', branchId: 'B01',
+    receiptTitle: 'ใบเสร็จรับเงิน', storeName: 'ร้านทดสอบ สาขา 1', subHeader: '',
+    address: 'กทม.', phone: '0812345678', taxId: '0105500000001', footer: 'ท้ายเฉพาะสาขา',
+    showAddress: true, showPhone: true, showTaxId: true, showCashier: true, showBranch: true
+  }, admin.user);
+  const branchRow = sandbox.getTable('ReceiptTexts').rows.find(r => r.scopeId === 'BRANCH_B01');
+  assert.strictEqual(branchRow.storeName, 'ร้านทดสอบ สาขา 1');
+  assert.strictEqual(branchRow.address, '', 'ที่อยู่เหมือนค่ากลาง ต้องเก็บเป็นว่าง (สืบทอด)');
+  assert.strictEqual(branchRow.taxId, '', 'เลขผู้เสียภาษีเหมือนค่ากลาง ต้องเก็บเป็นว่าง (สืบทอด)');
+
+  sandbox.saveReceiptTexts({
+    scopeId: 'DEFAULT', branchId: '*',
+    receiptTitle: 'ใบเสร็จรับเงิน', storeName: 'ร้านทดสอบ', subHeader: '',
+    address: 'ที่อยู่ใหม่', phone: '0812345678', taxId: '0105500000001', footer: '',
+    showAddress: true, showPhone: true, showTaxId: true, showCashier: true, showBranch: true
+  }, admin.user);
+  const after = sandbox.getReceiptStoreInfo('B01');
+  assert.strictEqual(after.address, 'ที่อยู่ใหม่', 'สาขาต้องตามค่ากลางที่แก้ไขใหม่');
+  assert.strictEqual(after.footer, 'ท้ายเฉพาะสาขา');
+  assert.strictEqual(after.storeName, 'ร้านทดสอบ สาขา 1');
+
+  // รายการสาขาที่ส่งให้หน้า Admin ต้องไม่ทำเลข 0 หาย
+  const branches = sandbox.getBranchesList();
+  assert.strictEqual(branches[0].taxId, '0105500000000');
+});
+
+test('GAS Mock: Checkout rounds money, enforces payment rules, and reports include voided bills', () => {
+  const { sandbox } = createGasMockContext();
+  sandbox.setupDatabase();
+  const admin = sandbox.loginUser('admin', 'Admin1234!');
+
+  // 1) ปัดทศนิยม: 3 x 0.1 ต้องได้ 0.3 พอดี (ไม่ใช่ 0.30000000000000004)
+  const r1 = sandbox.checkoutSale({
+    branchId: 'B01', items: [{ sku: 'P1001', name: 'น้ำ', qty: 3, unitPrice: 0.1, discount: 0 }],
+    received: 1, payMethod: 'CASH', clientTxnId: 'T-ROUND-1'
+  }, admin.user);
+  assert.strictEqual(r1.sale.total, 0.3);
+  assert.strictEqual(r1.sale.subtotal, 0.3);
+  assert.strictEqual(r1.items[0].amount, 0.3);
+  assert.strictEqual(r1.sale.change, 0.7);
+
+  // 2) รายการลดเต็มจำนวน amount ต้องเป็น 0 (ไม่ใช่ราคาเต็ม)
+  const r2 = sandbox.checkoutSale({
+    branchId: 'B01', items: [{ sku: 'P1001', name: 'น้ำ', qty: 1, unitPrice: 10, discount: 10 }],
+    received: 0, payMethod: 'TRANSFER', clientTxnId: 'T-ZERO-1'
+  }, admin.user);
+  assert.strictEqual(r2.items[0].amount, 0);
+  assert.strictEqual(r2.sale.total, 0);
+
+  // 3) เงินสดรับไม่พอ ต้องถูกปฏิเสธ
+  assert.throws(() => sandbox.checkoutSale({
+    branchId: 'B01', items: [{ sku: 'P1001', name: 'น้ำ', qty: 1, unitPrice: 10, discount: 0 }],
+    received: 5, payMethod: 'CASH', clientTxnId: 'T-SHORT-1'
+  }, admin.user), /น้อยกว่ายอด/);
+
+  // 4) โอนเงิน: received = total, change = 0 แม้ส่ง received มากกว่า
+  const r4 = sandbox.checkoutSale({
+    branchId: 'B01', items: [{ sku: 'P1001', name: 'น้ำ', qty: 2, unitPrice: 10, discount: 0 }],
+    received: 500, payMethod: 'TRANSFER', clientTxnId: 'T-TRANSFER-1'
+  }, admin.user);
+  assert.strictEqual(r4.sale.total, 20);
+  assert.strictEqual(r4.sale.received, 20);
+  assert.strictEqual(r4.sale.change, 0);
+
+  // 5) ส่วนลดท้ายบิลเกินยอดรวม ต้องถูกจำกัดไม่ให้ยอดติดลบ
+  const r5 = sandbox.checkoutSale({
+    branchId: 'B01', items: [{ sku: 'P1001', name: 'น้ำ', qty: 1, unitPrice: 10, discount: 0 }],
+    discount: 999, received: 0, payMethod: 'QR', clientTxnId: 'T-DISC-1'
+  }, admin.user);
+  assert.strictEqual(r5.sale.discount, 10);
+  assert.strictEqual(r5.sale.total, 0);
+
+  // 6) รายงาน: ยกเลิกบิล r4 แล้วต้องแยกแสดงบิลที่ยกเลิก และยอดสุทธิไม่รวมบิลนั้น
+  sandbox.voidReceipt(r4.receiptNo, 'ทดสอบยกเลิก', admin.user);
+  const d = new Date();
+  const today = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  const rep = sandbox.getDailySalesReport(today, today, '');
+  assert.strictEqual(rep.summary.voidBills, 1);
+  assert.strictEqual(rep.summary.voidAmount, 20);
+  assert.strictEqual(rep.summary.totalBills, 3);
+  assert.strictEqual(rep.summary.grossBills, 4);
+  assert.strictEqual(rep.summary.totalSales, 0.3, 'ยอดสุทธิ = 0.3 + 0 + 0 (ไม่รวมบิลที่ยกเลิก)');
 });
