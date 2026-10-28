@@ -2,14 +2,17 @@
  * Sales.gs - Sales Checkout (Atomic with LockService), Voiding, and Receipts
  */
 
-function checkoutSale(payload, sessionUser) {
+function acquireScriptLock_(timeoutMs) {
   const lock = LockService.getScriptLock();
-  try {
-    const success = lock.waitLock(15000); // 15 seconds wait
-    if (!success) {
-      throw new Error('ระบบกำลังประมวลผลรายการอื่น กรุณาลองใหม่อีกครั้ง');
-    }
+  if (!lock.tryLock(timeoutMs || 15000)) {
+    throw new Error('ระบบกำลังประมวลผลรายการอื่น กรุณาลองใหม่อีกครั้ง');
+  }
+  return lock;
+}
 
+function checkoutSale(payload, sessionUser) {
+  const lock = acquireScriptLock_(15000);
+  try {
     const branchId = payload.branchId || 'B01';
     const items = payload.items || [];
     const clientTxnId = payload.clientTxnId || '';
@@ -193,13 +196,8 @@ function voidReceipt(receiptNo, reason, sessionUser) {
     throw new Error('กรุณาระบุเลขที่ใบเสร็จและเหตุผลในการยกเลิก');
   }
 
-  const lock = LockService.getScriptLock();
+  const lock = acquireScriptLock_(15000);
   try {
-    const success = lock.waitLock(15000);
-    if (!success) {
-      throw new Error('ระบบกำลังประมวลผลรายการอื่น กรุณาลองใหม่อีกครั้ง');
-    }
-
     const sale = findRow(SHEETS.SALES, r => r.receiptNo === receiptNo);
     if (!sale) {
       throw new Error(`ไม่พบใบเสร็จเลขที่ ${receiptNo}`);

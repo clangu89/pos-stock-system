@@ -19,12 +19,13 @@ function applyStockMovements(movements, userId = 'SYSTEM') {
   }
 
   const ledgerEntries = [];
-  const balanceUpdates = [];
   const balanceAppends = [];
+  const touchedKeys = new Set();
 
   for (let i = 0; i < movements.length; i++) {
     const m = movements[i];
     const key = `${m.branchId}_${m.sku}`;
+    touchedKeys.add(key);
     const curr = balanceMap[key] ? balanceMap[key].qty : 0;
     const qtyIn = parseFloat(m.qtyIn) || 0;
     const qtyOut = parseFloat(m.qtyOut) || 0;
@@ -51,28 +52,47 @@ function applyStockMovements(movements, userId = 'SYSTEM') {
     });
   }
 
-  // Update StockBalance sheet
-  for (const key in balanceMap) {
-    const parts = key.split('_');
-    const branchId = parts[0];
-    const sku = parts.slice(1).join('_');
-    const item = balanceMap[key];
+  // Batch update StockBalance sheet (single read & single write)
+  const balanceSheet = getSheet(SHEETS.STOCK_BALANCE);
+  const dataRange = balanceSheet.getDataRange();
+  const rawValues = dataRange.getValues();
 
-    if (item.rowIndex) {
-      updateRows(SHEETS.STOCK_BALANCE, r => r.branchId === branchId && r.sku === sku, r => {
-        r.qty = item.qty;
-        r.updatedAt = now;
-        return r;
-      });
-    } else {
+  if (rawValues.length > 1) {
+    const headers = rawValues[0].map(h => String(h).trim());
+    const branchCol = headers.indexOf('branchId');
+    const skuCol = headers.indexOf('sku');
+    const qtyCol = headers.indexOf('qty');
+    const updatedCol = headers.indexOf('updatedAt');
+
+    let modified = false;
+    for (let r = 1; r < rawValues.length; r++) {
+      const bId = rawValues[r][branchCol];
+      const sSku = rawValues[r][skuCol];
+      const key = `${bId}_${sSku}`;
+      if (touchedKeys.has(key)) {
+        if (qtyCol >= 0) rawValues[r][qtyCol] = balanceMap[key].qty;
+        if (updatedCol >= 0) rawValues[r][updatedCol] = now;
+        modified = true;
+      }
+    }
+    if (modified) {
+      dataRange.setValues(rawValues);
+    }
+  }
+
+  // Handle new SKU appends for SKUs that were not previously in StockBalance
+  touchedKeys.forEach(key => {
+    const item = balanceMap[key];
+    if (!item || !item.rowIndex) {
+      const parts = key.split('_');
       balanceAppends.push({
-        branchId: branchId,
-        sku: sku,
-        qty: item.qty,
+        branchId: parts[0],
+        sku: parts.slice(1).join('_'),
+        qty: item ? item.qty : 0,
         updatedAt: now
       });
     }
-  }
+  });
 
   if (balanceAppends.length > 0) {
     appendRows(SHEETS.STOCK_BALANCE, balanceAppends);

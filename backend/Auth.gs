@@ -129,6 +129,7 @@ function loginUser(username, password, clientInfo = {}) {
   const userBranchIds = String(user.branchIds || '').split(',').map(b => b.trim()).filter(Boolean);
 
   return {
+    ok: true,
     token: token,
     expiresAt: expiresAt,
     user: {

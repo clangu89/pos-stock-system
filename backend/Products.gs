@@ -45,7 +45,7 @@ function saveProduct(productData, sessionUser) {
 
   // Check barcode uniqueness if barcode provided
   if (barcode) {
-    const existingByBarcode = findRow(SHEETS.PRODUCTS, r => r.barcode === barcode && r.sku !== sku);
+    const existingByBarcode = findRow(SHEETS.PRODUCTS, r => String(r.barcode || '').trim() === barcode && String(r.sku || '').trim() !== sku);
     if (existingByBarcode) {
       throw new Error(`บาร์โค้ด ${barcode} ซ้ำกับสินค้า "${existingByBarcode.name}" (SKU: ${existingByBarcode.sku})`);
     }
