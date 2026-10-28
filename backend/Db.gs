@@ -21,12 +21,17 @@ const SHEETS = {
   AUDIT_LOG: 'AuditLog'
 };
 
+const DEFAULT_SPREADSHEET_ID = '1YEVUjb74z9BmGPalcmOS7mfX9TzvUGx0sXKFfzgiYJc';
+
 function getSpreadsheet() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  if (ss) return ss;
-  // Fallback for standalone script bound to ScriptProperties DB_ID
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    if (ss) return ss;
+  } catch (e) {}
+
+  // Fallback for standalone script or Web App execution
   const props = PropertiesService.getScriptProperties();
-  const dbId = props.getProperty('DB_ID');
+  const dbId = props.getProperty('DB_ID') || DEFAULT_SPREADSHEET_ID;
   if (dbId) {
     return SpreadsheetApp.openById(dbId);
   }
