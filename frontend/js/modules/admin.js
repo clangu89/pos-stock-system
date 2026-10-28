@@ -20,6 +20,8 @@ const AdminModule = {
   async activate() {
     this.setupTabNavigation();
     await this.loadAdminData();
+    const savedTab = localStorage.getItem('pos_admin_active_tab') || 'users';
+    this.switchTab(savedTab);
     this.populateVoiceSettingsUI();
   },
 
@@ -34,10 +36,25 @@ const AdminModule = {
 
   switchTab(tabName) {
     this.currentTab = tabName;
+    try {
+      localStorage.setItem('pos_admin_active_tab', tabName);
+    } catch (e) {}
+
+    // Update Desktop Sidebar Buttons
     document.querySelectorAll('.admin-tab-btn').forEach(b => {
       const isAct = b.dataset.tab === tabName;
-      b.className = `admin-tab-btn px-4 py-2.5 rounded-xl font-bold text-xs transition cursor-pointer ${isAct ? 'bg-slate-900 text-white shadow-md' : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-200'}`;
+      if (isAct) {
+        b.className = 'admin-tab-btn w-full px-3.5 py-2.5 rounded-2xl font-bold text-xs flex items-center gap-2.5 transition text-left cursor-pointer bg-slate-900 text-white shadow-md';
+      } else {
+        b.className = 'admin-tab-btn w-full px-3.5 py-2.5 rounded-2xl font-bold text-xs flex items-center gap-2.5 transition text-left cursor-pointer text-slate-600 hover:text-slate-900 hover:bg-slate-100/80';
+      }
     });
+
+    // Sync Mobile Dropdown Selector
+    const mobileSelect = document.getElementById('adminMobileTabSelect');
+    if (mobileSelect && mobileSelect.value !== tabName) {
+      mobileSelect.value = tabName;
+    }
 
     document.querySelectorAll('.admin-tab-content').forEach(c => c.classList.add('hidden'));
     const target = document.getElementById(`adminTab_${tabName}`);
