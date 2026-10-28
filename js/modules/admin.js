@@ -8,6 +8,10 @@ const AdminModule = {
   roles: [],
   branches: [],
   configs: {},
+  configsTable: [],
+  categories: [],
+  units: [],
+  products: [],
   profiles: [],
   receiptTextsList: [],
   currentReceiptScope: 'DEFAULT',
@@ -45,18 +49,24 @@ const AdminModule = {
     else if (tabName === 'receiptText') this.loadReceiptTextsUI();
     else if (tabName === 'printer') this.renderPrinterSettings();
     else if (tabName === 'voice') this.populateVoiceSettingsUI();
+    else if (tabName === 'constants') this.loadConstantsUI();
+    else if (tabName === 'categories') this.loadCategoriesUI();
+    else if (tabName === 'units') this.loadUnitsUI();
     else if (tabName === 'audit') this.loadAuditLogs();
     else if (tabName === 'api') this.renderApiSettings();
   },
 
   async loadAdminData() {
     UI.showLoading('กำลังโหลดข้อมูลระบบผู้ดูแล...');
-    const [uRes, rRes, bRes, cRes, pRes] = await Promise.all([
+    const [uRes, rRes, bRes, cRes, pRes, catRes, unitRes, prodRes] = await Promise.all([
       Api.call('admin:users'),
       Api.call('admin:roles'),
       Api.call('admin:branches'),
       Api.call('admin:configs'),
-      Api.call('admin:printProfiles')
+      Api.call('admin:printProfiles'),
+      Api.call('admin:categories'),
+      Api.call('admin:units'),
+      Api.call('products:list')
     ]);
     UI.hideLoading();
 
@@ -65,6 +75,9 @@ const AdminModule = {
     if (bRes && bRes.ok) this.branches = bRes.branches || [];
     if (cRes && cRes.ok) this.configs = cRes.configs || {};
     if (pRes && pRes.ok) this.profiles = pRes.profiles || [];
+    if (catRes && catRes.ok) this.categories = catRes.categories || [];
+    if (unitRes && unitRes.ok) this.units = unitRes.units || [];
+    if (prodRes && prodRes.ok) this.products = prodRes.products || [];
 
     this.renderUsersTable();
   },
@@ -856,6 +869,477 @@ const AdminModule = {
       SoundManager.announceChange(249.50);
     } else if (type === 'void') {
       SoundManager.announceVoid('RC-TEST-001');
+    }
+  },
+
+  // --- System Constants & Configs Management ---
+  async loadConstantsUI() {
+    UI.showLoading('กำลังโหลดค่าคงที่ระบบ...');
+    const [cMapRes, cTableRes] = await Promise.all([
+      Api.call('admin:configs'),
+      Api.call('admin:configsTable')
+    ]);
+    UI.hideLoading();
+
+    if (cMapRes && cMapRes.ok) this.configs = cMapRes.configs || {};
+    if (cTableRes && cTableRes.ok) this.configsTable = cTableRes.configs || [];
+
+    this.renderCoreConstants();
+    this.renderConfigsTable();
+  },
+
+  renderCoreConstants() {
+    const vat = document.getElementById('constVatRateInput');
+    const hours = document.getElementById('constSessionHoursInput');
+    const pay = document.getElementById('constDefaultPayMethodSelect');
+    const curr = document.getElementById('constCurrencySymbolInput');
+    const negCheck = document.getElementById('constAllowNegativeCheck');
+    const negLabel = document.getElementById('constAllowNegativeLabel');
+
+    if (vat) vat.value = this.configs.VAT_RATE !== undefined ? this.configs.VAT_RATE : 0;
+    if (hours) hours.value = this.configs.SESSION_EXPIRE_HOURS || 12;
+    if (pay) pay.value = this.configs.DEFAULT_PAY_METHOD || 'CASH';
+    if (curr) curr.value = this.configs.CURRENCY_SYMBOL || '฿';
+
+    const isNeg = this.configs.ALLOW_NEGATIVE_STOCK === 'true' || this.configs.ALLOW_NEGATIVE_STOCK === true;
+    if (negCheck) negCheck.checked = isNeg;
+    if (negLabel) negLabel.textContent = isNeg ? 'เปิดใช้งาน' : 'ปิด';
+  },
+
+  async saveCoreConstants() {
+    const vatVal = parseFloat(document.getElementById('constVatRateInput')?.value) || 0;
+    const hoursVal = parseInt(document.getElementById('constSessionHoursInput')?.value, 10) || 12;
+    const payVal = document.getElementById('constDefaultPayMethodSelect')?.value || 'CASH';
+    const currVal = document.getElementById('constCurrencySymbolInput')?.value.trim() || '฿';
+    const negVal = document.getElementById('constAllowNegativeCheck')?.checked ? 'true' : 'false';
+
+    const payload = {
+      VAT_RATE: String(vatVal),
+      SESSION_EXPIRE_HOURS: String(hoursVal),
+      DEFAULT_PAY_METHOD: payVal,
+      CURRENCY_SYMBOL: currVal,
+      ALLOW_NEGATIVE_STOCK: negVal
+    };
+
+    UI.showLoading('กำลังบันทึกการตั้งค่าระบบหลัก...');
+    const res = await Api.call('admin:saveConfigs', payload);
+    UI.hideLoading();
+
+    if (res && res.ok) {
+      Object.assign(this.configs, payload);
+      UI.showToast('บันทึกการตั้งค่าระบบหลักสำเร็จ', 'success');
+      SoundManager.playSuccessChime();
+      await this.loadConstantsUI();
+    } else {
+      UI.showToast(`บันทึกไม่สำเร็จ: ${res.error || res.message}`, 'error');
+      SoundManager.playErrorTone();
+    }
+  },
+
+  renderConfigsTable(list = null) {
+    const tbody = document.getElementById('adminConfigsTableBody');
+    if (!tbody) return;
+
+    const data = list || this.configsTable || [];
+    if (data.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="5" class="text-center py-6 text-slate-400">ไม่พบรายการค่าคงที่</td></tr>';
+      return;
+    }
+
+    tbody.innerHTML = data.map(c => `
+      <tr class="border-b border-slate-100 hover:bg-slate-50 transition">
+        <td class="py-2.5 px-3 font-mono font-bold text-slate-900">${escapeHtml(c.key)}</td>
+        <td class="py-2.5 px-3 font-mono font-bold text-blue-700 truncate max-w-xs" title="${escapeHtml(c.value)}">${escapeHtml(c.value)}</td>
+        <td class="py-2.5 px-3 text-slate-600">${escapeHtml(c.description || '-')}</td>
+        <td class="py-2.5 px-3 text-slate-400 text-[11px] whitespace-nowrap">${c.updatedAt ? new Date(c.updatedAt).toLocaleString('th-TH') : '-'}</td>
+        <td class="py-2.5 px-3 text-right whitespace-nowrap">
+          <button onclick="AdminModule.openConfigModal('${c.key}')" class="px-2.5 py-1 text-xs font-bold text-blue-600 hover:bg-blue-50 rounded-lg transition">แก้ไข</button>
+          ${!c.isSystem ? `<button onclick="AdminModule.deleteConfigItem('${c.key}')" class="px-2.5 py-1 text-xs font-bold text-red-600 hover:bg-red-50 rounded-lg ml-1 transition">ลบ</button>` : ''}
+        </td>
+      </tr>
+    `).join('');
+  },
+
+  filterConfigsTable(query) {
+    const q = (query || '').trim().toLowerCase();
+    if (!q) {
+      this.renderConfigsTable();
+      return;
+    }
+    const filtered = (this.configsTable || []).filter(c =>
+      String(c.key).toLowerCase().includes(q) ||
+      String(c.value).toLowerCase().includes(q) ||
+      String(c.description || '').toLowerCase().includes(q)
+    );
+    this.renderConfigsTable(filtered);
+  },
+
+  openConfigModal(key = '') {
+    const isEdit = !!key;
+    document.getElementById('configModalTitle').textContent = isEdit ? 'แก้ไขค่าคงที่' : 'เพิ่มค่าคงที่ใหม่';
+    const keyInput = document.getElementById('configModalKey');
+    const valInput = document.getElementById('configModalValue');
+    const descInput = document.getElementById('configModalDesc');
+
+    if (isEdit) {
+      const item = (this.configsTable || []).find(c => c.key === key);
+      keyInput.value = key;
+      keyInput.disabled = true;
+      valInput.value = item ? item.value : (this.configs[key] || '');
+      descInput.value = item ? (item.description || '') : '';
+    } else {
+      keyInput.value = '';
+      keyInput.disabled = false;
+      valInput.value = '';
+      descInput.value = '';
+    }
+
+    UI.openModal('configEditModal');
+  },
+
+  async saveConfigModal() {
+    const key = document.getElementById('configModalKey').value.trim().toUpperCase();
+    const value = document.getElementById('configModalValue').value;
+    const description = document.getElementById('configModalDesc').value.trim();
+
+    if (!key) {
+      UI.showToast('กรุณาระบุคีย์ค่าคงที่ (Key)', 'warning');
+      return;
+    }
+
+    UI.showLoading('กำลังบันทึกค่าคงที่...');
+    const res = await Api.call('admin:saveConfigItem', { key, value, description });
+    UI.hideLoading();
+
+    if (res && res.ok) {
+      UI.closeModal('configEditModal');
+      UI.showToast(res.message || 'บันทึกสำเร็จ', 'success');
+      SoundManager.playSuccessChime();
+      this.configs[key] = value;
+      await this.loadConstantsUI();
+    } else {
+      UI.showToast(`บันทึกไม่สำเร็จ: ${res.error || res.message}`, 'error');
+      SoundManager.playErrorTone();
+    }
+  },
+
+  async deleteConfigItem(key) {
+    const ok = confirm(`ต้องการลบคีย์ค่าคงที่ [${key}] ใช่หรือไม่?`);
+    if (!ok) return;
+
+    UI.showLoading('กำลังลบคีย์ค่าคงที่...');
+    const res = await Api.call('admin:deleteConfigItem', { key });
+    UI.hideLoading();
+
+    if (res && res.ok) {
+      UI.showToast(res.message || 'ลบสำเร็จ', 'success');
+      delete this.configs[key];
+      await this.loadConstantsUI();
+    } else {
+      UI.showToast(`ไม่สามารถลบได้: ${res.error || res.message}`, 'error');
+    }
+  },
+
+  // --- Product Categories Management ---
+  async loadCategoriesUI() {
+    UI.showLoading('กำลังโหลดหมวดหมู่สินค้า...');
+    const [catRes, prodRes] = await Promise.all([
+      Api.call('admin:categories'),
+      Api.call('products:list')
+    ]);
+    UI.hideLoading();
+
+    if (catRes && catRes.ok) this.categories = catRes.categories || [];
+    if (prodRes && prodRes.ok) this.products = prodRes.products || [];
+
+    this.renderCategoriesTable();
+  },
+
+  renderCategoriesTable(list = null) {
+    const tbody = document.getElementById('adminCategoriesTableBody');
+    if (!tbody) return;
+
+    const data = list || this.categories || [];
+    if (data.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="6" class="text-center py-6 text-slate-400">ไม่พบหมวดหมู่สินค้า</td></tr>';
+      return;
+    }
+
+    // Count products per category
+    const countMap = {};
+    (this.products || []).forEach(p => {
+      countMap[p.categoryId] = (countMap[p.categoryId] || 0) + 1;
+    });
+
+    tbody.innerHTML = data.map(c => {
+      const prodCount = countMap[c.categoryId] || 0;
+      const color = c.color || '#3498DB';
+      return `
+        <tr class="border-b border-slate-100 hover:bg-slate-50 transition">
+          <td class="py-2.5 px-3 text-center">
+            <span class="inline-block w-4 h-4 rounded-full border border-black/10 shadow-xs" style="background-color: ${escapeHtml(color)};"></span>
+          </td>
+          <td class="py-2.5 px-3 font-mono font-bold text-slate-900">${escapeHtml(c.categoryId)}</td>
+          <td class="py-2.5 px-3 font-bold text-slate-800">
+            <span class="px-2.5 py-1 rounded-full text-xs font-bold" style="background-color: ${escapeHtml(color)}1a; color: ${escapeHtml(color)};">
+              ${escapeHtml(c.name)}
+            </span>
+          </td>
+          <td class="py-2.5 px-3 text-center font-bold text-slate-700">${parseInt(c.sortOrder, 10) || 1}</td>
+          <td class="py-2.5 px-3 text-center">
+            <span class="px-2 py-0.5 rounded-full text-xs font-bold ${prodCount > 0 ? 'bg-blue-100 text-blue-800' : 'bg-slate-100 text-slate-500'}">
+              ${prodCount} รายการ
+            </span>
+          </td>
+          <td class="py-2.5 px-3 text-right whitespace-nowrap">
+            <button onclick="AdminModule.openCategoryModal('${c.categoryId}')" class="px-2.5 py-1 text-xs font-bold text-blue-600 hover:bg-blue-50 rounded-lg transition">แก้ไข</button>
+            <button onclick="AdminModule.deleteCategory('${c.categoryId}')" class="px-2.5 py-1 text-xs font-bold text-red-600 hover:bg-red-50 rounded-lg ml-1 transition">ลบ</button>
+          </td>
+        </tr>
+      `;
+    }).join('');
+  },
+
+  filterCategoriesTable(query) {
+    const q = (query || '').trim().toLowerCase();
+    if (!q) {
+      this.renderCategoriesTable();
+      return;
+    }
+    const filtered = (this.categories || []).filter(c =>
+      String(c.categoryId).toLowerCase().includes(q) ||
+      String(c.name).toLowerCase().includes(q)
+    );
+    this.renderCategoriesTable(filtered);
+  },
+
+  openCategoryModal(catId = '') {
+    const isEdit = !!catId;
+    document.getElementById('categoryModalTitle').textContent = isEdit ? 'แก้ไขหมวดหมู่สินค้า' : 'เพิ่มหมวดสินค้าใหม่';
+    const idInput = document.getElementById('categoryModalId');
+    const nameInput = document.getElementById('categoryModalName');
+    const colorInput = document.getElementById('categoryModalColor');
+    const hexInput = document.getElementById('categoryModalColorHex');
+    const sortInput = document.getElementById('categoryModalSortOrder');
+
+    if (isEdit) {
+      const c = (this.categories || []).find(x => x.categoryId === catId);
+      idInput.value = catId;
+      idInput.disabled = true;
+      nameInput.value = c ? c.name : '';
+      const clr = c ? (c.color || '#3498DB') : '#3498DB';
+      colorInput.value = clr;
+      hexInput.value = clr;
+      sortInput.value = c ? (c.sortOrder || 1) : 1;
+    } else {
+      idInput.value = '';
+      idInput.disabled = false;
+      nameInput.value = '';
+      colorInput.value = '#3498DB';
+      hexInput.value = '#3498DB';
+      sortInput.value = (this.categories || []).length + 1;
+    }
+
+    UI.openModal('categoryEditModal');
+  },
+
+  setCategoryModalColor(hex) {
+    document.getElementById('categoryModalColor').value = hex;
+    document.getElementById('categoryModalColorHex').value = hex;
+  },
+
+  async saveCategoryModal() {
+    const categoryId = document.getElementById('categoryModalId').value.trim();
+    const name = document.getElementById('categoryModalName').value.trim();
+    const color = document.getElementById('categoryModalColor').value;
+    const sortOrder = parseInt(document.getElementById('categoryModalSortOrder').value, 10) || 1;
+
+    if (!name) {
+      UI.showToast('กรุณาระบุชื่อหมวดหมู่สินค้า', 'warning');
+      return;
+    }
+
+    UI.showLoading('กำลังบันทึกหมวดสินค้า...');
+    const res = await Api.call('admin:saveCategory', { categoryId, name, color, sortOrder });
+    UI.hideLoading();
+
+    if (res && res.ok) {
+      UI.closeModal('categoryEditModal');
+      UI.showToast('บันทึกหมวดหมู่สินค้าสำเร็จ', 'success');
+      SoundManager.playSuccessChime();
+
+      await this.loadCategoriesUI();
+      this.syncCategoriesToModules();
+    } else {
+      UI.showToast(`บันทึกไม่สำเร็จ: ${res.error || res.message}`, 'error');
+      SoundManager.playErrorTone();
+    }
+  },
+
+  async deleteCategory(catId) {
+    const c = (this.categories || []).find(x => x.categoryId === catId);
+    const catName = c ? c.name : catId;
+
+    const ok = confirm(`ต้องการลบหมวดหมู่ "${catName}" ใช่หรือไม่?`);
+    if (!ok) return;
+
+    UI.showLoading('กำลังลบหมวดสินค้า...');
+    const res = await Api.call('admin:deleteCategory', { categoryId: catId });
+    UI.hideLoading();
+
+    if (res && res.ok) {
+      UI.showToast('ลบหมวดหมู่สินค้าสำเร็จ', 'success');
+      await this.loadCategoriesUI();
+      this.syncCategoriesToModules();
+    } else {
+      UI.showToast(`ไม่สามารถลบได้: ${res.error || res.message}`, 'error');
+    }
+  },
+
+  syncCategoriesToModules() {
+    if (window.SalesModule) {
+      SalesModule.categories = this.categories;
+      SalesModule.populateCategoryFilter();
+    }
+    if (window.StockModule) {
+      StockModule.categories = this.categories;
+      StockModule.populateCategoryFilter();
+    }
+  },
+
+  // --- Units of Measure Management ---
+  async loadUnitsUI() {
+    UI.showLoading('กำลังโหลดหน่วยนับสินค้า...');
+    const [unitRes, prodRes] = await Promise.all([
+      Api.call('admin:units'),
+      Api.call('products:list')
+    ]);
+    UI.hideLoading();
+
+    if (unitRes && unitRes.ok) this.units = unitRes.units || [];
+    if (prodRes && prodRes.ok) this.products = prodRes.products || [];
+
+    this.renderUnitsTable();
+  },
+
+  renderUnitsTable(list = null) {
+    const tbody = document.getElementById('adminUnitsTableBody');
+    if (!tbody) return;
+
+    const data = list || this.units || [];
+    if (data.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="4" class="text-center py-6 text-slate-400">ไม่พบหน่วยนับสินค้า</td></tr>';
+      return;
+    }
+
+    // Count products per unit name
+    const countMap = {};
+    (this.products || []).forEach(p => {
+      countMap[p.unit] = (countMap[p.unit] || 0) + 1;
+    });
+
+    tbody.innerHTML = data.map(u => {
+      const prodCount = countMap[u.name] || 0;
+      return `
+        <tr class="border-b border-slate-100 hover:bg-slate-50 transition">
+          <td class="py-2.5 px-3 font-mono font-bold text-slate-900">${escapeHtml(u.unitId)}</td>
+          <td class="py-2.5 px-3 font-bold text-slate-800">${escapeHtml(u.name)}</td>
+          <td class="py-2.5 px-3 text-center">
+            <span class="px-2 py-0.5 rounded-full text-xs font-bold ${prodCount > 0 ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-500'}">
+              ${prodCount} รายการ
+            </span>
+          </td>
+          <td class="py-2.5 px-3 text-right whitespace-nowrap">
+            <button onclick="AdminModule.openUnitModal('${u.unitId}')" class="px-2.5 py-1 text-xs font-bold text-blue-600 hover:bg-blue-50 rounded-lg transition">แก้ไข</button>
+            <button onclick="AdminModule.deleteUnit('${u.unitId}')" class="px-2.5 py-1 text-xs font-bold text-red-600 hover:bg-red-50 rounded-lg ml-1 transition">ลบ</button>
+          </td>
+        </tr>
+      `;
+    }).join('');
+  },
+
+  filterUnitsTable(query) {
+    const q = (query || '').trim().toLowerCase();
+    if (!q) {
+      this.renderUnitsTable();
+      return;
+    }
+    const filtered = (this.units || []).filter(u =>
+      String(u.unitId).toLowerCase().includes(q) ||
+      String(u.name).toLowerCase().includes(q)
+    );
+    this.renderUnitsTable(filtered);
+  },
+
+  openUnitModal(unitId = '') {
+    const isEdit = !!unitId;
+    document.getElementById('unitModalTitle').textContent = isEdit ? 'แก้ไขหน่วยนับสินค้า' : 'เพิ่มหน่วยนับใหม่';
+    const idInput = document.getElementById('unitModalId');
+    const nameInput = document.getElementById('unitModalName');
+
+    if (isEdit) {
+      const u = (this.units || []).find(x => x.unitId === unitId);
+      idInput.value = unitId;
+      idInput.disabled = true;
+      nameInput.value = u ? u.name : '';
+    } else {
+      idInput.value = '';
+      idInput.disabled = false;
+      nameInput.value = '';
+    }
+
+    UI.openModal('unitEditModal');
+  },
+
+  async saveUnitModal() {
+    const unitId = document.getElementById('unitModalId').value.trim();
+    const name = document.getElementById('unitModalName').value.trim();
+
+    if (!name) {
+      UI.showToast('กรุณาระบุชื่อหน่วยนับ', 'warning');
+      return;
+    }
+
+    UI.showLoading('กำลังบันทึกหน่วยนับ...');
+    const res = await Api.call('admin:saveUnit', { unitId, name });
+    UI.hideLoading();
+
+    if (res && res.ok) {
+      UI.closeModal('unitEditModal');
+      UI.showToast('บันทึกหน่วยนับสำเร็จ', 'success');
+      SoundManager.playSuccessChime();
+
+      await this.loadUnitsUI();
+      this.syncUnitsToModules();
+    } else {
+      UI.showToast(`บันทึกไม่สำเร็จ: ${res.error || res.message}`, 'error');
+      SoundManager.playErrorTone();
+    }
+  },
+
+  async deleteUnit(unitId) {
+    const u = (this.units || []).find(x => x.unitId === unitId);
+    const unitName = u ? u.name : unitId;
+
+    const ok = confirm(`ต้องการลบหน่วยนับ "${unitName}" ใช่หรือไม่?`);
+    if (!ok) return;
+
+    UI.showLoading('กำลังลบหน่วยนับ...');
+    const res = await Api.call('admin:deleteUnit', { unitId });
+    UI.hideLoading();
+
+    if (res && res.ok) {
+      UI.showToast('ลบหน่วยนับสำเร็จ', 'success');
+      await this.loadUnitsUI();
+      this.syncUnitsToModules();
+    } else {
+      UI.showToast(`ไม่สามารถลบได้: ${res.error || res.message}`, 'error');
+    }
+  },
+
+  syncUnitsToModules() {
+    if (window.StockModule) {
+      StockModule.units = this.units;
     }
   },
 
