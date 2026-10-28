@@ -211,3 +211,86 @@ function getStockValuationReport(branchId = '') {
     lowStockItems
   };
 }
+
+/**
+ * ดึงรายการใบเสร็จรับเงินตามเงื่อนไข พร้อมข้อมูลสรุปยอด สำหรับหน้าจอตรวจสอบและพิมพ์ซ้ำ
+ */
+function getReceiptsList(startDateStr, endDateStr, branchId = '', status = '', payMethod = '', search = '', limit = 100) {
+  const salesTable = getTable(SHEETS.SALES);
+  const rows = salesTable.rows || [];
+
+  const start = startDateStr ? new Date(startDateStr + 'T00:00:00') : null;
+  const end = endDateStr ? new Date(endDateStr + 'T23:59:59') : null;
+  const searchLower = search ? String(search).trim().toLowerCase() : '';
+
+  const matched = [];
+  let totalAmount = 0;
+  let paidBills = 0;
+  let voidBills = 0;
+  let voidAmount = 0;
+
+  for (let i = 0; i < rows.length; i++) {
+    const s = rows[i];
+    if (!s || !s.receiptNo) continue;
+
+    // กรองตามสาขา
+    if (branchId && s.branchId !== branchId) continue;
+
+    // กรองตามช่วงวันที่
+    if (s.ts) {
+      const sDate = new Date(s.ts);
+      if (start && sDate < start) continue;
+      if (end && sDate > end) continue;
+    }
+
+    // กรองตามสถานะ (PAID / VOID)
+    const sStatus = String(s.status || 'PAID').toUpperCase();
+    if (status && sStatus !== String(status).toUpperCase()) continue;
+
+    // กรองตามวิธีชำระเงิน
+    if (payMethod && String(s.payMethod || '').toUpperCase() !== String(payMethod).toUpperCase()) continue;
+
+    // กรองตามคำค้นหา (เลขที่ใบเสร็จ, แคชเชียร์, รหัสผู้ใช้)
+    if (searchLower) {
+      const rNo = String(s.receiptNo || '').toLowerCase();
+      const cName = String(s.cashierName || '').toLowerCase();
+      const uId = String(s.userId || '').toLowerCase();
+      if (!rNo.includes(searchLower) && !cName.includes(searchLower) && !uId.includes(searchLower)) {
+        continue;
+      }
+    }
+
+    matched.push(s);
+
+    const amt = parseFloat(s.total) || 0;
+    if (sStatus === 'VOID') {
+      voidBills++;
+      voidAmount += amt;
+    } else {
+      paidBills++;
+      totalAmount += amt;
+    }
+  }
+
+  // เรียงลำดับจากบิลล่าสุดไปเก่าสุด
+  matched.sort((a, b) => {
+    const tA = a.ts ? new Date(a.ts).getTime() : 0;
+    const tB = b.ts ? new Date(b.ts).getTime() : 0;
+    return tB - tA;
+  });
+
+  const totalBills = matched.length;
+  const maxLimit = Math.max(1, parseInt(limit, 10) || 100);
+  const receipts = matched.slice(0, maxLimit);
+
+  return {
+    receipts: receipts,
+    summary: {
+      totalBills: totalBills,
+      paidBills: paidBills,
+      voidBills: voidBills,
+      totalAmount: totalAmount,
+      voidAmount: voidAmount
+    }
+  };
+}

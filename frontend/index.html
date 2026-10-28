@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>ระบบขายสินค้าและสต๊อก (POS & Stock Management)</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <link rel="stylesheet" href="css/app.css?v=20261028-v8">
-  <link rel="stylesheet" href="css/receipt.css?v=20261028-v8">
+  <link rel="stylesheet" href="css/app.css?v=20261028-v9">
+  <link rel="stylesheet" href="css/receipt.css?v=20261028-v9">
 </head>
 <body class="bg-slate-50 text-slate-900 min-h-screen flex flex-col font-sans antialiased select-none">
 
@@ -421,86 +421,213 @@
     </section>
 
     <!-- 5. REPORTS SCREEN -->
-    <section id="view_reports" class="view-screen hidden space-y-6 flex-1">
+        <section id="view_reports" class="view-screen hidden space-y-5 flex-1">
       <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-slate-200 gap-3">
         <div>
           <h1 class="text-2xl font-black text-slate-900 tracking-tight">รายงานและการเงิน</h1>
-          <p class="text-xs text-slate-500">สรุปยอดขาย กำไร-ต้นทุน สินค้าขายดี และมูลค่าสต๊อกรวม</p>
+          <p class="text-xs text-slate-500">สรุปยอดขาย กำไร-ต้นทุน ตรวจสอบใบเสร็จ และพิมพ์ซ้ำ (Reprint)</p>
         </div>
-        <div class="flex items-center gap-2">
-          <input type="date" id="reportStartDate" class="px-3 py-1.5 rounded-xl bg-white border border-slate-200 text-xs font-bold">
-          <span class="text-xs text-slate-400">ถึง</span>
-          <input type="date" id="reportEndDate" class="px-3 py-1.5 rounded-xl bg-white border border-slate-200 text-xs font-bold">
-          <select id="reportBranchSelect" class="px-3 py-1.5 rounded-xl bg-white border border-slate-200 text-xs font-bold"></select>
-          <button onclick="ReportsModule.generateReport()" class="px-4 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs shadow-sm">
-            คำนวณ
+      </div>
+
+      <!-- Navigation Tabs -->
+      <div class="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar">
+        <button id="reportsTabBtn_overview" onclick="ReportsModule.switchTab('overview')"
+                class="reports-tab-btn px-4 py-2.5 rounded-xl font-bold text-xs bg-amber-600 text-white shadow-md transition cursor-pointer">
+          📊 ภาพรวมและสรุปยอดขาย
+        </button>
+        <button id="reportsTabBtn_receipts" onclick="ReportsModule.switchTab('receipts')"
+                class="reports-tab-btn px-4 py-2.5 rounded-xl font-bold text-xs bg-white text-slate-700 hover:bg-slate-100 border border-slate-200 transition cursor-pointer">
+          🧾 ตรวจสอบใบเสร็จและ Reprint
+        </button>
+      </div>
+
+      <!-- Tab Content 1: Overview & Analytics -->
+      <div id="reportsTab_overview" class="reports-tab-content space-y-6">
+        <!-- Filter Toolbar -->
+        <div class="flex flex-wrap items-center justify-between bg-white p-4 rounded-3xl border border-slate-200/80 shadow-sm gap-3">
+          <div class="flex items-center gap-2 flex-wrap">
+            <label class="text-xs font-bold text-slate-500">ช่วงวันที่:</label>
+            <input type="date" id="reportStartDate" class="px-3 py-1.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-bold">
+            <span class="text-xs text-slate-400">ถึง</span>
+            <input type="date" id="reportEndDate" class="px-3 py-1.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-bold">
+            <label class="text-xs font-bold text-slate-500 ml-2">สาขา:</label>
+            <select id="reportBranchSelect" class="px-3 py-1.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-bold"></select>
+          </div>
+          <button onclick="ReportsModule.generateReport()" class="px-5 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs shadow-sm transition cursor-pointer">
+            คำนวณรายงาน
           </button>
         </div>
-      </div>
 
-      <!-- KPI Summary Cards -->
-      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div class="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-sm">
-          <div class="text-xs font-bold text-slate-400 mb-1">ยอดขายรวม (Total Sales)</div>
-          <div id="repTotalSales" class="text-2xl font-black text-blue-600 font-mono">฿0.00</div>
-          <div id="repCashRatio" class="text-[11px] text-slate-500 mt-2 truncate">เงินสด: ฿0 | โอน: ฿0</div>
-          <div id="repVoidInfo" class="text-[11px] text-rose-500 mt-0.5 truncate">ยกเลิก: 0 บิล (฿0.00)</div>
-          <div id="repScopeInfo" class="text-[10px] text-slate-400 mt-0.5 truncate">ขอบเขต: ทุกสาขา (ไม่รวมบิลที่ยกเลิก)</div>
-        </div>
-        <div class="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-sm">
-          <div class="text-xs font-bold text-slate-400 mb-1">กำไรขั้นต้นโดยประมาณ</div>
-          <div id="repTotalProfit" class="text-2xl font-black text-emerald-600 font-mono">฿0.00</div>
-          <div class="text-[11px] text-slate-500 mt-2">คำนวณจากราคาขาย - ทุนสินค้า</div>
-        </div>
-        <div class="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-sm">
-          <div class="text-xs font-bold text-slate-400 mb-1">จำนวนบิลที่ขายได้</div>
-          <div id="repTotalBills" class="text-2xl font-black text-slate-800 font-mono">0 บิล</div>
-          <div class="text-[11px] text-slate-500 mt-2">ไม่นับรวมบิลที่ยกเลิก (VOID)</div>
-        </div>
-        <div class="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-sm">
-          <div class="text-xs font-bold text-slate-400 mb-1">มูลค่าสต๊อกสินค้าคงเหลือ</div>
-          <div id="valTotalCost" class="text-2xl font-black text-amber-600 font-mono">฿0.00</div>
-          <div id="valTotalUnits" class="text-[11px] text-slate-500 mt-2 truncate">0 ชิ้น</div>
-        </div>
-      </div>
-
-      <!-- Tables Grid: Daily vs Top Selling -->
-      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <!-- Daily Sales Table -->
-        <div class="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-sm space-y-3">
-          <h3 class="font-bold text-sm text-slate-900">สรุปยอดขายรายวัน</h3>
-          <div class="max-h-80 overflow-y-auto">
-            <table class="w-full text-left text-xs">
-              <thead>
-                <tr class="border-b border-slate-200 text-slate-400 uppercase font-bold sticky top-0 bg-white">
-                  <th class="py-2 px-3">วันที่</th>
-                  <th class="py-2 px-3 text-center">บิล</th>
-                  <th class="py-2 px-3 text-right">ยอดรวม</th>
-                  <th class="py-2 px-3 text-right">ส่วนลด</th>
-                  <th class="py-2 px-3 text-right">สุทธิ</th>
-                  <th class="py-2 px-3 text-right">กำไร</th>
-                </tr>
-              </thead>
-              <tbody id="reportDailyTableBody"></tbody>
-            </table>
+        <!-- KPI Summary Cards -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div class="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-sm">
+            <div class="text-xs font-bold text-slate-400 mb-1">ยอดขายรวม (Total Sales)</div>
+            <div id="repTotalSales" class="text-2xl font-black text-blue-600 font-mono">฿0.00</div>
+            <div id="repCashRatio" class="text-[11px] text-slate-500 mt-2 truncate">เงินสด: ฿0 | โอน: ฿0</div>
+            <div id="repVoidInfo" class="text-[11px] text-rose-500 mt-0.5 truncate">ยกเลิก: 0 บิล (฿0.00)</div>
+            <div id="repScopeInfo" class="text-[10px] text-slate-400 mt-0.5 truncate">ขอบเขต: ทุกสาขา (ไม่รวมบิลที่ยกเลิก)</div>
+          </div>
+          <div class="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-sm">
+            <div class="text-xs font-bold text-slate-400 mb-1">กำไรขั้นต้นโดยประมาณ</div>
+            <div id="repTotalProfit" class="text-2xl font-black text-emerald-600 font-mono">฿0.00</div>
+            <div class="text-[11px] text-slate-500 mt-2">คำนวณจากราคาขาย - ทุนสินค้า</div>
+          </div>
+          <div class="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-sm">
+            <div class="text-xs font-bold text-slate-400 mb-1">จำนวนบิลที่ขายได้</div>
+            <div id="repTotalBills" class="text-2xl font-black text-slate-800 font-mono">0 บิล</div>
+            <div class="text-[11px] text-slate-500 mt-2">ไม่นับรวมบิลที่ยกเลิก (VOID)</div>
+          </div>
+          <div class="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-sm">
+            <div class="text-xs font-bold text-slate-400 mb-1">มูลค่าสต๊อกสินค้าคงเหลือ</div>
+            <div id="valTotalCost" class="text-2xl font-black text-amber-600 font-mono">฿0.00</div>
+            <div id="valTotalUnits" class="text-[11px] text-slate-500 mt-2 truncate">0 ชิ้น</div>
           </div>
         </div>
 
-        <!-- Top Selling Table -->
-        <div class="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-sm space-y-3">
-          <h3 class="font-bold text-sm text-slate-900">15 อันดับสินค้าขายดี (Top Sellers)</h3>
-          <div class="max-h-80 overflow-y-auto">
+        <!-- Tables Grid: Daily vs Top Selling -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <!-- Daily Sales Table -->
+          <div class="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-sm space-y-3">
+            <h3 class="font-bold text-sm text-slate-900">สรุปยอดขายรายวัน</h3>
+            <div class="max-h-80 overflow-y-auto">
+              <table class="w-full text-left text-xs">
+                <thead>
+                  <tr class="border-b border-slate-200 text-slate-400 uppercase font-bold sticky top-0 bg-white">
+                    <th class="py-2 px-3">วันที่</th>
+                    <th class="py-2 px-3 text-center">บิล</th>
+                    <th class="py-2 px-3 text-right">ยอดรวม</th>
+                    <th class="py-2 px-3 text-right">ส่วนลด</th>
+                    <th class="py-2 px-3 text-right">สุทธิ</th>
+                    <th class="py-2 px-3 text-right">กำไร</th>
+                  </tr>
+                </thead>
+                <tbody id="reportDailyTableBody"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Top Selling Table -->
+          <div class="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-sm space-y-3">
+            <h3 class="font-bold text-sm text-slate-900">15 อันดับสินค้าขายดี (Top Sellers)</h3>
+            <div class="max-h-80 overflow-y-auto">
+              <table class="w-full text-left text-xs">
+                <thead>
+                  <tr class="border-b border-slate-200 text-slate-400 uppercase font-bold sticky top-0 bg-white">
+                    <th class="py-2 px-3 text-center">#</th>
+                    <th class="py-2 px-3">สินค้า</th>
+                    <th class="py-2 px-3 text-center">ขายได้</th>
+                    <th class="py-2 px-3 text-right">ยอดขาย</th>
+                    <th class="py-2 px-3 text-right">กำไร</th>
+                  </tr>
+                </thead>
+                <tbody id="reportTopSellingTableBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tab Content 2: Receipts & Reprint -->
+      <div id="reportsTab_receipts" class="reports-tab-content hidden space-y-5">
+        <!-- Receipts Filter Toolbar -->
+        <div class="bg-white p-4 rounded-3xl border border-slate-200/80 shadow-sm space-y-3">
+          <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2.5">
+            <div>
+              <label class="block text-[11px] font-bold text-slate-500 mb-1">วันที่เริ่มต้น</label>
+              <input type="date" id="receiptStartDate" class="w-full px-3 py-1.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-bold">
+            </div>
+            <div>
+              <label class="block text-[11px] font-bold text-slate-500 mb-1">ถึงวันที่</label>
+              <input type="date" id="receiptEndDate" class="w-full px-3 py-1.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-bold">
+            </div>
+            <div>
+              <label class="block text-[11px] font-bold text-slate-500 mb-1">สาขา</label>
+              <select id="receiptBranchSelect" class="w-full px-3 py-1.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-bold"></select>
+            </div>
+            <div>
+              <label class="block text-[11px] font-bold text-slate-500 mb-1">สถานะบิล</label>
+              <select id="receiptStatusSelect" class="w-full px-3 py-1.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-bold">
+                <option value="">ทั้งหมด</option>
+                <option value="PAID">ชำระแล้ว (PAID)</option>
+                <option value="VOID">ยกเลิกแล้ว (VOID)</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-[11px] font-bold text-slate-500 mb-1">ช่องทางชำระ</label>
+              <select id="receiptPayMethodSelect" class="w-full px-3 py-1.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-bold">
+                <option value="">ทั้งหมด</option>
+                <option value="CASH">เงินสด (CASH)</option>
+                <option value="TRANSFER">โอนเงิน (TRANSFER)</option>
+                <option value="QR">QR Code</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-[11px] font-bold text-slate-500 mb-1">ค้นหาบิล/แคชเชียร์</label>
+              <input type="text" id="receiptSearchInput" placeholder="เลขที่บิล หรือ ชื่อผู้ขาย..."
+                     onkeyup="if(event.key === 'Enter') ReportsModule.fetchReceipts()"
+                     class="w-full px-3 py-1.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-bold">
+            </div>
+          </div>
+          <div class="flex items-center justify-between pt-1 border-t border-slate-100 flex-wrap gap-2">
+            <span class="text-[11px] text-slate-400">💡 กด Enter ในช่องค้นหา หรือกดปุ่ม "ค้นหาใบเสร็จ" เพื่อกรองข้อมูล</span>
+            <div class="flex items-center gap-2">
+              <button onclick="ReportsModule.resetReceiptFilters()" class="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs transition cursor-pointer">
+                ล้างตัวกรอง
+              </button>
+              <button onclick="ReportsModule.fetchReceipts()" class="px-4 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-sm transition flex items-center gap-1.5 cursor-pointer">
+                <span>🔍</span> <span>ค้นหาใบเสร็จ</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Receipts Mini KPI Summary Ribbon -->
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div class="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm">
+            <div class="text-[11px] font-bold text-slate-400">บิลที่พบทั้งหมด</div>
+            <div class="text-xl font-black text-slate-800 font-mono mt-0.5"><span id="receiptSummaryTotal">0</span> <span class="text-xs font-normal text-slate-400">บิล</span></div>
+          </div>
+          <div class="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm">
+            <div class="text-[11px] font-bold text-slate-400">ยอดขายสุทธิ (บิลปกติ)</div>
+            <div class="text-xl font-black text-blue-600 font-mono mt-0.5">฿<span id="receiptSummaryAmount">0.00</span></div>
+          </div>
+          <div class="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm">
+            <div class="text-[11px] font-bold text-slate-400">บิลชำระแล้ว (PAID)</div>
+            <div class="text-xl font-black text-emerald-600 font-mono mt-0.5"><span id="receiptSummaryPaid">0</span> <span class="text-xs font-normal text-slate-400">บิล</span></div>
+          </div>
+          <div class="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm">
+            <div class="text-[11px] font-bold text-slate-400">บิลยกเลิก (VOID)</div>
+            <div class="text-xl font-black text-rose-600 font-mono mt-0.5"><span id="receiptSummaryVoid">0</span> <span class="text-xs font-normal text-slate-400">บิล (฿<span id="receiptSummaryVoidAmount">0.00</span>)</span></div>
+          </div>
+        </div>
+
+        <!-- Receipts Table -->
+        <div class="bg-white rounded-3xl border border-slate-200/80 shadow-sm overflow-hidden">
+          <div class="p-4 border-b border-slate-100 flex items-center justify-between">
+            <h3 class="font-bold text-sm text-slate-900 flex items-center gap-2">
+              <span>🧾</span> <span>รายการใบเสร็จรับเงิน</span>
+            </h3>
+            <span id="receiptTableCountLabel" class="text-xs text-slate-400">กำลังโหลด...</span>
+          </div>
+          <div class="overflow-x-auto max-h-[600px] overflow-y-auto">
             <table class="w-full text-left text-xs">
-              <thead>
-                <tr class="border-b border-slate-200 text-slate-400 uppercase font-bold sticky top-0 bg-white">
-                  <th class="py-2 px-3 text-center">#</th>
-                  <th class="py-2 px-3">สินค้า</th>
-                  <th class="py-2 px-3 text-center">ขายได้</th>
-                  <th class="py-2 px-3 text-right">ยอดขาย</th>
-                  <th class="py-2 px-3 text-right">กำไร</th>
+              <thead class="bg-slate-50 text-slate-500 uppercase font-bold sticky top-0 border-b border-slate-200 z-10">
+                <tr>
+                  <th class="py-3 px-3">วัน-เวลา</th>
+                  <th class="py-3 px-3">เลขที่ใบเสร็จ</th>
+                  <th class="py-3 px-3">สาขา</th>
+                  <th class="py-3 px-3">แคชเชียร์</th>
+                  <th class="py-3 px-3">ชำระโดย</th>
+                  <th class="py-3 px-3 text-right">ยอดสุทธิ</th>
+                  <th class="py-3 px-3 text-center">สถานะ</th>
+                  <th class="py-3 px-3 text-center">จัดการ / การทำงาน</th>
                 </tr>
               </thead>
-              <tbody id="reportTopSellingTableBody"></tbody>
+              <tbody id="receiptsTableBody" class="divide-y divide-slate-100">
+                <tr>
+                  <td colspan="8" class="text-center py-10 text-slate-400">กำลังโหลดรายการใบเสร็จ...</td>
+                </tr>
+              </tbody>
             </table>
           </div>
         </div>
@@ -1319,6 +1446,89 @@
       </div>
     </div>
   </div>
+  <!-- 3.1 Receipt Detail Modal -->
+  <div id="receiptDetailModal" class="hidden fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 space-y-4 max-h-[90vh] flex flex-col">
+      <div class="flex items-center justify-between pb-3 border-b border-slate-100">
+        <div>
+          <h3 class="font-bold text-base text-slate-900 flex items-center gap-2">
+            <span>🧾</span> <span>รายละเอียดใบเสร็จ</span>
+          </h3>
+          <p id="rdReceiptNo" class="text-xs font-mono font-bold text-blue-600 mt-0.5">-</p>
+        </div>
+        <button onclick="UI.closeModal('receiptDetailModal')" class="text-slate-400 hover:text-slate-700 text-lg">✕</button>
+      </div>
+
+      <div class="flex-1 overflow-y-auto space-y-4 pr-1 text-xs">
+        <!-- VOID alert if applicable -->
+        <div id="rdVoidBanner" class="hidden p-3 bg-rose-50 border border-rose-200 rounded-2xl text-rose-800 space-y-1">
+          <div class="font-black text-rose-700 flex items-center gap-1.5">
+            <span>⚠️</span> <span>ใบเสร็จนี้ถูกยกเลิกแล้ว (VOID)</span>
+          </div>
+          <div id="rdVoidInfo" class="text-[11px] text-rose-600">-</div>
+        </div>
+
+        <!-- Receipt Meta Information -->
+        <div class="grid grid-cols-2 gap-2 bg-slate-50 p-3 rounded-2xl border border-slate-100">
+          <div><span class="text-slate-400">วันที่ขาย:</span> <span id="rdDate" class="font-bold text-slate-800">-</span></div>
+          <div><span class="text-slate-400">สาขา:</span> <span id="rdBranch" class="font-bold text-slate-800">-</span></div>
+          <div><span class="text-slate-400">แคชเชียร์:</span> <span id="rdCashier" class="font-bold text-slate-800">-</span></div>
+          <div><span class="text-slate-400">ช่องทางชำระ:</span> <span id="rdPayMethod" class="font-bold text-slate-800">-</span></div>
+        </div>
+
+        <!-- Items Table -->
+        <div class="border border-slate-100 rounded-2xl overflow-hidden">
+          <table class="w-full text-left">
+            <thead class="bg-slate-100 text-slate-600 text-[11px] font-bold">
+              <tr>
+                <th class="py-2 px-2.5">#</th>
+                <th class="py-2 px-2.5">รายการ</th>
+                <th class="py-2 px-2 text-center">จน.</th>
+                <th class="py-2 px-2 text-right">ราคา</th>
+                <th class="py-2 px-2 text-right">ส่วนลด</th>
+                <th class="py-2 px-2.5 text-right">รวม</th>
+              </tr>
+            </thead>
+            <tbody id="rdItemsBody" class="divide-y divide-slate-100"></tbody>
+          </table>
+        </div>
+
+        <!-- Totals Calculation -->
+        <div class="bg-slate-50 p-3.5 rounded-2xl border border-slate-100 space-y-1.5 font-mono">
+          <div class="flex justify-between text-slate-600">
+            <span>รวมเป็นเงิน (Subtotal):</span>
+            <span id="rdSubtotal" class="font-bold">฿0.00</span>
+          </div>
+          <div id="rdDiscountRow" class="flex justify-between text-rose-600">
+            <span>ส่วนลดท้ายบิล:</span>
+            <span id="rdDiscount" class="font-bold">-฿0.00</span>
+          </div>
+          <div id="rdVatRow" class="flex justify-between text-slate-500 text-[11px]">
+            <span>VAT (รวมในยอด):</span>
+            <span id="rdVat">฿0.00</span>
+          </div>
+          <div class="flex justify-between text-slate-900 text-sm font-black pt-1 border-t border-slate-200">
+            <span>ยอดชำระสุทธิ (Total):</span>
+            <span id="rdTotal" class="text-blue-600">฿0.00</span>
+          </div>
+          <div class="flex justify-between text-slate-600 pt-1 text-[11px]">
+            <span>รับเงินมา: <span id="rdReceived">฿0.00</span></span>
+            <span>เงินทอน: <span id="rdChange" class="font-bold text-slate-800">฿0.00</span></span>
+          </div>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-2 gap-2 pt-2 border-t border-slate-100">
+        <button onclick="UI.closeModal('receiptDetailModal')" class="py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition">
+          ปิด
+        </button>
+        <button id="rdReprintBtn" onclick="ReportsModule.reprintActiveDetailReceipt()" class="py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-md transition flex items-center justify-center gap-1.5">
+          <span>🖨️</span> <span>พิมพ์ซ้ำ (Reprint)</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
 
   <!-- 4. Product Edit Modal -->
   <div id="productEditModal" class="hidden fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
@@ -1651,19 +1861,19 @@
   <iframe id="receiptPrintIframe" class="hidden"></iframe>
 
   <!-- ================= SCRIPTS ================= -->
-  <script src="config.js?v=20261028-v8"></script>
-  <script src="js/numberToThai.js?v=20261028-v8"></script>
-  <script src="js/sound.js?v=20261028-v8"></script>
-  <script src="js/print.js?v=20261028-v8"></script>
-  <script src="js/ui.js?v=20261028-v8"></script>
-  <script src="js/api.js?v=20261028-v8"></script>
-  <script src="js/auth.js?v=20261028-v8"></script>
-  <script src="js/modules/launcher.js?v=20261028-v8"></script>
-  <script src="js/modules/sales.js?v=20261028-v8"></script>
-  <script src="js/modules/stock.js?v=20261028-v8"></script>
-  <script src="js/modules/reports.js?v=20261028-v8"></script>
-  <script src="js/modules/admin.js?v=20261028-v8"></script>
-  <script src="js/router.js?v=20261028-v8"></script>
+  <script src="config.js?v=20261028-v9"></script>
+  <script src="js/numberToThai.js?v=20261028-v9"></script>
+  <script src="js/sound.js?v=20261028-v9"></script>
+  <script src="js/print.js?v=20261028-v9"></script>
+  <script src="js/ui.js?v=20261028-v9"></script>
+  <script src="js/api.js?v=20261028-v9"></script>
+  <script src="js/auth.js?v=20261028-v9"></script>
+  <script src="js/modules/launcher.js?v=20261028-v9"></script>
+  <script src="js/modules/sales.js?v=20261028-v9"></script>
+  <script src="js/modules/stock.js?v=20261028-v9"></script>
+  <script src="js/modules/reports.js?v=20261028-v9"></script>
+  <script src="js/modules/admin.js?v=20261028-v9"></script>
+  <script src="js/router.js?v=20261028-v9"></script>
 
   <script>
     // System Startup

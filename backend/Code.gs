@@ -186,6 +186,22 @@ function routeAction(action, token, data, reqContext) {
     return { ok: true, data: getStockValuationReport(data.branchId) };
   }
 
+  if (action === 'reports:receipts') {
+    requireAuth(token, 'reports', 'view');
+    return {
+      ok: true,
+      data: getReceiptsList(
+        data.startDate,
+        data.endDate,
+        data.branchId,
+        data.status,
+        data.payMethod,
+        data.search,
+        data.limit
+      )
+    };
+  }
+
   // --- Admin Operations ---
   if (action === 'admin:users') {
     requireAuth(token, 'admin', 'users');

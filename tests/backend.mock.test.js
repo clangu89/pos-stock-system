@@ -686,3 +686,96 @@ test('GAS Mock: Smart idempotency distinguishes true network retry vs stale clie
   const p1001 = sandbox.getProductsWithStock('B01').find(p => p.sku === 'P1001');
   assert.strictEqual(p1001.stockQty, 87);
 });
+
+test('GAS Mock: getReceiptsList filters, searches, and summarizes receipts for reprint view', () => {
+  const { sandbox } = createGasMockContext();
+  sandbox.setupDatabase();
+  const admin = sandbox.loginUser('admin', 'Admin1234!');
+
+  // สร้างบิลทดสอบ 3 บิล:
+  // บิล 1: สาขา B01, ยอด 100, เงินสด
+  const b1 = sandbox.checkoutSale({
+    branchId: 'B01',
+    items: [{ sku: 'P1001', name: 'น้ำดื่ม', qty: 10, unitPrice: 10, discount: 0 }],
+    discount: 0,
+    received: 100,
+    payMethod: 'CASH',
+    clientTxnId: 'TXN_REP_01'
+  }, admin.user);
+
+  // บิล 2: สาขา B01, ยอด 250, โอนเงิน
+  const b2 = sandbox.checkoutSale({
+    branchId: 'B01',
+    items: [{ sku: 'P1002', name: 'ปลั๊กไฟ', qty: 1, unitPrice: 250, discount: 0 }],
+    discount: 0,
+    received: 250,
+    payMethod: 'TRANSFER',
+    clientTxnId: 'TXN_REP_02'
+  }, admin.user);
+
+  // บิล 3: สาขา B01, ยอด 50, เงินสด แล้วทำการ VOID
+  const b3 = sandbox.checkoutSale({
+    branchId: 'B01',
+    items: [{ sku: 'P1001', name: 'น้ำดื่ม', qty: 5, unitPrice: 10, discount: 0 }],
+    discount: 0,
+    received: 50,
+    payMethod: 'CASH',
+    clientTxnId: 'TXN_REP_03'
+  }, admin.user);
+
+  const voidRes = sandbox.voidReceipt(b3.receiptNo, 'ลูกค้าขอยกเลิก', admin.user);
+  assert.strictEqual(voidRes.ok, true);
+
+  // 1. ทดสอบดึงรายการทั้งหมด (ไม่กรอง)
+  const allRes = sandbox.getReceiptsList('', '', '', '', '', '', 50);
+  assert.strictEqual(allRes.receipts.length, 3);
+  assert.strictEqual(allRes.summary.totalBills, 3);
+  assert.strictEqual(allRes.summary.paidBills, 2);
+  assert.strictEqual(allRes.summary.voidBills, 1);
+  assert.strictEqual(allRes.summary.totalAmount, 350); // 100 + 250
+  assert.strictEqual(allRes.summary.voidAmount, 50);
+
+  // ตรวจสอบการเรียงลำดับ: บิลล่าสุด (b3) ต้องอยู่ลำดับแรก
+  assert.strictEqual(allRes.receipts[0].receiptNo, b3.receiptNo);
+  assert.strictEqual(allRes.receipts[0].status, 'VOID');
+
+  // 2. ทดสอบกรองเฉพาะบิลที่ชำระแล้ว (PAID)
+  const paidOnly = sandbox.getReceiptsList('', '', '', 'PAID');
+  assert.strictEqual(paidOnly.receipts.length, 2);
+  assert.ok(paidOnly.receipts.every(r => r.status === 'PAID'));
+
+  // 3. ทดสอบกรองเฉพาะบิลยกเลิก (VOID)
+  const voidOnly = sandbox.getReceiptsList('', '', '', 'VOID');
+  assert.strictEqual(voidOnly.receipts.length, 1);
+  assert.strictEqual(voidOnly.receipts[0].receiptNo, b3.receiptNo);
+  assert.strictEqual(voidOnly.receipts[0].voidReason, 'ลูกค้าขอยกเลิก');
+
+  // 4. ทดสอบกรองตามวิธีชำระเงิน (TRANSFER)
+  const transferOnly = sandbox.getReceiptsList('', '', '', '', 'TRANSFER');
+  assert.strictEqual(transferOnly.receipts.length, 1);
+  assert.strictEqual(transferOnly.receipts[0].receiptNo, b2.receiptNo);
+  assert.strictEqual(transferOnly.receipts[0].payMethod, 'TRANSFER');
+
+  // 5. ทดสอบค้นหาด้วยเลขที่ใบเสร็จ
+  const searchByNo = sandbox.getReceiptsList('', '', '', '', '', b1.receiptNo);
+  assert.strictEqual(searchByNo.receipts.length, 1);
+  assert.strictEqual(searchByNo.receipts[0].receiptNo, b1.receiptNo);
+
+  // 6. ทดสอบผ่าน API doPost (route: reports:receipts)
+  const postOutput = sandbox.doPost({
+    postData: {
+      contents: JSON.stringify({
+        action: 'reports:receipts',
+        token: admin.token,
+        data: {
+          branchId: 'B01',
+          status: 'PAID'
+        }
+      })
+    }
+  });
+  const apiRes = JSON.parse(typeof postOutput === 'string' ? postOutput : postOutput.text);
+  assert.strictEqual(apiRes.ok, true);
+  assert.strictEqual(apiRes.data.receipts.length, 2);
+  assert.strictEqual(apiRes.data.summary.totalAmount, 350);
+});
