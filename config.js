@@ -4,7 +4,7 @@
 
 const CONFIG = {
   // Apps Script Web App URL
-  API_URL: "https://script.google.com/macros/s/AKfycbzzUM7ML5EeQbJXa-CxiZCy6-nhtM6ib8MC70t9Ig-PuUlTUPxCe4C4lqYXYcIQBrmK/exec",
+  API_URL: "https://script.google.com/macros/s/AKfycbz1A6FrJl5kPWbYZK4CTj2k5zi_K2gWPQ7OJmzwUY82qcamx49nx8Bct6ylfDDSS6E/exec",
 
   // ข้อมูลเริ่มต้นสำหรับระบบ
   DEFAULT_STORE_NAME: "POS & Stock Management",
