@@ -19,6 +19,12 @@ const SalesModule = {
   async activate() {
     this.activeBranchId = localStorage.getItem(CONFIG.STORAGE_KEYS.BRANCH_ID) || CONFIG.DEFAULT_BRANCH_ID;
     this.loadDraftBills();
+    // ล้างค่าช่องค้นหาเพื่อป้องกัน Browser Password Autofill แอบใส่ username
+    const searchInput = document.getElementById('posBarcodeSearchInput');
+    if (searchInput) {
+      searchInput.value = '';
+    }
+    this.searchQuery = '';
     await this.refreshData();
     this.setupEventListeners();
     this.render();
@@ -156,8 +162,23 @@ const SalesModule = {
   focusBarcodeInput() {
     const input = document.getElementById('posBarcodeSearchInput');
     if (input) {
-      setTimeout(() => input.focus(), 50);
+      if (!this.searchQuery) {
+        input.value = '';
+      }
+      setTimeout(() => {
+        input.focus();
+        if (!this.searchQuery && input.value) {
+          input.value = '';
+        }
+      }, 50);
     }
+  },
+
+  render() {
+    this.populateCategoryFilter();
+    this.renderProductGrid();
+    this.renderBillTabs();
+    this.renderCart();
   },
 
   setupEventListeners() {
