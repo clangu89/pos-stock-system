@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>ระบบขายสินค้าและสต๊อก (POS & Stock Management)</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <link rel="stylesheet" href="css/app.css?v=20261028-v9">
-  <link rel="stylesheet" href="css/receipt.css?v=20261028-v9">
+  <link rel="stylesheet" href="css/app.css?v=20261029-v10">
+  <link rel="stylesheet" href="css/receipt.css?v=20261029-v10">
 </head>
 <body class="bg-slate-50 text-slate-900 min-h-screen flex flex-col font-sans antialiased select-none">
 
@@ -1433,7 +1433,7 @@
   </div>
 
   <!-- 3. Receipt Preview Modal -->
-  <div id="receiptPreviewModal" class="hidden fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+  <div id="receiptPreviewModal" class="hidden fixed inset-0 z-[70] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
     <div class="bg-white rounded-3xl max-w-sm w-full p-6 shadow-2xl border border-slate-200 space-y-4 max-h-[90vh] flex flex-col">
       <div class="flex items-center justify-between pb-2 border-b border-slate-100">
         <h3 class="font-bold text-sm text-slate-800">ตัวอย่างใบเสร็จ</h3>
@@ -1847,10 +1847,10 @@
   </div>
 
   <!-- Global Toast Notifications Container -->
-  <div id="toastContainer" class="fixed top-5 right-5 z-50 flex flex-col gap-2 max-w-sm w-full pointer-events-none"></div>
+  <div id="toastContainer" class="fixed top-5 right-5 z-[100] flex flex-col gap-2 max-w-sm w-full pointer-events-none"></div>
 
   <!-- Global Loading Spinner Overlay -->
-  <div id="globalLoadingOverlay" class="hidden fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center">
+  <div id="globalLoadingOverlay" class="hidden fixed inset-0 z-[80] bg-slate-900/40 backdrop-blur-sm flex items-center justify-center">
     <div class="bg-white rounded-3xl p-6 shadow-2xl border border-slate-200 flex items-center gap-4">
       <div class="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
       <span id="globalLoadingText" class="text-sm font-extrabold text-slate-800">กำลังประมวลผล...</span>
@@ -1861,19 +1861,19 @@
   <iframe id="receiptPrintIframe" class="hidden"></iframe>
 
   <!-- ================= SCRIPTS ================= -->
-  <script src="config.js?v=20261028-v9"></script>
-  <script src="js/numberToThai.js?v=20261028-v9"></script>
-  <script src="js/sound.js?v=20261028-v9"></script>
-  <script src="js/print.js?v=20261028-v9"></script>
-  <script src="js/ui.js?v=20261028-v9"></script>
-  <script src="js/api.js?v=20261028-v9"></script>
-  <script src="js/auth.js?v=20261028-v9"></script>
-  <script src="js/modules/launcher.js?v=20261028-v9"></script>
-  <script src="js/modules/sales.js?v=20261028-v9"></script>
-  <script src="js/modules/stock.js?v=20261028-v9"></script>
-  <script src="js/modules/reports.js?v=20261028-v9"></script>
-  <script src="js/modules/admin.js?v=20261028-v9"></script>
-  <script src="js/router.js?v=20261028-v9"></script>
+  <script src="config.js?v=20261029-v10"></script>
+  <script src="js/numberToThai.js?v=20261029-v10"></script>
+  <script src="js/sound.js?v=20261029-v10"></script>
+  <script src="js/print.js?v=20261029-v10"></script>
+  <script src="js/ui.js?v=20261029-v10"></script>
+  <script src="js/api.js?v=20261029-v10"></script>
+  <script src="js/auth.js?v=20261029-v10"></script>
+  <script src="js/modules/launcher.js?v=20261029-v10"></script>
+  <script src="js/modules/sales.js?v=20261029-v10"></script>
+  <script src="js/modules/stock.js?v=20261029-v10"></script>
+  <script src="js/modules/reports.js?v=20261029-v10"></script>
+  <script src="js/modules/admin.js?v=20261029-v10"></script>
+  <script src="js/router.js?v=20261029-v10"></script>
 
   <script>
     // System Startup

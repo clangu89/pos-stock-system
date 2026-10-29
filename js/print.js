@@ -263,25 +263,31 @@ const PrintManager = {
     const prof = profile || this.activeProfile || this.getDefaultProfile();
     const widthMm = prof.widthMm || (prof.paperType === '80mm' ? 80 : 58);
 
-    let frame = container.querySelector('iframe[data-receipt-preview]');
-    if (!frame) {
-      container.innerHTML = '';
-      frame = document.createElement('iframe');
-      frame.setAttribute('data-receipt-preview', '1');
-      frame.style.border = '0';
-      frame.style.background = '#fff';
-      frame.style.display = 'block';
-      frame.style.margin = '0 auto';
-      container.appendChild(frame);
-    }
+    // เคลียร์และสร้าง iframe ใหม่เสมอ เพื่อป้องกันแคชและคำนวณ scrollHeight ได้อย่างถูกต้อง
+    container.innerHTML = '';
+    const frame = document.createElement('iframe');
+    frame.setAttribute('data-receipt-preview', '1');
+    frame.style.border = '0';
+    frame.style.background = '#fff';
+    frame.style.display = 'block';
+    frame.style.margin = '0 auto';
     frame.style.width = `${Math.round(widthMm * 3.78)}px`;
     frame.style.maxWidth = '100%';
+    frame.style.minHeight = '350px';
     frame.style.height = '480px';
+    container.appendChild(frame);
+
     frame.onload = () => {
       try {
-        const h = frame.contentWindow.document.documentElement.scrollHeight;
-        if (h) frame.style.height = `${h + 8}px`;
-      } catch (e) { /* ignore */ }
+        const doc = frame.contentWindow && frame.contentWindow.document;
+        if (doc) {
+          const h = Math.max(
+            doc.body ? doc.body.scrollHeight : 0,
+            doc.documentElement ? doc.documentElement.scrollHeight : 0
+          );
+          if (h > 50) frame.style.height = `${h + 16}px`;
+        }
+      } catch (e) { /* ignore cross-origin if any */ }
     };
     frame.srcdoc = html;
     this.lastPreviewHtml = html;
@@ -291,8 +297,9 @@ const PrintManager = {
   previewReceiptModal(sale, items, store, profile) {
     const container = document.getElementById('receiptPreviewModalContent');
     if (!container) return;
-    this.renderPreviewInto(container, sale, items, store, profile);
+    // เปิด Modal ให้แสดงผลก่อน (display: flex) เพื่อให้ iframe มีขนาดจริงใน DOM
     UI.openModal('receiptPreviewModal');
+    this.renderPreviewInto(container, sale, items, store, profile);
   },
 
   /**
