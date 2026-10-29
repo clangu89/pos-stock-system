@@ -431,8 +431,13 @@ const ReportsModule = {
   },
 
   reprintActiveDetailReceipt() {
-    if (!this.activeDetailReceipt) return;
+    if (!this.activeDetailReceipt || !this.activeDetailReceipt.sale) {
+      UI.showToast('ไม่พบข้อมูลใบเสร็จสำหรับพิมพ์ซ้ำ', 'warning');
+      return;
+    }
     const { sale, items, store } = this.activeDetailReceipt;
+    // ปิดหน้าต่างรายละเอียดบิล เพื่อสลับมาแสดงหน้าต่างตัวอย่างใบเสร็จอย่างชัดเจน
+    UI.closeModal('receiptDetailModal');
     PrintManager.previewReceiptModal(sale, items, store);
   },
 
