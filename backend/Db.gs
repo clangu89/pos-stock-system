@@ -24,37 +24,129 @@ const SHEETS = {
 
 const DEFAULT_SPREADSHEET_ID = '1YEVUjb74z9BmGPalcmOS7mfX9TzvUGx0sXKFfzgiYJc';
 
+// Request-scoped in-memory caches (ลดการเปิด Spreadsheet และการอ่านชีตซ้ำๆ ใน 1 คำขอ)
+let _cachedSpreadsheet = null;
+let _sheetCache = {};
+let _headersCache = {};
+let _configCache = null;
+let _tableCache = {};
+
+const SCRIPT_CACHE_KEYS = {
+  PRODUCTS: 'cache_table_products',
+  BRANCHES: 'cache_table_branches',
+  RECEIPT_TEXTS: 'cache_table_receipt_texts',
+  CONFIG: 'cache_table_config'
+};
+
+function getScriptCacheJson_(key) {
+  try {
+    if (typeof CacheService === 'undefined' || !CacheService.getScriptCache) return null;
+    const str = CacheService.getScriptCache().get(key);
+    return str ? JSON.parse(str) : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+function setScriptCacheJson_(key, obj, ttlSeconds) {
+  try {
+    if (typeof CacheService === 'undefined' || !CacheService.getScriptCache) return;
+    const str = JSON.stringify(obj);
+    if (str.length < 95000) {
+      CacheService.getScriptCache().put(key, str, ttlSeconds || 1800);
+    }
+  } catch (e) {}
+}
+
+function removeScriptCacheKey_(key) {
+  try {
+    if (typeof CacheService === 'undefined' || !CacheService.getScriptCache) return;
+    CacheService.getScriptCache().remove(key);
+  } catch (e) {}
+}
+
+function clearExecutionContextCache() {
+  _cachedSpreadsheet = null;
+  _sheetCache = {};
+  _headersCache = {};
+  _configCache = null;
+  _tableCache = {};
+  _receiptTextsEnsured = false;
+}
+
 function getSpreadsheet() {
+  if (_cachedSpreadsheet) return _cachedSpreadsheet;
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
-    if (ss) return ss;
+    if (ss) {
+      _cachedSpreadsheet = ss;
+      return ss;
+    }
   } catch (e) {}
 
   // Fallback for standalone script or Web App execution
   const props = PropertiesService.getScriptProperties();
   const dbId = props.getProperty('DB_ID') || DEFAULT_SPREADSHEET_ID;
   if (dbId) {
-    return SpreadsheetApp.openById(dbId);
+    _cachedSpreadsheet = SpreadsheetApp.openById(dbId);
+    return _cachedSpreadsheet;
   }
   throw new Error('Spreadsheet not found. Please bind this script to a Google Sheet or set DB_ID script property.');
 }
 
 function getSheet(sheetName) {
+  if (_sheetCache[sheetName]) return _sheetCache[sheetName];
   const ss = getSpreadsheet();
   let sheet = ss.getSheetByName(sheetName);
   if (!sheet) {
     sheet = ss.insertSheet(sheetName);
   }
+  _sheetCache[sheetName] = sheet;
   return sheet;
 }
 
+function getSheetHeaders_(sheetName, sheet) {
+  if (_headersCache[sheetName]) return _headersCache[sheetName];
+  const s = sheet || getSheet(sheetName);
+  const lastCol = Math.max(1, s.getLastColumn());
+  const headerData = s.getRange(1, 1, 1, lastCol).getValues()[0];
+  const headers = headerData.map(h => String(h).trim());
+  _headersCache[sheetName] = headers;
+  return headers;
+}
+
 function getTable(sheetName) {
+  if (_tableCache[sheetName]) return _tableCache[sheetName];
+
+  if (sheetName === SHEETS.PRODUCTS) {
+    const cached = getScriptCacheJson_(SCRIPT_CACHE_KEYS.PRODUCTS);
+    if (cached) {
+      _tableCache[sheetName] = cached;
+      return cached;
+    }
+  } else if (sheetName === SHEETS.BRANCHES) {
+    const cached = getScriptCacheJson_(SCRIPT_CACHE_KEYS.BRANCHES);
+    if (cached) {
+      _tableCache[sheetName] = cached;
+      return cached;
+    }
+  } else if (sheetName === SHEETS.RECEIPT_TEXTS) {
+    const cached = getScriptCacheJson_(SCRIPT_CACHE_KEYS.RECEIPT_TEXTS);
+    if (cached) {
+      _tableCache[sheetName] = cached;
+      return cached;
+    }
+  }
+
   const sheet = getSheet(sheetName);
   const data = sheet.getDataRange().getValues();
   if (!data || data.length === 0) {
-    return { headers: [], rows: [] };
+    const emptyRes = { headers: [], rows: [] };
+    _tableCache[sheetName] = emptyRes;
+    return emptyRes;
   }
   const headers = data[0].map(h => String(h).trim());
+  _headersCache[sheetName] = headers;
   const rows = [];
   for (let i = 1; i < data.length; i++) {
     const row = {};
@@ -64,7 +156,14 @@ function getTable(sheetName) {
     row._rowIndex = i + 1; // 1-based index in sheet
     rows.push(row);
   }
-  return { headers, rows };
+  const result = { headers, rows };
+  _tableCache[sheetName] = result;
+
+  if (sheetName === SHEETS.PRODUCTS) setScriptCacheJson_(SCRIPT_CACHE_KEYS.PRODUCTS, result);
+  else if (sheetName === SHEETS.BRANCHES) setScriptCacheJson_(SCRIPT_CACHE_KEYS.BRANCHES, result);
+  else if (sheetName === SHEETS.RECEIPT_TEXTS) setScriptCacheJson_(SCRIPT_CACHE_KEYS.RECEIPT_TEXTS, result);
+
+  return result;
 }
 
 function findRows(sheetName, predicate) {
@@ -84,9 +183,19 @@ function findRow(sheetName, predicate) {
 
 function appendRows(sheetName, rowObjs) {
   if (!rowObjs || rowObjs.length === 0) return;
+  delete _tableCache[sheetName];
+  if (sheetName === SHEETS.CONFIG) {
+    _configCache = null;
+    removeScriptCacheKey_(SCRIPT_CACHE_KEYS.CONFIG);
+  } else if (sheetName === SHEETS.PRODUCTS) {
+    removeScriptCacheKey_(SCRIPT_CACHE_KEYS.PRODUCTS);
+  } else if (sheetName === SHEETS.BRANCHES) {
+    removeScriptCacheKey_(SCRIPT_CACHE_KEYS.BRANCHES);
+  } else if (sheetName === SHEETS.RECEIPT_TEXTS) {
+    removeScriptCacheKey_(SCRIPT_CACHE_KEYS.RECEIPT_TEXTS);
+  }
   const sheet = getSheet(sheetName);
-  const headerData = sheet.getRange(1, 1, 1, Math.max(1, sheet.getLastColumn())).getValues()[0];
-  const headers = headerData.map(h => String(h).trim());
+  const headers = getSheetHeaders_(sheetName, sheet);
 
   const matrix = rowObjs.map(rowObj => {
     return headers.map(h => {
@@ -129,6 +238,17 @@ function updateRows(sheetName, predicate, updaterFn) {
   }
 
   if (updatedCount > 0) {
+    delete _tableCache[sheetName];
+    if (sheetName === SHEETS.CONFIG) {
+      _configCache = null;
+      removeScriptCacheKey_(SCRIPT_CACHE_KEYS.CONFIG);
+    } else if (sheetName === SHEETS.PRODUCTS) {
+      removeScriptCacheKey_(SCRIPT_CACHE_KEYS.PRODUCTS);
+    } else if (sheetName === SHEETS.BRANCHES) {
+      removeScriptCacheKey_(SCRIPT_CACHE_KEYS.BRANCHES);
+    } else if (sheetName === SHEETS.RECEIPT_TEXTS) {
+      removeScriptCacheKey_(SCRIPT_CACHE_KEYS.RECEIPT_TEXTS);
+    }
     sheet.getRange(1, 1, data.length, headers.length).setValues(data);
   }
   return updatedCount;
@@ -151,6 +271,19 @@ function deleteRows(sheetName, predicate) {
     if (predicate(rowObj)) {
       sheet.deleteRow(i + 1);
       deletedCount++;
+    }
+  }
+  if (deletedCount > 0) {
+    delete _tableCache[sheetName];
+    if (sheetName === SHEETS.CONFIG) {
+      _configCache = null;
+      removeScriptCacheKey_(SCRIPT_CACHE_KEYS.CONFIG);
+    } else if (sheetName === SHEETS.PRODUCTS) {
+      removeScriptCacheKey_(SCRIPT_CACHE_KEYS.PRODUCTS);
+    } else if (sheetName === SHEETS.BRANCHES) {
+      removeScriptCacheKey_(SCRIPT_CACHE_KEYS.BRANCHES);
+    } else if (sheetName === SHEETS.RECEIPT_TEXTS) {
+      removeScriptCacheKey_(SCRIPT_CACHE_KEYS.RECEIPT_TEXTS);
     }
   }
   return deletedCount;
@@ -198,12 +331,27 @@ function normalizeThaiPhone_(v) {
   return /^[1-9]\d{7,9}$/.test(s) ? '0' + s : s;
 }
 
+function loadAllConfigs_() {
+  if (_configCache) return _configCache;
+  const table = getTable(SHEETS.CONFIG);
+  const map = {};
+  for (let i = 0; i < table.rows.length; i++) {
+    const r = table.rows[i];
+    if (r.key) {
+      map[r.key] = r.value;
+    }
+  }
+  _configCache = map;
+  return _configCache;
+}
+
 function getConfig(key, defaultValue = '') {
-  const row = findRow(SHEETS.CONFIG, r => r.key === key);
-  return row ? row.value : defaultValue;
+  const configs = loadAllConfigs_();
+  return configs[key] !== undefined ? configs[key] : defaultValue;
 }
 
 function setConfig(key, value, desc = '') {
+  _configCache = null; // Invalidate cache on write
   const count = updateRows(SHEETS.CONFIG, r => r.key === key, r => {
     r.value = value;
     if (desc) r.description = desc;

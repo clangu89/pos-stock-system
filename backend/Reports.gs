@@ -276,7 +276,8 @@ function getReceiptsList(startDateStr, endDateStr, branchId = '', status = '', p
   matched.sort((a, b) => {
     const tA = a.ts ? new Date(a.ts).getTime() : 0;
     const tB = b.ts ? new Date(b.ts).getTime() : 0;
-    return tB - tA;
+    if (tB !== tA) return tB - tA;
+    return (b._rowIndex || 0) - (a._rowIndex || 0);
   });
 
   const totalBills = matched.length;

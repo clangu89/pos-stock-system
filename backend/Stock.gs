@@ -2,20 +2,48 @@
  * Stock.gs - Inventory Management, Ledger Movements, Adjustments, Transfers
  */
 
-function applyStockMovements(movements, userId = 'SYSTEM') {
+function applyStockMovements(movements, userId = 'SYSTEM', options = {}) {
   if (!movements || movements.length === 0) return [];
   const now = new Date().toISOString();
-  const balanceTable = getTable(SHEETS.STOCK_BALANCE);
+
+  // Read StockBalance ONCE directly from sheet
+  const balanceSheet = getSheet(SHEETS.STOCK_BALANCE);
+  const dataRange = balanceSheet.getDataRange();
+  const rawValues = dataRange.getValues();
+
+  const headers = rawValues.length > 0 ? rawValues[0].map(h => String(h).trim()) : [];
+  const branchCol = headers.indexOf('branchId');
+  const skuCol = headers.indexOf('sku');
+  const qtyCol = headers.indexOf('qty');
+  const updatedCol = headers.indexOf('updatedAt');
 
   // Group current balances: key = branchId + '_' + sku
   const balanceMap = {};
-  for (let i = 0; i < balanceTable.rows.length; i++) {
-    const row = balanceTable.rows[i];
-    const key = `${row.branchId}_${row.sku}`;
+  for (let i = 1; i < rawValues.length; i++) {
+    const bId = rawValues[i][branchCol];
+    const sSku = rawValues[i][skuCol];
+    const key = `${bId}_${sSku}`;
     balanceMap[key] = {
-      qty: parseFloat(row.qty) || 0,
-      rowIndex: row._rowIndex
+      qty: parseFloat(rawValues[i][qtyCol]) || 0,
+      rowIndex: i + 1
     };
+  }
+
+  // Pre-validate stock availability in-memory if requested (avoids redundant StockBalance read)
+  if (options && options.checkAvailability) {
+    const nameMap = options.nameMap || {};
+    for (let i = 0; i < movements.length; i++) {
+      const m = movements[i];
+      const reqQty = parseFloat(m.qtyOut) || 0;
+      if (reqQty > 0) {
+        const key = `${m.branchId}_${m.sku}`;
+        const curr = balanceMap[key] ? balanceMap[key].qty : 0;
+        if (reqQty > curr) {
+          const itemName = nameMap[m.sku] || m.sku;
+          throw new Error(`สินค้า "${itemName}" มีสต๊อกคงเหลือไม่พอ (คงเหลือ ${curr}, ขอซื้อ ${reqQty})`);
+        }
+      }
+    }
   }
 
   const ledgerEntries = [];
@@ -52,11 +80,6 @@ function applyStockMovements(movements, userId = 'SYSTEM') {
     });
   }
 
-  // Batch update StockBalance sheet (single read & single write)
-  const balanceSheet = getSheet(SHEETS.STOCK_BALANCE);
-  const dataRange = balanceSheet.getDataRange();
-  const rawValues = dataRange.getValues();
-
   if (rawValues.length > 1) {
     const headers = rawValues[0].map(h => String(h).trim());
     const branchCol = headers.indexOf('branchId');
@@ -77,6 +100,7 @@ function applyStockMovements(movements, userId = 'SYSTEM') {
     }
     if (modified) {
       dataRange.setValues(rawValues);
+      delete _tableCache[SHEETS.STOCK_BALANCE];
     }
   }
 
@@ -101,6 +125,8 @@ function applyStockMovements(movements, userId = 'SYSTEM') {
   // Append movements to ledger
   if (ledgerEntries.length > 0) {
     appendRows(SHEETS.STOCK_MOVEMENTS, ledgerEntries);
+    delete _tableCache[SHEETS.STOCK_BALANCE];
+    delete _tableCache[SHEETS.STOCK_MOVEMENTS];
   }
 
   return ledgerEntries;

@@ -1,3 +1,45 @@
+function incrementCounter_(counterKey) {
+  const sheet = getSheet(SHEETS.COUNTERS);
+  const data = sheet.getDataRange().getValues();
+  if (data.length <= 1) {
+    appendRow(SHEETS.COUNTERS, {
+      key: counterKey,
+      value: 1,
+      updatedAt: new Date().toISOString()
+    });
+    return 1;
+  }
+
+  const headers = data[0].map(h => String(h).trim());
+  const keyCol = headers.indexOf('key');
+  const valCol = headers.indexOf('value');
+  const updatedCol = headers.indexOf('updatedAt');
+
+  const now = new Date().toISOString();
+  let foundRowIdx = -1;
+  let nextVal = 1;
+
+  for (let r = 1; r < data.length; r++) {
+    if (String(data[r][keyCol]) === counterKey) {
+      foundRowIdx = r + 1; // 1-based row in sheet
+      nextVal = (parseInt(data[r][valCol], 10) || 0) + 1;
+      break;
+    }
+  }
+
+  if (foundRowIdx > 0) {
+    if (valCol >= 0) sheet.getRange(foundRowIdx, valCol + 1, 1, 1).setValues([[nextVal]]);
+    if (updatedCol >= 0) sheet.getRange(foundRowIdx, updatedCol + 1, 1, 1).setValues([[now]]);
+  } else {
+    appendRow(SHEETS.COUNTERS, {
+      key: counterKey,
+      value: nextVal,
+      updatedAt: now
+    });
+  }
+  return nextVal;
+}
+
 /**
  * Receipt.gs - Receipt Running Number Generator and Format Parsing
  */
@@ -27,23 +69,8 @@ function generateReceiptNo(branchCode = 'MAIN', dateObj = new Date()) {
 
   const counterKey = `RC_${branchCode}_${counterPeriodKey}`;
 
-  // Read and increment counter atomically
-  let nextVal = 1;
-  const existingCounter = findRow(SHEETS.COUNTERS, r => r.key === counterKey);
-  if (existingCounter) {
-    nextVal = (parseInt(existingCounter.value, 10) || 0) + 1;
-    updateRows(SHEETS.COUNTERS, r => r.key === counterKey, r => {
-      r.value = nextVal;
-      r.updatedAt = new Date().toISOString();
-      return r;
-    });
-  } else {
-    appendRow(SHEETS.COUNTERS, {
-      key: counterKey,
-      value: nextVal,
-      updatedAt: new Date().toISOString()
-    });
-  }
+  // Read and increment counter atomically (1 single read + targeted cell write)
+  const nextVal = incrementCounter_(counterKey);
 
   return formatReceiptNumber(format, {
     prefix: prefix,
@@ -104,7 +131,9 @@ function previewReceiptFormat(formatStr, prefix, branchCode, runVal = 1) {
  * Receipt Text Customization & Store Information Resolver
  */
 
+let _receiptTextsEnsured = false;
 function ensureReceiptTextsSheet_() {
+  if (_receiptTextsEnsured) return getSheet(SHEETS.RECEIPT_TEXTS);
   const ss = getSpreadsheet();
   let sheet = ss.getSheetByName(SHEETS.RECEIPT_TEXTS);
   const headers = [
@@ -119,13 +148,16 @@ function ensureReceiptTextsSheet_() {
     sheet.getRange(1, 1, 1, headers.length).setFontWeight('bold').setBackground('#2C3E50').setFontColor('#FFFFFF');
     sheet.setFrozenRows(1);
   }
+  _receiptTextsEnsured = true;
   return sheet;
 }
 
 function getReceiptStoreInfo(branchId = '') {
   ensureReceiptTextsSheet_();
 
-  let defaultRow = findRow(SHEETS.RECEIPT_TEXTS, r => r.scopeId === 'DEFAULT' || r.branchId === '*');
+  // ดึง ReceiptTexts ตารางเดียวในหน่วยความจำ ไม่ต้อง findRow ซ้ำ 2 รอบ
+  const receiptTextsRows = getTable(SHEETS.RECEIPT_TEXTS).rows;
+  let defaultRow = receiptTextsRows.find(r => r.scopeId === 'DEFAULT' || r.branchId === '*');
   // ถ้ามีแถวค่ากลางจริง ช่องที่ผู้ใช้ "เว้นว่างโดยตั้งใจ" ต้องถูกเคารพ (ไม่ถูกแทนด้วยค่าเริ่มต้น)
   const hasDefaultRow = !!defaultRow;
   if (!defaultRow) {
@@ -149,7 +181,7 @@ function getReceiptStoreInfo(branchId = '') {
 
   let branchRow = null;
   if (branchId && branchId !== '*') {
-    branchRow = findRow(SHEETS.RECEIPT_TEXTS, r => (r.branchId === branchId || r.scopeId === `BRANCH_${branchId}`) && r.scopeId !== 'DEFAULT');
+    branchRow = receiptTextsRows.find(r => (r.branchId === branchId || r.scopeId === `BRANCH_${branchId}`) && r.scopeId !== 'DEFAULT');
   }
 
   let branchMeta = null;

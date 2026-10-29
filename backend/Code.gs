@@ -14,6 +14,7 @@ function doGet(e) {
 }
 
 function doPost(e) {
+  clearExecutionContextCache();
   let output;
   try {
     let payload = {};

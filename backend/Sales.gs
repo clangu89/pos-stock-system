@@ -98,7 +98,26 @@ function checkoutSale(payload, sessionUser) {
     // 2. Smart Idempotency Check (เช็คลายนิ้วมือบิล + ยอด + วิธีชำระ + เวลาไม่เกิน 5 นาที)
     let effectiveClientTxnId = clientTxnId || ('TXN_SRV_' + Utilities.getUuid().slice(0, 12));
     if (clientTxnId) {
-      const matchedSales = findRows(SHEETS.SALES, r => String(r.clientTxnId || '') === clientTxnId);
+      // Fast path: ตรวจสอบ CacheService ก่อน (ใช้เวลา ~10ms ไม่ต้องอ่าน Google Sheets)
+      const cachedTxn = getScriptCacheJson_('txn_' + clientTxnId);
+      if (cachedTxn && cachedTxn.receiptNo && cachedTxn.sale) {
+        const isSameCached =
+          cachedTxn.sale.status !== 'VOID' &&
+          String(cachedTxn.sale.branchId) === String(branchId) &&
+          String(cachedTxn.sale.payMethod) === String(payMethod) &&
+          round2_(cachedTxn.sale.total) === grandTotal &&
+          buildItemsSignature_(cachedTxn.items) === buildItemsSignature_(preparedItems);
+
+        if (isSameCached) {
+          const copy = JSON.parse(JSON.stringify(cachedTxn));
+          copy.isDuplicate = true;
+          return copy;
+        }
+      }
+
+      // ค้นหาเฉพาะ 50 บิลล่าสุดจากท้ายตาราง
+      const recentSales = getRecentSalesRows_(50);
+      const matchedSales = recentSales.filter(r => String(r.clientTxnId || '') === clientTxnId);
       const existingSale = matchedSales.length > 0 ? matchedSales[matchedSales.length - 1] : null;
       if (existingSale) {
         const saleItems = findRows(SHEETS.SALE_ITEMS, r => r.receiptNo === existingSale.receiptNo);
@@ -134,26 +153,11 @@ function checkoutSale(payload, sessionUser) {
       name: 'สำนักงานใหญ่'
     };
 
-    // 4. Stock Availability Check
+    // 4. Stock Availability Configuration
     const allowNegative = getConfig('ALLOW_NEGATIVE_STOCK', 'false') === 'true';
-    const currentBalances = getTable(SHEETS.STOCK_BALANCE).rows;
-    const balanceMap = {};
-    for (let i = 0; i < currentBalances.length; i++) {
-      const r = currentBalances[i];
-      if (r.branchId === branchId) {
-        balanceMap[r.sku] = parseFloat(r.qty) || 0;
-      }
-    }
-
-    if (!allowNegative) {
-      for (let i = 0; i < items.length; i++) {
-        const it = items[i];
-        const reqQty = parseFloat(it.qty) || 0;
-        const currStock = balanceMap[it.sku] !== undefined ? balanceMap[it.sku] : 0;
-        if (reqQty > currStock) {
-          throw new Error(`สินค้า "${it.name || it.sku}" มีสต๊อกคงเหลือไม่พอ (คงเหลือ ${currStock}, ขอซื้อ ${reqQty})`);
-        }
-      }
+    const nameMap = {};
+    for (let i = 0; i < items.length; i++) {
+      nameMap[items[i].sku] = items[i].name || items[i].sku;
     }
 
     // 5. Generate Receipt Number
@@ -198,7 +202,7 @@ function checkoutSale(payload, sessionUser) {
     }));
     appendRows(SHEETS.SALE_ITEMS, saleItemRows);
 
-    // 8. Deduct Stock via Movements
+    // 8. Deduct Stock via Movements (ตรวจสอบสต๊อกและตัดสต๊อกในรอบเดียว)
     const stockMovements = preparedItems.map(it => ({
       branchId: branchId,
       sku: it.sku,
@@ -208,20 +212,26 @@ function checkoutSale(payload, sessionUser) {
       refDoc: receiptNo,
       note: `ขายสินค้า บิลเลขที่ ${receiptNo}`
     }));
-    applyStockMovements(stockMovements, sessionUser.userId);
+    applyStockMovements(stockMovements, sessionUser.userId, { checkAvailability: !allowNegative, nameMap: nameMap });
 
     logAudit(sessionUser.userId, 'CHECKOUT_SALE', 'Sales', { receiptNo, total: grandTotal, items: preparedItems.length });
 
     // Store config info for printing resolved via ReceiptTexts
     const storeInfo = getReceiptStoreInfo(branchId);
 
-    return {
+    const result = {
       ok: true,
       receiptNo: receiptNo,
       sale: saleRecord,
       items: saleItemRows,
       store: storeInfo
     };
+
+    if (clientTxnId) {
+      setScriptCacheJson_('txn_' + clientTxnId, result, 300);
+    }
+
+    return result;
   } finally {
     lock.releaseLock();
   }
@@ -280,6 +290,28 @@ function voidReceipt(receiptNo, reason, sessionUser) {
   } finally {
     lock.releaseLock();
   }
+}
+
+function getRecentSalesRows_(limit = 100) {
+  const sheet = getSheet(SHEETS.SALES);
+  const lastRow = sheet.getLastRow();
+  if (lastRow <= 1) return [];
+
+  const headers = getSheetHeaders_(SHEETS.SALES, sheet);
+  const numRows = Math.min(limit, lastRow - 1);
+  const startRow = lastRow - numRows + 1;
+  const values = sheet.getRange(startRow, 1, numRows, headers.length).getValues();
+
+  const rows = [];
+  for (let i = 0; i < values.length; i++) {
+    const row = {};
+    for (let j = 0; j < headers.length; j++) {
+      row[headers[j]] = values[i][j];
+    }
+    row._rowIndex = startRow + i;
+    rows.push(row);
+  }
+  return rows;
 }
 
 function getRecentSales(branchId = '', limit = 50) {

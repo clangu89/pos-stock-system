@@ -779,3 +779,52 @@ test('GAS Mock: getReceiptsList filters, searches, and summarizes receipts for r
   assert.strictEqual(apiRes.data.receipts.length, 2);
   assert.strictEqual(apiRes.data.summary.totalAmount, 350);
 });
+
+test('GAS Mock: Performance optimizations, cache validity, and getRecentSalesRows_', () => {
+  const { sandbox } = createGasMockContext();
+  sandbox.setupDatabase();
+  const admin = sandbox.loginUser('admin', 'Admin1234!');
+
+  // 1. ตรวจสอบการจำ Spreadsheet & Sheet instance
+  const ss1 = sandbox.getSpreadsheet();
+  const ss2 = sandbox.getSpreadsheet();
+  assert.strictEqual(ss1, ss2, 'getSpreadsheet ต้องคืน instance เดิมจากแคช');
+
+  const sheet1 = sandbox.getSheet('Config');
+  const sheet2 = sandbox.getSheet('Config');
+  assert.strictEqual(sheet1, sheet2, 'getSheet ต้องคืน sheet instance เดิมจากแคช');
+
+  // 2. ตรวจสอบ In-Memory Config Cache
+  const vat1 = sandbox.getConfig('VAT_RATE', '0');
+  assert.strictEqual(vat1, '0');
+
+  // แก้ไขค่า Config -> แคชต้องถูก invalidate และโหลดค่าใหม่
+  sandbox.setConfig('VAT_RATE', '7');
+  const vat2 = sandbox.getConfig('VAT_RATE', '0');
+  assert.strictEqual(vat2, '7');
+
+  // 3. ทดสอบ getRecentSalesRows_
+  // สร้างบิล 5 บิล
+  for (let i = 1; i <= 5; i++) {
+    sandbox.checkoutSale({
+      branchId: 'B01',
+      items: [{ sku: 'P1001', name: 'น้ำดื่ม', qty: 1, unitPrice: 10, discount: 0 }],
+      discount: 0,
+      received: 10,
+      payMethod: 'CASH',
+      clientTxnId: 'TXN_PERF_' + i
+    }, admin.user);
+  }
+
+  // ดึง 3 บิลล่าสุด
+  const recent3 = sandbox.getRecentSalesRows_(3);
+  assert.strictEqual(recent3.length, 3);
+  assert.strictEqual(recent3[0].clientTxnId, 'TXN_PERF_3');
+  assert.strictEqual(recent3[1].clientTxnId, 'TXN_PERF_4');
+  assert.strictEqual(recent3[2].clientTxnId, 'TXN_PERF_5');
+
+  // 4. ทดสอบ clearExecutionContextCache
+  sandbox.clearExecutionContextCache();
+  const ssAfterClear = sandbox.getSpreadsheet();
+  assert.ok(ssAfterClear);
+});
