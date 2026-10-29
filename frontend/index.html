@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>ระบบขายสินค้าและสต๊อก (POS & Stock Management)</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <link rel="stylesheet" href="css/app.css?v=20261029-v12">
-  <link rel="stylesheet" href="css/receipt.css?v=20261029-v12">
+  <link rel="stylesheet" href="css/app.css?v=20261029-v13">
+  <link rel="stylesheet" href="css/receipt.css?v=20261029-v13">
 </head>
 <body class="bg-slate-50 text-slate-900 min-h-screen flex flex-col font-sans antialiased select-none">
 
@@ -90,12 +90,12 @@
           </div>
           <div>
             <label class="block text-xs font-bold text-slate-700 mb-1">ชื่อผู้ใช้งาน (Username)</label>
-            <input type="text" id="loginUsername" required placeholder="กรอกชื่อผู้ใช้งาน" autocomplete="username"
+            <input type="text" id="loginUsername" name="username" required placeholder="กรอกชื่อผู้ใช้งาน" autocomplete="username"
                    class="w-full px-4 py-3 rounded-2xl bg-slate-50 border border-slate-200 focus:outline-none focus:border-blue-600 focus:bg-white text-sm font-semibold transition">
           </div>
           <div>
             <label class="block text-xs font-bold text-slate-700 mb-1">รหัสผ่าน (Password)</label>
-            <input type="password" id="loginPassword" required placeholder="••••••••" autocomplete="current-password"
+            <input type="password" id="loginPassword" name="password" required placeholder="••••••••" autocomplete="current-password"
                    class="w-full px-4 py-3 rounded-2xl bg-slate-50 border border-slate-200 focus:outline-none focus:border-blue-600 focus:bg-white text-sm font-semibold transition">
           </div>
           <button type="submit" 
@@ -132,7 +132,7 @@
           <div class="flex items-center gap-2">
             <div class="relative flex-1" id="posSearchContainer">
               <span class="absolute inset-y-0 left-3 flex items-center text-slate-400 pointer-events-none">🔍</span>
-              <input type="text" id="posBarcodeSearchInput" autofocus autocomplete="off" spellcheck="false"
+              <input type="search" id="posBarcodeSearchInput" name="pos_barcode_search_query" autofocus autocomplete="off" spellcheck="false"
                      placeholder="สแกนบาร์โค้ด หรือพิมพ์ชื่อสินค้า/SKU แล้วกด Enter..."
                      class="w-full pl-9 pr-8 py-2.5 rounded-2xl bg-slate-50 border border-slate-200 focus:outline-none focus:border-blue-600 focus:bg-white text-sm font-semibold transition">
               <button type="button" id="posClearSearchBtn" onclick="SalesModule.clearSearch()" title="ล้างคำค้นหา"
@@ -264,7 +264,7 @@
       <div id="stockTab_products" class="stock-tab-content bg-white rounded-3xl p-5 border border-slate-200/80 shadow-sm space-y-4">
         <div class="flex flex-col sm:flex-row gap-3 items-center justify-between">
           <div class="flex items-center gap-2 w-full sm:w-auto">
-            <input type="text" id="stockSearchInput" oninput="StockModule.renderProductsTable()" placeholder="ค้นหา SKU, บาร์โค้ด, ชื่อ..." class="px-4 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs font-semibold focus:outline-none focus:border-emerald-600">
+            <input type="search" id="stockSearchInput" name="stock_search_query" autocomplete="off" oninput="StockModule.renderProductsTable()" placeholder="ค้นหา SKU, บาร์โค้ด, ชื่อ..." class="px-4 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs font-semibold focus:outline-none focus:border-emerald-600">
             <select id="stockCategoryFilter" onchange="StockModule.renderProductsTable()" class="px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs font-semibold focus:outline-none"></select>
           </div>
           <label class="flex items-center gap-2 text-xs font-bold text-slate-700 cursor-pointer self-start sm:self-auto">
@@ -563,7 +563,7 @@
             </div>
             <div>
               <label class="block text-[11px] font-bold text-slate-500 mb-1">ค้นหาบิล/แคชเชียร์</label>
-              <input type="text" id="receiptSearchInput" placeholder="เลขที่บิล หรือ ชื่อผู้ขาย..."
+              <input type="search" id="receiptSearchInput" name="receipt_search_query" autocomplete="off" placeholder="เลขที่บิล หรือ ชื่อผู้ขาย..."
                      onkeyup="if(event.key === 'Enter') ReportsModule.fetchReceipts()"
                      class="w-full px-3 py-1.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-bold">
             </div>
@@ -1174,7 +1174,7 @@
               <p class="text-xs text-slate-500">ดูและแก้ไขค่าคอนฟิกทั้งหมดที่จัดเก็บในชีต Config</p>
             </div>
             <div class="flex items-center gap-2">
-              <input type="text" id="constSearchInput" oninput="AdminModule.filterConfigsTable(this.value)"
+              <input type="search" id="constSearchInput" name="const_search_query" autocomplete="off" oninput="AdminModule.filterConfigsTable(this.value)"
                      placeholder="ค้นหา Key หรือคำอธิบาย..."
                      class="px-3.5 py-1.5 rounded-xl bg-slate-50 border border-slate-200 text-xs w-48 sm:w-64">
               <button onclick="AdminModule.openConfigModal()" class="px-3.5 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs shadow-sm flex items-center gap-1 whitespace-nowrap">
@@ -1213,7 +1213,7 @@
             <p class="text-xs text-slate-500">จัดการสาขา ตัวย่อสำหรับรันบิล ({BRANCH}) เบอร์โทร ที่อยู่ และสถานะเปิด/ปิด</p>
           </div>
           <div class="flex items-center gap-2">
-            <input type="text" id="branchSearchInput" oninput="AdminModule.filterBranchesTable(this.value)"
+            <input type="search" id="branchSearchInput" name="branch_search_query" autocomplete="off" oninput="AdminModule.filterBranchesTable(this.value)"
                    placeholder="ค้นหาชื่อ/รหัสสาขา..."
                    class="px-3.5 py-1.5 rounded-xl bg-slate-50 border border-slate-200 text-xs w-48 focus:bg-white focus:border-blue-600">
             <button onclick="AdminModule.openBranchModal()" class="px-3.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-sm flex items-center gap-1 whitespace-nowrap cursor-pointer">
@@ -1251,7 +1251,7 @@
             <p class="text-xs text-slate-500">จัดการป้ายสีหมวดหมู่ ลำดับการแสดงผลในหน้าขาย และการจัดหมวดสินค้า</p>
           </div>
           <div class="flex items-center gap-2">
-            <input type="text" id="categorySearchInput" oninput="AdminModule.filterCategoriesTable(this.value)"
+            <input type="search" id="categorySearchInput" name="category_search_query" autocomplete="off" oninput="AdminModule.filterCategoriesTable(this.value)"
                    placeholder="ค้นหาหมวดหมู่..."
                    class="px-3.5 py-1.5 rounded-xl bg-slate-50 border border-slate-200 text-xs w-48">
             <button onclick="AdminModule.openCategoryModal()" class="px-3.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-sm flex items-center gap-1 whitespace-nowrap">
@@ -1288,7 +1288,7 @@
             <p class="text-xs text-slate-500">จัดการรายชื่อหน่วยนับสินค้า (เช่น ชิ้น, ขวด, กล่อง, แพ็ค, กิโลกรัม)</p>
           </div>
           <div class="flex items-center gap-2">
-            <input type="text" id="unitSearchInput" oninput="AdminModule.filterUnitsTable(this.value)"
+            <input type="search" id="unitSearchInput" name="unit_search_query" autocomplete="off" oninput="AdminModule.filterUnitsTable(this.value)"
                    placeholder="ค้นหาหน่วยนับ..."
                    class="px-3.5 py-1.5 rounded-xl bg-slate-50 border border-slate-200 text-xs w-48">
             <button onclick="AdminModule.openUnitModal()" class="px-3.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-sm flex items-center gap-1 whitespace-nowrap">
@@ -1415,7 +1415,7 @@
       </div>
 
       <div class="flex gap-2">
-        <input type="text" id="voidSearchReceiptNo" placeholder="กรอกเลขที่ใบเสร็จ..." class="flex-1 px-4 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs font-mono font-bold">
+        <input type="search" id="voidSearchReceiptNo" name="void_search_receipt_no" autocomplete="off" placeholder="กรอกเลขที่ใบเสร็จ..." class="flex-1 px-4 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs font-mono font-bold">
         <button onclick="SalesModule.searchReceiptForVoid()" class="px-4 py-2 rounded-xl bg-slate-900 text-white font-bold text-xs">ค้นหา</button>
       </div>
 
@@ -1861,19 +1861,19 @@
   <iframe id="receiptPrintIframe" class="hidden"></iframe>
 
   <!-- ================= SCRIPTS ================= -->
-  <script src="config.js?v=20261029-v12"></script>
-  <script src="js/numberToThai.js?v=20261029-v12"></script>
-  <script src="js/sound.js?v=20261029-v12"></script>
-  <script src="js/print.js?v=20261029-v12"></script>
-  <script src="js/ui.js?v=20261029-v12"></script>
-  <script src="js/api.js?v=20261029-v12"></script>
-  <script src="js/auth.js?v=20261029-v12"></script>
-  <script src="js/modules/launcher.js?v=20261029-v12"></script>
-  <script src="js/modules/sales.js?v=20261029-v12"></script>
-  <script src="js/modules/stock.js?v=20261029-v12"></script>
-  <script src="js/modules/reports.js?v=20261029-v12"></script>
-  <script src="js/modules/admin.js?v=20261029-v12"></script>
-  <script src="js/router.js?v=20261029-v12"></script>
+  <script src="config.js?v=20261029-v13"></script>
+  <script src="js/numberToThai.js?v=20261029-v13"></script>
+  <script src="js/sound.js?v=20261029-v13"></script>
+  <script src="js/print.js?v=20261029-v13"></script>
+  <script src="js/ui.js?v=20261029-v13"></script>
+  <script src="js/api.js?v=20261029-v13"></script>
+  <script src="js/auth.js?v=20261029-v13"></script>
+  <script src="js/modules/launcher.js?v=20261029-v13"></script>
+  <script src="js/modules/sales.js?v=20261029-v13"></script>
+  <script src="js/modules/stock.js?v=20261029-v13"></script>
+  <script src="js/modules/reports.js?v=20261029-v13"></script>
+  <script src="js/modules/admin.js?v=20261029-v13"></script>
+  <script src="js/router.js?v=20261029-v13"></script>
 
   <script>
     // System Startup
