@@ -12,14 +12,15 @@ test('GAS Mock: Backup Status reports accurate table row counts and config value
   assert.strictEqual(status.ok, true);
   assert.ok(status.spreadsheetId);
   assert.ok(status.totalRows > 0);
-  assert.strictEqual(status.tableCount, 19);
+  assert.strictEqual(status.tableCount, 21);
   assert.ok(status.tableStats);
 
-  // ตรวจสอบว่ามีตารางหลักครบ 17 ตาราง และเก็บจำนวนแถว >= 0
+  // ตรวจสอบว่ามีตารางหลักครบ และเก็บจำนวนแถว >= 0
   const expectedTables = [
     'Users', 'Roles', 'Branches', 'Products', 'Categories', 'Units',
     'StockBalance', 'StockMovements', 'StockDocs', 'Sales', 'SaleItems',
-    'Counters', 'Config', 'ReceiptTexts', 'PrintProfiles', 'AuditLog', 'Sessions', 'FinanceTxns', 'CashClosings'
+    'Counters', 'Config', 'ReceiptTexts', 'PrintProfiles', 'AuditLog', 'Sessions', 'FinanceTxns', 'CashClosings',
+    'BusinessDays', 'CashDrawers'
   ];
   for (const t of expectedTables) {
     assert.ok(typeof status.tableStats[t] === 'number', `tableStats should have numeric row count for ${t}`);
@@ -45,7 +46,7 @@ test('GAS Mock: Export Backup generates compact schema, computes SHA-256 checksu
   assert.ok(b.exportedAt);
   assert.strictEqual(b.exportedBy, 'ผู้ดูแลระบบสูงสุด');
   assert.ok(b.checksum && b.checksum.startsWith('sha256:'), 'Checksum should start with sha256:');
-  assert.strictEqual(b.tableCount, 18); // 19 ตารางลบ Sessions
+  assert.strictEqual(b.tableCount, 20); // 21 ตารางลบ Sessions
 
   // ตรวจสอบตาราง Users ใน backup
   assert.ok(b.tables.Users);

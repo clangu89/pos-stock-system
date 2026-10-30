@@ -105,6 +105,7 @@ function routeAction(action, token, data, reqContext) {
   // --- High-Speed Initial POS Load (Products + Branches + Config + Profiles in 1 Call) ---
   if (action === 'pos:init') {
     const branchId = data.branchId || (session.branchIds && session.branchIds[0]) || 'B01';
+    const stationId = data.stationId || 'POS-01';
     return {
       ok: true,
       products: getProductsWithStock(branchId),
@@ -113,7 +114,8 @@ function routeAction(action, token, data, reqContext) {
       receiptTexts: getReceiptStoreInfo(branchId),
       printProfiles: getPrintProfilesList(),
       categories: getCategories(),
-      units: getUnits()
+      units: getUnits(),
+      dayDrawerStatus: getDayAndDrawerStatus(branchId, stationId)
     };
   }
 
@@ -256,6 +258,71 @@ function routeAction(action, token, data, reqContext) {
   if (action === 'finance:resetBranchSettings') {
     requireAuth(token, 'finance', 'settings');
     return resetBranchFinanceSettings(data.branchId, session);
+  }
+
+  // --- Day Control & Cash Drawer Operations ---
+  if (action === 'finance:dayStatus') {
+    if (!hasPermission(session, 'sales', 'view') && !hasPermission(session, 'finance', 'view')) {
+      requireAuth(token, 'sales', 'view');
+    }
+    const branchId = data.branchId || (session.branchIds && session.branchIds[0]) || 'B01';
+    const stationId = data.stationId || 'POS-01';
+    return getDayAndDrawerStatus(branchId, stationId, data.businessDate);
+  }
+
+  if (action === 'finance:openDay') {
+    requireAuth(token, 'finance', 'dayControl');
+    return openBusinessDay(data, session);
+  }
+
+  if (action === 'finance:dayClosePreview') {
+    requireAuth(token, 'finance', 'dayControl');
+    return getBusinessDayClosePreview(data);
+  }
+
+  if (action === 'finance:closeDay') {
+    requireAuth(token, 'finance', 'dayControl');
+    return closeBusinessDay(data, session);
+  }
+
+  if (action === 'finance:daysHistory') {
+    requireAuth(token, 'finance', 'view');
+    return getBusinessDaysHistory(data);
+  }
+
+  if (action === 'finance:openDrawer') {
+    if (!hasPermission(session, 'sales', 'drawer') && !hasPermission(session, 'finance', 'close')) {
+      requireAuth(token, 'sales', 'drawer');
+    }
+    return openCashDrawer(data, session);
+  }
+
+  if (action === 'finance:drawerMovement') {
+    if (!hasPermission(session, 'sales', 'drawer') && !hasPermission(session, 'finance', 'create')) {
+      requireAuth(token, 'sales', 'drawer');
+    }
+    return recordDrawerMovement(data, session);
+  }
+
+  if (action === 'finance:drawerClosePreview') {
+    if (!hasPermission(session, 'sales', 'drawer') && !hasPermission(session, 'finance', 'view')) {
+      requireAuth(token, 'sales', 'drawer');
+    }
+    return getCashDrawerClosePreview(data.drawerId);
+  }
+
+  if (action === 'finance:closeDrawer') {
+    if (!hasPermission(session, 'sales', 'drawer') && !hasPermission(session, 'finance', 'close')) {
+      requireAuth(token, 'sales', 'drawer');
+    }
+    return closeCashDrawer(data, session);
+  }
+
+  if (action === 'finance:drawersList') {
+    if (!hasPermission(session, 'sales', 'view') && !hasPermission(session, 'finance', 'view')) {
+      requireAuth(token, 'finance', 'view');
+    }
+    return getCashDrawersList(data);
   }
 
   // --- Admin Operations ---

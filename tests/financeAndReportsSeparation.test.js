@@ -159,6 +159,7 @@ test('Finance & Reports Separation: Cash Drawer Closing, Variance & Roll-over', 
   // Sale 2: TRANSFER 200 THB
   const sale1 = sandbox.checkoutSale({
     branchId: 'B01',
+    ts: '2026-10-30T10:00:00.000Z',
     payMethod: 'CASH',
     received: 100,
     subtotal: 100,
@@ -172,6 +173,7 @@ test('Finance & Reports Separation: Cash Drawer Closing, Variance & Roll-over', 
 
   const sale2 = sandbox.checkoutSale({
     branchId: 'B01',
+    ts: '2026-10-30T10:05:00.000Z',
     payMethod: 'TRANSFER',
     received: 200,
     subtotal: 200,
@@ -337,6 +339,7 @@ test('Finance & Reports Separation: Cash Closing Preview & Closings API compatib
   const p1 = sandbox.getTable('Products').rows.find(p => p.sku === 'P1001');
   sandbox.checkoutSale({
     branchId: 'B01',
+    ts: '2026-10-30T11:00:00.000Z',
     payMethod: 'CASH',
     received: 100,
     subtotal: 100,

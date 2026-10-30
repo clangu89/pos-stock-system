@@ -4,7 +4,11 @@
 
 const FinanceModule = {
   branches: [],
-  currentTab: 'summary',
+  currentTab: 'day',
+  activeDayStatus: null,
+  activeDayClosePreview: null,
+  activeZReport: null,
+  cachedDayHistory: [],
   cachedOverview: null,
   cachedTxns: [],
   cachedClosings: [],
@@ -26,6 +30,12 @@ const FinanceModule = {
   },
 
   updateTabPermissionUI() {
+    const btnDay = document.getElementById('financeTabBtn_day');
+    if (btnDay) {
+      const canDay = window.Auth && typeof window.Auth.can === 'function' ? window.Auth.can('finance', 'dayControl') : true;
+      btnDay.style.display = canDay ? 'inline-flex' : 'none';
+    }
+
     const btnSettings = document.getElementById('financeTabBtn_settings');
     if (btnSettings) {
       const canSettings = window.Auth && typeof window.Auth.can === 'function' ? window.Auth.can('finance', 'settings') : true;
@@ -66,6 +76,9 @@ const FinanceModule = {
 
     const closingDate = document.getElementById('closingDateInput');
     if (closingDate && !closingDate.value) closingDate.value = format(new Date());
+
+    const dayDate = document.getElementById('financeDayDateInput');
+    if (dayDate && !dayDate.value) dayDate.value = format(new Date());
   },
 
   async loadBranches() {
@@ -81,6 +94,14 @@ const FinanceModule = {
 
       const txBranch = document.getElementById('financeTxnBranchFilter');
       if (txBranch) txBranch.innerHTML = optionsHtml;
+
+      const dayBranch = document.getElementById('financeDayBranchSelect');
+      if (dayBranch) {
+        const activeBranchId = (window.Auth && window.Auth.activeBranch && window.Auth.activeBranch.branchId) || (this.branches[0] && this.branches[0].branchId) || 'B01';
+        dayBranch.innerHTML = this.branches.map(b => `
+          <option value="${b.branchId}" ${b.branchId === activeBranchId ? 'selected' : ''}>${b.name}</option>
+        `).join('');
+      }
 
       const closeBranch = document.getElementById('financeClosingBranchSelect');
       if (closeBranch) {
@@ -122,11 +143,13 @@ const FinanceModule = {
   async switchTab(tabName) {
     this.currentTab = tabName;
 
+    const btnDay = document.getElementById('financeTabBtn_day');
     const btnSummary = document.getElementById('financeTabBtn_summary');
     const btnLedger = document.getElementById('financeTabBtn_ledger');
     const btnClosing = document.getElementById('financeTabBtn_closing');
     const btnSettings = document.getElementById('financeTabBtn_settings');
 
+    const contentDay = document.getElementById('financeTab_day');
     const contentSummary = document.getElementById('financeTab_summary');
     const contentLedger = document.getElementById('financeTab_ledger');
     const contentClosing = document.getElementById('financeTab_closing');
@@ -135,17 +158,22 @@ const FinanceModule = {
     const activeClasses = 'finance-tab-btn px-4 py-2.5 rounded-xl font-bold text-xs bg-purple-600 text-white shadow-md transition cursor-pointer';
     const inactiveClasses = 'finance-tab-btn px-4 py-2.5 rounded-xl font-bold text-xs bg-white text-slate-700 hover:bg-slate-100 border border-slate-200 transition cursor-pointer';
 
+    if (btnDay) btnDay.className = (tabName === 'day') ? activeClasses : inactiveClasses;
     if (btnSummary) btnSummary.className = (tabName === 'summary') ? activeClasses : inactiveClasses;
     if (btnLedger) btnLedger.className = (tabName === 'ledger') ? activeClasses : inactiveClasses;
     if (btnClosing) btnClosing.className = (tabName === 'closing') ? activeClasses : inactiveClasses;
     if (btnSettings) btnSettings.className = (tabName === 'settings') ? activeClasses : inactiveClasses;
 
+    if (contentDay) contentDay.classList.toggle('hidden', tabName !== 'day');
     if (contentSummary) contentSummary.classList.toggle('hidden', tabName !== 'summary');
     if (contentLedger) contentLedger.classList.toggle('hidden', tabName !== 'ledger');
     if (contentClosing) contentClosing.classList.toggle('hidden', tabName !== 'closing');
     if (contentSettings) contentSettings.classList.toggle('hidden', tabName !== 'settings');
 
-    if (tabName === 'summary') {
+    if (tabName === 'day') {
+      await this.loadDayStatus();
+      await this.loadBusinessDaysHistory();
+    } else if (tabName === 'summary') {
       await this.fetchSummary();
     } else if (tabName === 'ledger') {
       await this.fetchTxns();
@@ -156,6 +184,528 @@ const FinanceModule = {
       await this.loadSettings(this.activeSettingsScope);
       this.renderSettingsUI();
     }
+  },
+
+  // ================= TAB 0: DAY & DRAWER CONTROL (OPEN/CLOSE DAY & LIVE DRAWERS) =================
+
+  async loadDayStatus() {
+    const branchId = document.getElementById('financeDayBranchSelect')?.value ||
+      (window.Auth && window.Auth.activeBranch && window.Auth.activeBranch.branchId) ||
+      (this.branches[0] && this.branches[0].branchId) || 'B01';
+    const businessDate = document.getElementById('financeDayDateInput')?.value || this.formatLocalDate(new Date());
+
+    UI.showLoading('กำลังตรวจสอบสถานะวันทำการและลิ้นชัก...');
+    const res = await Api.call('finance:dayStatus', { branchId, businessDate });
+    UI.hideLoading();
+
+    if (!res || !res.ok) {
+      UI.showToast(res && res.error ? res.error : 'ไม่สามารถโหลดสถานะวันทำการได้', 'error');
+      return;
+    }
+
+    this.activeDayStatus = res;
+    const activeDay = res.activeDay;
+
+    // 1. Banner badge
+    const badge = document.getElementById('financeDayStatusBannerBadge');
+    const dot = document.getElementById('financeDayStatusDot');
+    const txt = document.getElementById('financeDayStatusText');
+    const openCard = document.getElementById('financeOpenDayCard');
+    const infoCard = document.getElementById('financeActiveDayInfoCard');
+    const closePanel = document.getElementById('financeDayClosePanel');
+
+    if (activeDay && activeDay.status === 'OPEN') {
+      if (badge) badge.className = 'px-4 py-2 rounded-2xl text-xs font-black flex items-center gap-2 bg-emerald-50 text-emerald-800 border border-emerald-200';
+      if (dot) dot.className = 'w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse';
+      if (txt) txt.textContent = `เปิดวันทำการแล้ว (${activeDay.businessDate}) - รหัส: ${activeDay.dayId}`;
+
+      if (openCard) openCard.classList.add('hidden');
+      if (infoCard) infoCard.classList.remove('hidden');
+      if (closePanel) closePanel.classList.remove('hidden');
+
+      const idEl = document.getElementById('activeDayIdLabel');
+      if (idEl) idEl.textContent = activeDay.dayId;
+      const fltEl = document.getElementById('activeDayFloatLabel');
+      if (fltEl) fltEl.textContent = `฿${parseFloat(activeDay.openingFloat || 0).toFixed(2)}`;
+      const userEl = document.getElementById('activeDayUserLabel');
+      if (userEl) userEl.textContent = activeDay.openedByName || activeDay.openedBy || '-';
+      const timeEl = document.getElementById('activeDayTimeLabel');
+      if (timeEl) timeEl.textContent = new Date(activeDay.openedAt).toLocaleTimeString('th-TH');
+
+    } else if (activeDay && activeDay.status === 'CLOSED') {
+      if (badge) badge.className = 'px-4 py-2 rounded-2xl text-xs font-black flex items-center gap-2 bg-slate-100 text-slate-700 border border-slate-200';
+      if (dot) dot.className = 'w-2.5 h-2.5 rounded-full bg-slate-400';
+      if (txt) txt.textContent = `ปิดวันทำการแล้ว (${activeDay.businessDate}) - รหัส: ${activeDay.dayId}`;
+
+      if (openCard) openCard.classList.add('hidden');
+      if (infoCard) infoCard.classList.remove('hidden');
+      if (closePanel) closePanel.classList.add('hidden');
+
+      const idEl = document.getElementById('activeDayIdLabel');
+      if (idEl) idEl.textContent = activeDay.dayId;
+      const fltEl = document.getElementById('activeDayFloatLabel');
+      if (fltEl) fltEl.textContent = `฿${parseFloat(activeDay.openingFloat || 0).toFixed(2)}`;
+      const userEl = document.getElementById('activeDayUserLabel');
+      if (userEl) userEl.textContent = `${activeDay.openedByName || activeDay.openedBy || '-'} (ปิดโดย: ${activeDay.closedByName || activeDay.closedBy || '-'})`;
+      const timeEl = document.getElementById('activeDayTimeLabel');
+      if (timeEl) timeEl.textContent = `${new Date(activeDay.openedAt).toLocaleTimeString('th-TH')} - ${new Date(activeDay.closedAt).toLocaleTimeString('th-TH')}`;
+
+    } else {
+      if (badge) badge.className = 'px-4 py-2 rounded-2xl text-xs font-black flex items-center gap-2 bg-amber-50 text-amber-800 border border-amber-200';
+      if (dot) dot.className = 'w-2.5 h-2.5 rounded-full bg-amber-400';
+      if (txt) txt.textContent = `ยังไม่ได้เปิดวันทำการ (${businessDate})`;
+
+      if (infoCard) infoCard.classList.add('hidden');
+      if (openCard) openCard.classList.remove('hidden');
+      if (closePanel) closePanel.classList.add('hidden');
+
+      const floatInput = document.getElementById('financeOpenDayFloatInput');
+      if (floatInput && !floatInput.value) {
+        floatInput.value = (res.settings && res.settings.openingFloatAmount !== undefined) ? res.settings.openingFloatAmount : 1000;
+      }
+    }
+
+    // 2. Fetch live drawers for this Day
+    await this.fetchLiveDrawers(branchId, (activeDay && activeDay.dayId) || '', businessDate);
+
+    // 3. If Day is OPEN, fetch closing preview
+    if (activeDay && activeDay.status === 'OPEN') {
+      await this.fetchDayClosePreview(branchId, activeDay.dayId);
+    }
+  },
+
+  async fetchLiveDrawers(branchId, dayId, businessDate) {
+    const tbody = document.getElementById('financeLiveDrawersTableBody');
+    if (tbody) tbody.innerHTML = `<tr><td colspan="11" class="text-center py-6 text-slate-400">กำลังโหลดรายการลิ้นชัก...</td></tr>`;
+
+    const res = await Api.call('finance:drawersList', { branchId, dayId, businessDate });
+    if (!res || !res.ok) {
+      if (tbody) tbody.innerHTML = `<tr><td colspan="11" class="text-center py-6 text-slate-400">ไม่สามารถโหลดรายการลิ้นชักได้</td></tr>`;
+      return;
+    }
+
+    const drawers = res.drawers || [];
+    const openCount = drawers.filter(d => d.status === 'OPEN').length;
+    const countBadge = document.getElementById('drawersOpenBadge');
+    if (countBadge) {
+      countBadge.textContent = `${openCount} เปิดอยู่ / ทั้งหมด ${drawers.length}`;
+      countBadge.className = openCount > 0 ?
+        'px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200' :
+        'px-2.5 py-1 rounded-full text-[11px] font-bold bg-slate-100 text-slate-600 border border-slate-200';
+    }
+
+    if (drawers.length === 0) {
+      if (tbody) tbody.innerHTML = `<tr><td colspan="11" class="text-center py-6 text-slate-400">ยังไม่มีประวัติการเปิดลิ้นชักในวันนี้</td></tr>`;
+      return;
+    }
+
+    if (tbody) {
+      tbody.innerHTML = drawers.map(d => {
+        const isOpen = d.status === 'OPEN';
+        const stBadge = isOpen ?
+          '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">OPEN</span>' :
+          '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-600">CLOSED</span>';
+
+        const variance = d.variance !== null && d.variance !== undefined ? parseFloat(d.variance) : null;
+        let varDisplay = '-';
+        if (variance !== null) {
+          const varColor = Math.abs(variance) < 0.01 ? 'text-emerald-600' : (variance > 0 ? 'text-blue-600' : 'text-rose-600');
+          varDisplay = `<span class="${varColor} font-bold">${variance >= 0 ? '+' : ''}฿${variance.toFixed(2)}</span>`;
+        }
+
+        const moveTxt = `+฿${parseFloat(d.cashIn || 0).toFixed(2)} / -฿${parseFloat(d.cashOut || 0).toFixed(2)} / -฿${parseFloat(d.cashDrop || 0).toFixed(2)}`;
+
+        const safeDrawerId = escapeHtml(d.drawerId);
+
+        return `
+          <tr class="hover:bg-slate-50 transition">
+            <td class="py-2.5 px-3 font-mono font-bold text-purple-700">${safeDrawerId}</td>
+            <td class="py-2.5 px-3 font-bold text-slate-800">${escapeHtml(d.stationId || 'POS-01')} <span class="text-slate-400">(${escapeHtml(d.shift || '-')})</span></td>
+            <td class="py-2.5 px-3 text-slate-700">${escapeHtml(d.cashierName || d.cashierId || '-')}</td>
+            <td class="py-2.5 px-3 text-center">${stBadge}</td>
+            <td class="py-2.5 px-3 text-right font-mono font-bold text-slate-700">฿${parseFloat(d.openingFloat || 0).toFixed(2)}</td>
+            <td class="py-2.5 px-3 text-right font-mono font-bold text-emerald-600">฿${parseFloat(d.cashSales || 0).toFixed(2)}</td>
+            <td class="py-2.5 px-3 text-right font-mono text-[10px] text-slate-500">${moveTxt}</td>
+            <td class="py-2.5 px-3 text-right font-mono font-black text-purple-700">฿${parseFloat(d.expectedCash || 0).toFixed(2)}</td>
+            <td class="py-2.5 px-3 text-right font-mono">฿${parseFloat(d.actualCash || 0).toFixed(2)} (${varDisplay})</td>
+            <td class="py-2.5 px-3 text-right font-mono text-[11px] text-slate-600">฿${parseFloat(d.finalDrop || 0).toFixed(2)} / ฿${parseFloat(d.carryForward || 0).toFixed(2)}</td>
+            <td class="py-2.5 px-3 text-center">
+              ${isOpen ? `
+                <button onclick="SalesModule.stationId='${escapeHtml(d.stationId || 'POS-01')}'; SalesModule.openDrawerModal();" class="px-2.5 py-1 rounded-lg bg-purple-50 hover:bg-purple-100 text-purple-700 font-bold text-[11px] border border-purple-200 transition cursor-pointer">
+                  จัดการ
+                </button>
+              ` : `
+                <button onclick="SalesModule.printDrawerClosingSlip(${escapeHtml(JSON.stringify(d).replace(/"/g, '&quot;'))})" class="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-[11px] border border-slate-200 transition cursor-pointer">
+                  🖨️ สลิป
+                </button>
+              `}
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+  },
+
+  async fetchDayClosePreview(branchId, dayId) {
+    const res = await Api.call('finance:dayClosePreview', { branchId, dayId });
+    if (!res || !res.ok) return;
+
+    this.activeDayClosePreview = res;
+
+    const setTxt = (id, val) => {
+      const el = document.getElementById(id);
+      if (el) el.textContent = val;
+    };
+
+    setTxt('zSummaryCashSales', `฿${(res.cashSales || 0).toFixed(2)}`);
+    setTxt('zSummaryTransferSales', `฿${(res.transferSales || 0).toFixed(2)}`);
+    setTxt('zSummaryCashIncome', `+฿${(res.cashIncome || 0).toFixed(2)}`);
+    setTxt('zSummaryCashExpense', `-฿${(res.cashExpense || 0).toFixed(2)}`);
+    setTxt('zSummaryCashDrop', `฿${(res.totalCashDrop || 0).toFixed(2)}`);
+    setTxt('zSummaryCarryForward', `฿${(res.totalCarryForward || 0).toFixed(2)}`);
+
+    const chkBadge = document.getElementById('dayPrecloseChecklistBadge');
+    const closeBtn = document.getElementById('financeSubmitCloseDayBtn');
+    const chk = res.checklist || {};
+    const requireCloseAll = !!(res.settings && res.settings.requireCloseAllDrawersBeforeDayClose);
+
+    if (chkBadge) {
+      if (chk.allDrawersClosed) {
+        chkBadge.textContent = 'พร้อมปิดวันทำการ (ลิ้นชักทุกเครื่องปิดครบถ้วน)';
+        chkBadge.className = 'px-3 py-1 rounded-xl text-xs font-bold bg-emerald-50 text-emerald-800 border border-emerald-200';
+        if (closeBtn) closeBtn.disabled = false;
+      } else {
+        chkBadge.textContent = `⚠️ มีลิ้นชักยังเปิดอยู่ (${chk.openDrawersCount} ลิ้นชัก)`;
+        chkBadge.className = 'px-3 py-1 rounded-xl text-xs font-bold bg-amber-50 text-amber-800 border border-amber-200';
+        if (closeBtn) closeBtn.disabled = requireCloseAll;
+      }
+    }
+  },
+
+  async submitOpenDay() {
+    const branchId = document.getElementById('financeDayBranchSelect')?.value || 'B01';
+    const businessDate = document.getElementById('financeDayDateInput')?.value || this.formatLocalDate(new Date());
+    const openingFloat = parseFloat(document.getElementById('financeOpenDayFloatInput')?.value);
+    const note = document.getElementById('financeOpenDayNoteInput')?.value.trim() || '';
+
+    if (isNaN(openingFloat) || openingFloat < 0) {
+      UI.showToast('กรุณาระบุเงินสดตั้งต้นประจำวันที่ถูกต้อง', 'warning');
+      return;
+    }
+
+    UI.showLoading('กำลังบันทึกเปิดวันทำการ...');
+    const res = await Api.call('finance:openDay', {
+      branchId,
+      businessDate,
+      openingFloat,
+      note
+    });
+    UI.hideLoading();
+
+    if (res && res.ok) {
+      UI.showToast(`เปิดวันทำการ ${businessDate} เรียบร้อยแล้ว (รหัส: ${res.day.dayId})`, 'success');
+      await this.loadDayStatus();
+      await this.loadBusinessDaysHistory();
+    } else {
+      UI.showToast(res && res.error ? res.error : 'ไม่สามารถเปิดวันทำการได้', 'error');
+    }
+  },
+
+  async submitCloseDay() {
+    const activeDay = this.activeDayStatus && this.activeDayStatus.activeDay;
+    if (!activeDay || activeDay.status !== 'OPEN') {
+      UI.showToast('ไม่มีวันทำการที่เปิดอยู่สำหรับสาขานี้', 'warning');
+      return;
+    }
+
+    const prev = this.activeDayClosePreview;
+    const chk = (prev && prev.checklist) || {};
+    const requireCloseAll = !!(prev && prev.settings && prev.settings.requireCloseAllDrawersBeforeDayClose);
+
+    if (requireCloseAll && !chk.allDrawersClosed) {
+      UI.showToast(`ไม่สามารถปิดวันได้: ยังมีลิ้นชักเปิดค้างอยู่ ${chk.openDrawersCount} เครื่อง`, 'error');
+      return;
+    }
+
+    const note = document.getElementById('financeDayCloseNoteInput')?.value.trim() || '';
+
+    const confirmed = await UI.confirmDialog(
+      'ยืนยันปิดวันทำการ (Close Business Day)',
+      `รหัสวันทำการ: ${activeDay.dayId} (${activeDay.businessDate})\nยอดขายเงินสดรวม: ฿${((prev && prev.cashSales) || 0).toFixed(2)}\nเงินสดนำส่งเซฟรวม: ฿${((prev && prev.totalCashDrop) || 0).toFixed(2)}\n\nเมื่อปิดวันทำการแล้ว ระบบจะออกใบสรุป Z-Report และล็อกงวด (หากเปิดใช้งาน)\nต้องการยืนยันใช่หรือไม่?`
+    );
+    if (!confirmed) return;
+
+    UI.showLoading('กำลังสรุปปิดวันทำการและออก Z-Report...');
+    const res = await Api.call('finance:closeDay', {
+      branchId: activeDay.branchId,
+      dayId: activeDay.dayId,
+      note
+    });
+    UI.hideLoading();
+
+    if (res && res.ok && res.zReport) {
+      UI.showToast(`ปิดวันทำการ ${res.day.dayId} เรียบร้อยแล้ว!`, 'success');
+      await this.loadDayStatus();
+      await this.loadBusinessDaysHistory();
+      this.renderZReportModal(res.zReport);
+    } else {
+      UI.showToast(res && res.error ? res.error : 'ไม่สามารถปิดวันทำการได้', 'error');
+    }
+  },
+
+  async loadBusinessDaysHistory() {
+    const branchId = document.getElementById('financeDayBranchSelect')?.value || '';
+    const tbody = document.getElementById('businessDaysHistoryTableBody');
+    if (tbody) tbody.innerHTML = `<tr><td colspan="11" class="text-center py-6 text-slate-400">กำลังโหลดประวัติวันทำการ...</td></tr>`;
+
+    const res = await Api.call('finance:daysHistory', { branchId, limit: 30 });
+    if (!res || !res.ok) {
+      if (tbody) tbody.innerHTML = `<tr><td colspan="11" class="text-center py-6 text-slate-400">ไม่สามารถโหลดประวัติได้</td></tr>`;
+      return;
+    }
+
+    this.cachedDayHistory = res.history || [];
+    if (this.cachedDayHistory.length === 0) {
+      if (tbody) tbody.innerHTML = `<tr><td colspan="11" class="text-center py-6 text-slate-400">ยังไม่มีประวัติการเปิด-ปิดวันทำการ</td></tr>`;
+      return;
+    }
+
+    if (tbody) {
+      tbody.innerHTML = this.cachedDayHistory.map(day => {
+        const isOpen = day.status === 'OPEN';
+        const stBadge = isOpen ?
+          '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">OPEN</span>' :
+          '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-600">CLOSED</span>';
+
+        const safeDayId = escapeHtml(day.dayId);
+        const safeBranch = escapeHtml(this.getBranchName(day.branchId));
+
+        return `
+          <tr class="hover:bg-slate-50 transition">
+            <td class="py-2.5 px-3 font-bold text-slate-800">${escapeHtml(day.businessDate)}</td>
+            <td class="py-2.5 px-3 font-mono font-bold text-purple-700">${safeDayId}</td>
+            <td class="py-2.5 px-3 text-slate-700">${safeBranch}</td>
+            <td class="py-2.5 px-3 text-center">${stBadge}</td>
+            <td class="py-2.5 px-3 text-right font-mono font-bold text-slate-700">฿${parseFloat(day.openingFloat || 0).toFixed(2)}</td>
+            <td class="py-2.5 px-3 text-right font-mono font-bold text-emerald-600">฿${parseFloat(day.cashSales || 0).toFixed(2)}</td>
+            <td class="py-2.5 px-3 text-right font-mono font-bold text-blue-600">฿${parseFloat(day.transferSales || 0).toFixed(2)}</td>
+            <td class="py-2.5 px-3 text-right font-mono font-black text-purple-700">฿${parseFloat(day.totalCashDrop || 0).toFixed(2)}</td>
+            <td class="py-2.5 px-3 text-right font-mono text-slate-600">฿${parseFloat(day.totalCarryForward || 0).toFixed(2)}</td>
+            <td class="py-2.5 px-3 text-center text-[11px] text-slate-600">${escapeHtml(day.closedByName || day.closedBy || day.openedByName || day.openedBy || '-')}</td>
+            <td class="py-2.5 px-3 text-center">
+              ${day.zReportJson ? `
+                <button onclick="FinanceModule.openZReportFromHistory('${safeDayId}')" class="px-2.5 py-1 rounded-lg bg-purple-50 hover:bg-purple-100 text-purple-700 font-bold text-[11px] border border-purple-200 transition cursor-pointer">
+                  📜 Z-Report
+                </button>
+              ` : `
+                <span class="text-slate-400 text-[10px]">-</span>
+              `}
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+  },
+
+  openZReportFromHistory(dayId) {
+    const item = this.cachedDayHistory.find(d => d.dayId === dayId);
+    if (!item) {
+      UI.showToast('ไม่พบข้อมูลวันทำการ', 'error');
+      return;
+    }
+
+    let zReport = null;
+    try {
+      zReport = typeof item.zReportJson === 'string' ? JSON.parse(item.zReportJson) : item.zReportJson;
+    } catch (e) {
+      zReport = null;
+    }
+
+    if (!zReport) {
+      UI.showToast('วันทำการนี้ยังไม่มีใบสรุป Z-Report', 'warning');
+      return;
+    }
+
+    this.renderZReportModal(zReport);
+  },
+
+  renderZReportModal(zReport) {
+    if (!zReport) return;
+    this.activeZReport = zReport;
+
+    const idLabel = document.getElementById('zModalDayId');
+    if (idLabel) idLabel.textContent = `${zReport.dayId} (${zReport.businessDate})`;
+
+    const container = document.getElementById('zModalContent');
+    if (!container) return;
+
+    const b = zReport.breakdown || {};
+    const dList = zReport.drawers || [];
+
+    container.innerHTML = `
+      <div class="space-y-3">
+        <!-- Header Info Card -->
+        <div class="p-3 bg-purple-50 rounded-2xl border border-purple-200 text-purple-900 space-y-1">
+          <div class="flex justify-between font-bold text-xs">
+            <span>สาขา: ${escapeHtml(this.getBranchName(zReport.branchId))}</span>
+            <span>วันที่: ${escapeHtml(zReport.businessDate)}</span>
+          </div>
+          <div class="flex justify-between text-[11px] text-purple-700">
+            <span>ผู้ปิดวัน: ${escapeHtml(zReport.closedByName || zReport.closedBy || '-')}</span>
+            <span>เวลาปิด: ${new Date(zReport.closedAt).toLocaleTimeString('th-TH')}</span>
+          </div>
+        </div>
+
+        <!-- Financial Summary Grid -->
+        <div class="p-3 bg-slate-50 rounded-2xl border border-slate-200 space-y-2">
+          <div class="font-extrabold text-slate-800 text-[11px] uppercase border-b border-slate-200 pb-1">สรุปกระแสเงินสดหน้าร้าน</div>
+          <div class="flex justify-between"><span>เงินทอนตั้งต้นวันทำการ:</span><span class="font-mono font-bold">฿${parseFloat(b.openingFloat || 0).toFixed(2)}</span></div>
+          <div class="flex justify-between"><span>ยอดขายเงินสด (Cash Sales):</span><span class="font-mono font-bold text-emerald-600">฿${parseFloat(b.cashSales || 0).toFixed(2)}</span></div>
+          <div class="flex justify-between"><span>ยอดขายโอน/QR (ไม่รวมในลิ้นชัก):</span><span class="font-mono font-bold text-blue-600">฿${parseFloat(b.transferSales || 0).toFixed(2)}</span></div>
+          <div class="flex justify-between"><span>รายรับเงินสดอื่นหน้าร้าน (+):</span><span class="font-mono text-teal-600">+฿${parseFloat(b.cashIncome || 0).toFixed(2)}</span></div>
+          <div class="flex justify-between"><span>รายจ่ายเงินสดหน้าร้าน (-):</span><span class="font-mono text-rose-600">-฿${parseFloat(b.cashExpense || 0).toFixed(2)}</span></div>
+          <div class="border-t border-slate-200 pt-1 flex justify-between font-bold text-slate-900">
+            <span>เงินสดที่ต้องมีในระบบรวม:</span>
+            <span class="font-mono text-purple-700 text-sm">฿${parseFloat(b.expectedCash || 0).toFixed(2)}</span>
+          </div>
+          <div class="flex justify-between font-bold text-slate-900">
+            <span>เงินสดนับได้จริงรวม:</span>
+            <span class="font-mono text-sm">฿${parseFloat(b.actualCash || 0).toFixed(2)}</span>
+          </div>
+          <div class="flex justify-between text-xs">
+            <span>ผลต่างเงินสดรวม (จริง - คาดการณ์):</span>
+            <span class="font-mono font-bold ${Math.abs(parseFloat(b.variance || 0)) < 0.01 ? 'text-emerald-600' : 'text-rose-600'}">
+              ${parseFloat(b.variance || 0) >= 0 ? '+' : ''}฿${parseFloat(b.variance || 0).toFixed(2)}
+            </span>
+          </div>
+        </div>
+
+        <!-- Cash Drop & Carry Forward Banner -->
+        <div class="p-3 bg-slate-900 text-white rounded-2xl space-y-1 text-xs">
+          <div class="flex justify-between items-center">
+            <span class="text-slate-300 font-bold">ยอดเงินสดนำส่งเซฟสุทธิ (Total Cash Drop):</span>
+            <span class="font-mono font-black text-emerald-400 text-base">฿${parseFloat(b.totalCashDrop || 0).toFixed(2)}</span>
+          </div>
+          <div class="flex justify-between items-center pt-1 border-t border-slate-800">
+            <span class="text-slate-400 text-[11px]">เงินทอนยกไปวันถัดไป (Carry Forward):</span>
+            <span class="font-mono font-bold text-slate-200">฿${parseFloat(b.totalCarryForward || 0).toFixed(2)}</span>
+          </div>
+        </div>
+
+        <!-- Drawers Breakdown List -->
+        ${dList.length > 0 ? `
+          <div class="space-y-1.5 pt-1">
+            <div class="font-extrabold text-slate-700 text-[11px]">รายการลิ้นชักที่ส่งมอบกะ (${dList.length} รายการ):</div>
+            <div class="space-y-1 max-h-40 overflow-y-auto pr-1">
+              ${dList.map(d => `
+                <div class="p-2 bg-slate-50 rounded-xl border border-slate-200 text-[11px] flex justify-between items-center">
+                  <div>
+                    <span class="font-bold text-purple-700">${escapeHtml(d.stationId || 'POS-01')}</span>
+                    <span class="text-slate-500">(${escapeHtml(d.shift || '-')})</span>
+                    <span class="text-slate-400 text-[10px] block">${escapeHtml(d.cashierName || d.cashierId || '-')}</span>
+                  </div>
+                  <div class="text-right font-mono">
+                    <span class="text-emerald-600 font-bold block">ขายสด ฿${parseFloat(d.cashSales || 0).toFixed(2)}</span>
+                    <span class="text-slate-600 text-[10px]">ส่งเซฟ ฿${parseFloat(d.finalDrop || 0).toFixed(2)}</span>
+                  </div>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+        ` : ''}
+
+        ${zReport.note ? `
+          <div class="p-2.5 bg-amber-50 rounded-xl border border-amber-200 text-amber-900 text-[11px]">
+            <strong>หมายเหตุ:</strong> ${escapeHtml(zReport.note)}
+          </div>
+        ` : ''}
+      </div>
+    `;
+
+    UI.openModal('dayCloseDetailModal');
+  },
+
+  printZReportSlip() {
+    const zReport = this.activeZReport;
+    if (!zReport) {
+      UI.showToast('ไม่พบข้อมูล Z-Report สำหรับพิมพ์', 'warning');
+      return;
+    }
+
+    const st = this.receiptStoreInfo || this.cachedSettings || {};
+    const storeName = st.storeName || CONFIG.DEFAULT_STORE_NAME || 'POS System';
+    const b = zReport.breakdown || {};
+    const dList = zReport.drawers || [];
+    const variance = parseFloat(b.variance || 0);
+    const varText = variance === 0 ? '฿0.00 (ตรง)' : (variance > 0 ? `+฿${variance.toFixed(2)} (เกิน)` : `-฿${Math.abs(variance).toFixed(2)} (ขาด)`);
+
+    const html = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <title>Z-Report - ${zReport.dayId}</title>
+        <style>
+          @page { size: auto; margin: 2mm; }
+          body { font-family: monospace, sans-serif; font-size: 11px; margin: 0; padding: 4px; color: #000; }
+          .center { text-align: center; }
+          .right { text-align: right; }
+          .bold { font-weight: bold; }
+          .line { border-top: 1px dashed #000; margin: 4px 0; }
+          .double-line { border-top: 2px solid #000; margin: 5px 0; }
+          .row { display: flex; justify-content: space-between; margin: 2px 0; }
+        </style>
+      </head>
+      <body>
+        <div class="center bold" style="font-size:13px;">${escapeHtml(storeName)}</div>
+        <div class="center bold" style="font-size:12px;">ใบสรุปปิดวันทำการ (Z-Report)</div>
+        <div class="center" style="font-size:10px;">สาขา: ${escapeHtml(this.getBranchName(zReport.branchId))} | วันที่: ${escapeHtml(zReport.businessDate)}</div>
+        <div class="line"></div>
+        <div class="row"><span>รหัสวันทำการ:</span><span class="bold">${escapeHtml(zReport.dayId)}</span></div>
+        <div class="row"><span>ผู้เปิดวัน:</span><span>${escapeHtml(zReport.openedByName || zReport.openedBy || '-')}</span></div>
+        <div class="row"><span>เวลาเปิด:</span><span>${new Date(zReport.openedAt).toLocaleTimeString('th-TH')}</span></div>
+        <div class="row"><span>ผู้ปิดวัน:</span><span>${escapeHtml(zReport.closedByName || zReport.closedBy || '-')}</span></div>
+        <div class="row"><span>เวลาปิด:</span><span>${new Date(zReport.closedAt).toLocaleTimeString('th-TH')}</span></div>
+        <div class="line"></div>
+        <div class="row"><span>เงินทอนตั้งต้นวัน:</span><span class="bold">฿${parseFloat(b.openingFloat || 0).toFixed(2)}</span></div>
+        <div class="row"><span>ยอดขายเงินสด:</span><span class="bold">฿${parseFloat(b.cashSales || 0).toFixed(2)}</span></div>
+        <div class="row"><span>ยอดขายโอน/QR:</span><span>฿${parseFloat(b.transferSales || 0).toFixed(2)}</span></div>
+        <div class="row"><span>รายรับสดอื่นหน้าร้าน (+):</span><span>+฿${parseFloat(b.cashIncome || 0).toFixed(2)}</span></div>
+        <div class="row"><span>รายจ่ายสดหน้าร้าน (-):</span><span>-฿${parseFloat(b.cashExpense || 0).toFixed(2)}</span></div>
+        <div class="line"></div>
+        <div class="row bold" style="font-size:12px;"><span>เงินสดคาดการณ์:</span><span>฿${parseFloat(b.expectedCash || 0).toFixed(2)}</span></div>
+        <div class="row bold" style="font-size:12px;"><span>เงินสดนับจริง:</span><span>฿${parseFloat(b.actualCash || 0).toFixed(2)}</span></div>
+        <div class="row"><span>ผลต่างรวม:</span><span class="bold">${varText}</span></div>
+        <div class="double-line"></div>
+        <div class="row bold" style="font-size:12px;"><span>เงินสดนำส่งเซฟรวม:</span><span>฿${parseFloat(b.totalCashDrop || 0).toFixed(2)}</span></div>
+        <div class="row bold"><span>เงินทอนยกไปวันถัดไป:</span><span>฿${parseFloat(b.totalCarryForward || 0).toFixed(2)}</span></div>
+        ${dList.length > 0 ? `
+          <div class="line"></div>
+          <div class="bold" style="font-size:10px; margin-bottom:2px;">ลิ้นชักในวันทำการ (${dList.length} เครื่อง/กะ):</div>
+          ${dList.map(d => `
+            <div class="row" style="font-size:10px;">
+              <span>${escapeHtml(d.stationId || 'POS')} (${escapeHtml(d.shift || '-')}) ${escapeHtml(d.cashierName || '')}</span>
+              <span>สด ฿${parseFloat(d.cashSales || 0).toFixed(2)} | ส่ง ฿${parseFloat(d.finalDrop || 0).toFixed(2)}</span>
+            </div>
+          `).join('')}
+        ` : ''}
+        ${zReport.note ? `<div class="line"></div><div style="font-size:10px;">หมายเหตุ: ${escapeHtml(zReport.note)}</div>` : ''}
+        <div class="line"></div>
+        <div style="margin-top:20px; display:flex; justify-content:space-between; font-size:10px; text-align:center;">
+          <div>........................<br>ผู้จัดการสาขา / ผู้ปิดวัน</div>
+          <div>........................<br>ผู้ตรวจสอบบัญชี</div>
+        </div>
+      </body>
+      </html>
+    `;
+
+    PrintManager.printHtmlDocument(html);
+  },
+
+  openNewDrawerModal() {
+    const branchId = document.getElementById('financeDayBranchSelect')?.value || 'B01';
+    SalesModule.activeBranchId = branchId;
+    SalesModule.openDrawerModal();
   },
 
   // ================= CSV DOWNLOAD UTILITY =================
@@ -1202,6 +1752,12 @@ const FinanceModule = {
     setVal('st_closingSlipFooterNote', st.closingSlipFooterNote);
     setChecked('st_autoPrintOnClosing', st.autoPrintOnClosing);
 
+    // Card 5: Day & Drawer Policy
+    setVal('st_posDayDrawerPolicy', st.posDayDrawerPolicy || 'WARN');
+    setChecked('st_requireCloseAllDrawersBeforeDayClose', st.requireCloseAllDrawersBeforeDayClose);
+    setChecked('st_lockLedgerAfterDayClose', st.lockLedgerAfterDayClose);
+    setChecked('st_autoOpenDayOnFirstDrawer', st.autoOpenDayOnFirstDrawer);
+
     // Render Category Chips
     this.renderCategoryChips();
   },
@@ -1291,7 +1847,11 @@ const FinanceModule = {
       closingSlipPaperWidth: selectedPaperWidth,
       closingReceiverTitle: getValStr('st_closingReceiverTitle') || 'ผู้จัดการสาขา / ผู้ตรวจรับเงิน',
       closingSlipFooterNote: getValStr('st_closingSlipFooterNote'),
-      autoPrintOnClosing: getChecked('st_autoPrintOnClosing')
+      autoPrintOnClosing: getChecked('st_autoPrintOnClosing'),
+      posDayDrawerPolicy: getValStr('st_posDayDrawerPolicy') || 'WARN',
+      requireCloseAllDrawersBeforeDayClose: getChecked('st_requireCloseAllDrawersBeforeDayClose'),
+      lockLedgerAfterDayClose: getChecked('st_lockLedgerAfterDayClose'),
+      autoOpenDayOnFirstDrawer: getChecked('st_autoOpenDayOnFirstDrawer')
     };
 
     UI.showLoading('กำลังบันทึกการตั้งค่าระบบการเงิน...');
@@ -1326,3 +1886,7 @@ const FinanceModule = {
     }
   }
 };
+
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = FinanceModule;
+}

@@ -323,6 +323,17 @@ function hasPermission(sessionUser, moduleName, actionName) {
   if (p[moduleName] && p[moduleName][actionName] === true) return true;
   // Wildcard check
   if (p[moduleName] && p[moduleName]['all'] === true) return true;
+
+  // Backward compatibility fallback for legacy roles in sheet
+  if (moduleName === 'sales' && actionName === 'drawer') {
+    if (p.sales && p.sales.drawer !== undefined) return p.sales.drawer === true;
+    return !!(p.sales && p.sales.create);
+  }
+  if (moduleName === 'finance' && actionName === 'dayControl') {
+    if (p.finance && p.finance.dayControl !== undefined) return p.finance.dayControl === true;
+    return sessionUser.roleId === 'manager' || sessionUser.roleName === 'Manager';
+  }
+
   return false;
 }
 

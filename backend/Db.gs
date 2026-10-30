@@ -21,7 +21,9 @@ const SHEETS = {
   PRINT_PROFILES: 'PrintProfiles',
   AUDIT_LOG: 'AuditLog',
   FINANCE_TXNS: 'FinanceTxns',
-  CASH_CLOSINGS: 'CashClosings'
+  CASH_CLOSINGS: 'CashClosings',
+  BUSINESS_DAYS: 'BusinessDays',
+  CASH_DRAWERS: 'CashDrawers'
 };
 
 const DEFAULT_SPREADSHEET_ID = '1YEVUjb74z9BmGPalcmOS7mfX9TzvUGx0sXKFfzgiYJc';
@@ -121,6 +123,21 @@ function getSheetHeaders_(sheetName, sheet) {
   const headers = headerData.map(h => String(h).trim());
   _headersCache[sheetName] = headers;
   return headers;
+}
+
+function ensureSheetColumns_(sheetName, requiredColumns) {
+  if (!requiredColumns || requiredColumns.length === 0) return;
+  const sheet = getSheet(sheetName);
+  const headers = getSheetHeaders_(sheetName, sheet);
+  const missing = requiredColumns.filter(col => !headers.includes(col));
+  if (missing.length > 0) {
+    const startCol = headers.length + 1;
+    sheet.getRange(1, startCol, 1, missing.length).setValues([missing]);
+    try {
+      sheet.getRange(1, startCol, 1, missing.length).setFontWeight('bold').setBackground('#2C3E50').setFontColor('#FFFFFF');
+    } catch (e) {}
+    delete _headersCache[sheetName];
+  }
 }
 
 function getTable(sheetName) {

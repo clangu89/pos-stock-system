@@ -214,9 +214,19 @@ const Auth = {
     if (!p) return false;
     if (p[moduleName]) {
       if (p[moduleName]['all'] === true) return true;
+      if (moduleName === 'sales' && actionName === 'drawer' && p.sales.drawer === undefined) {
+        return !!p.sales.create;
+      }
+      if (moduleName === 'finance' && actionName === 'dayControl' && p.finance.dayControl === undefined) {
+        return this.user.roleId === 'manager' || this.user.roleName === 'Manager';
+      }
       return p[moduleName][actionName] === true;
     }
     return false;
+  },
+
+  can(moduleName, actionName = 'view') {
+    return this.hasPerm(moduleName, actionName);
   },
 
   async login(username, password, branchId) {

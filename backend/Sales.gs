@@ -29,11 +29,60 @@ function checkoutSale(payload, sessionUser) {
   const lock = acquireScriptLock_(15000);
   try {
     const branchId = payload.branchId || 'B01';
+    const stationId = payload.stationId || 'POS-01';
     const items = payload.items || [];
     const clientTxnId = String(payload.clientTxnId || '').trim();
 
     if (items.length === 0) {
       throw new Error('ไม่พบรายการสินค้าในบิล');
+    }
+
+    const now = payload.ts || new Date().toISOString();
+    const targetDate = Utilities.formatDate(new Date(now), 'Asia/Bangkok', 'yyyy-MM-dd');
+
+    // Day & Drawer policy resolution
+    let dayId = payload.dayId || '';
+    let drawerId = payload.drawerId || '';
+
+    const finSettings = (typeof getFinanceSettings === 'function' ? getFinanceSettings(branchId).settings : null) || {};
+    const policy = finSettings.posDayDrawerPolicy || 'WARN';
+    const lockAfterClose = finSettings.lockLedgerAfterDayClose !== false;
+
+    // 1) Closed day lock enforcement
+    if (lockAfterClose) {
+      const closedDay = findRow(SHEETS.BUSINESS_DAYS, r => r.branchId === branchId && r.businessDate === targetDate && r.status === 'CLOSED');
+      const openDay = findRow(SHEETS.BUSINESS_DAYS, r => r.branchId === branchId && r.status === 'OPEN');
+      if (closedDay && !openDay) {
+        throw new Error(`ไม่สามารถทำรายการขายได้: วันทำการ [${targetDate}] ของสาขานี้ได้ถูกปิดวันเรียบร้อยแล้ว`);
+      }
+    }
+
+    // 2) Resolve active day
+    let activeDay = null;
+    if (dayId) {
+      activeDay = findRow(SHEETS.BUSINESS_DAYS, r => r.dayId === dayId);
+    } else {
+      activeDay = findRow(SHEETS.BUSINESS_DAYS, r => r.branchId === branchId && r.status === 'OPEN');
+      if (activeDay) dayId = activeDay.dayId;
+    }
+
+    // 3) Resolve active drawer
+    let activeDrawer = null;
+    if (drawerId) {
+      activeDrawer = findRow(SHEETS.CASH_DRAWERS, r => r.drawerId === drawerId);
+    } else {
+      activeDrawer = findRow(SHEETS.CASH_DRAWERS, r => r.branchId === branchId && r.stationId === stationId && r.status === 'OPEN');
+      if (activeDrawer) drawerId = activeDrawer.drawerId;
+    }
+
+    // 4) Enforce STRICT policy if configured
+    if (policy === 'STRICT') {
+      if (!activeDay || activeDay.status !== 'OPEN') {
+        throw new Error('ไม่สามารถคิดเงินได้: ระบบตั้งค่านโยบายเข้มงวด (STRICT) ต้องเปิดวันทำการก่อนเริ่มขาย');
+      }
+      if (!activeDrawer || activeDrawer.status !== 'OPEN') {
+        throw new Error(`ไม่สามารถคิดเงินได้: ลิ้นชักของเครื่องจุดขาย [${stationId}] ยังไม่ได้เปิดกะ`);
+      }
     }
 
     // Read current products for cost prices & item metadata
@@ -162,14 +211,13 @@ function checkoutSale(payload, sessionUser) {
 
     // 5. Generate Receipt Number
     const receiptNo = generateReceiptNo(branch.code || 'MAIN');
-    const now = new Date().toISOString();
 
     // 6. Record Sale
     const saleRecord = {
       receiptNo: receiptNo,
       ts: now,
       branchId: branchId,
-      stationId: payload.stationId || 'POS-01',
+      stationId: stationId,
       userId: sessionUser.userId,
       cashierName: sessionUser.name || sessionUser.username,
       subtotal: subtotal,
@@ -183,9 +231,47 @@ function checkoutSale(payload, sessionUser) {
       voidBy: '',
       voidAt: '',
       voidReason: '',
-      clientTxnId: effectiveClientTxnId
+      clientTxnId: effectiveClientTxnId,
+      dayId: dayId,
+      drawerId: drawerId
     };
     appendRow(SHEETS.SALES, saleRecord);
+
+    // Update real-time drawer stats if open
+    if (activeDrawer && activeDrawer.drawerId) {
+      updateRows(SHEETS.CASH_DRAWERS, r => r.drawerId === activeDrawer.drawerId, r => {
+        const pm = String(payMethod || '').toUpperCase();
+        if (pm === 'CASH') {
+          r.cashSales = round2_((parseFloat(r.cashSales) || 0) + grandTotal);
+          r.expectedCash = round2_((parseFloat(r.expectedCash) || 0) + grandTotal);
+        } else if (pm === 'TRANSFER') {
+          r.transferSales = round2_((parseFloat(r.transferSales) || 0) + grandTotal);
+        } else if (pm === 'QR') {
+          r.qrSales = round2_((parseFloat(r.qrSales) || 0) + grandTotal);
+        } else {
+          r.otherSales = round2_((parseFloat(r.otherSales) || 0) + grandTotal);
+        }
+        r.saleCount = (parseInt(r.saleCount) || 0) + 1;
+        return r;
+      });
+    }
+
+    // Update real-time day stats if open
+    if (activeDay && activeDay.dayId) {
+      updateRows(SHEETS.BUSINESS_DAYS, r => r.dayId === activeDay.dayId, r => {
+        const pm = String(payMethod || '').toUpperCase();
+        if (pm === 'CASH') {
+          r.cashSales = round2_((parseFloat(r.cashSales) || 0) + grandTotal);
+        } else if (pm === 'TRANSFER') {
+          r.transferSales = round2_((parseFloat(r.transferSales) || 0) + grandTotal);
+        } else if (pm === 'QR') {
+          r.qrSales = round2_((parseFloat(r.qrSales) || 0) + grandTotal);
+        } else {
+          r.otherSales = round2_((parseFloat(r.otherSales) || 0) + grandTotal);
+        }
+        return r;
+      });
+    }
 
     // 7. Record Sale Items
     const saleItemRows = preparedItems.map(it => ({

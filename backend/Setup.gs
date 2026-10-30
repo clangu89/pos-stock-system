@@ -13,15 +13,17 @@ const DB_SCHEMAS = {
     [SHEETS.STOCK_BALANCE]: ['branchId', 'sku', 'qty', 'updatedAt'],
     [SHEETS.STOCK_MOVEMENTS]: ['movId', 'ts', 'branchId', 'sku', 'type', 'qtyIn', 'qtyOut', 'balanceAfter', 'refDoc', 'userId', 'note'],
     [SHEETS.STOCK_DOCS]: ['docNo', 'type', 'branchId', 'toBranchId', 'status', 'itemsJson', 'userId', 'note', 'createdAt'],
-    [SHEETS.SALES]: ['receiptNo', 'ts', 'branchId', 'stationId', 'userId', 'cashierName', 'subtotal', 'discount', 'vat', 'total', 'received', 'change', 'payMethod', 'status', 'voidBy', 'voidAt', 'voidReason', 'clientTxnId'],
+    [SHEETS.SALES]: ['receiptNo', 'ts', 'branchId', 'stationId', 'userId', 'cashierName', 'subtotal', 'discount', 'vat', 'total', 'received', 'change', 'payMethod', 'status', 'voidBy', 'voidAt', 'voidReason', 'clientTxnId', 'dayId', 'drawerId'],
     [SHEETS.SALE_ITEMS]: ['receiptNo', 'lineNo', 'sku', 'barcode', 'name', 'qty', 'unitPrice', 'unitCost', 'discount', 'amount'],
     [SHEETS.COUNTERS]: ['key', 'value', 'updatedAt'],
     [SHEETS.CONFIG]: ['key', 'value', 'description', 'updatedAt'],
     [SHEETS.RECEIPT_TEXTS]: ['scopeId', 'branchId', 'receiptTitle', 'storeName', 'subHeader', 'address', 'phone', 'taxId', 'footer', 'showAddress', 'showPhone', 'showTaxId', 'showCashier', 'showBranch', 'updatedBy', 'updatedAt'],
     [SHEETS.PRINT_PROFILES]: ['profileId', 'branchId', 'stationId', 'printerName', 'paperType', 'widthMm', 'heightMm', 'marginMm', 'fontSize', 'copies', 'autoPrint', 'showLogo', 'updatedAt'],
     [SHEETS.AUDIT_LOG]: ['ts', 'userId', 'action', 'target', 'detail'],
-    [SHEETS.FINANCE_TXNS]: ['txnId', 'ts', 'txDate', 'branchId', 'type', 'category', 'amount', 'payMethod', 'refDoc', 'description', 'status', 'userId', 'userName', 'voidBy', 'voidAt', 'voidReason'],
-    [SHEETS.CASH_CLOSINGS]: ['closingId', 'ts', 'closeDate', 'branchId', 'openingFloat', 'cashSales', 'transferSales', 'qrSales', 'cashIncome', 'cashExpense', 'expectedCash', 'actualCash', 'variance', 'cashDrop', 'carryForward', 'denomJson', 'note', 'status', 'userId', 'userName']
+    [SHEETS.FINANCE_TXNS]: ['txnId', 'ts', 'txDate', 'branchId', 'type', 'category', 'amount', 'payMethod', 'refDoc', 'description', 'status', 'userId', 'userName', 'voidBy', 'voidAt', 'voidReason', 'dayId', 'drawerId'],
+    [SHEETS.CASH_CLOSINGS]: ['closingId', 'ts', 'closeDate', 'branchId', 'openingFloat', 'cashSales', 'transferSales', 'qrSales', 'cashIncome', 'cashExpense', 'expectedCash', 'actualCash', 'variance', 'cashDrop', 'carryForward', 'denomJson', 'note', 'status', 'userId', 'userName'],
+    [SHEETS.BUSINESS_DAYS]: ['dayId', 'businessDate', 'branchId', 'status', 'openingFloat', 'openedAt', 'openedBy', 'openedByName', 'openNote', 'drawerCount', 'cashSales', 'transferSales', 'qrSales', 'otherSales', 'cashIncome', 'cashExpense', 'drawerCashIn', 'drawerCashOut', 'drawerMidDrop', 'expectedCash', 'actualCash', 'variance', 'cashDrop', 'carryForward', 'closedAt', 'closedBy', 'closedByName', 'closeNote'],
+    [SHEETS.CASH_DRAWERS]: ['drawerId', 'dayId', 'businessDate', 'branchId', 'stationId', 'shiftLabel', 'status', 'openingFloat', 'openedAt', 'openedBy', 'openedByName', 'openNote', 'cashIn', 'cashOut', 'midShiftDrop', 'movementsJson', 'cashSales', 'transferSales', 'qrSales', 'otherSales', 'saleCount', 'expectedCash', 'actualCash', 'variance', 'cashDrop', 'carryForward', 'denomJson', 'closedAt', 'closedBy', 'closedByName', 'closeNote']
 };
 
 function setupDatabase() {
@@ -47,6 +49,14 @@ function setupDatabase() {
     }
   }
 
+  // Ensure newly added columns on existing sheets
+  ensureSheetColumns_(SHEETS.SALES, ['dayId', 'drawerId']);
+  ensureSheetColumns_(SHEETS.FINANCE_TXNS, ['dayId', 'drawerId']);
+
+  // Set plain text format on key ID columns
+  setTextColumns_(SHEETS.BUSINESS_DAYS, ['dayId', 'businessDate', 'branchId', 'openedBy', 'closedBy']);
+  setTextColumns_(SHEETS.CASH_DRAWERS, ['drawerId', 'dayId', 'businessDate', 'branchId', 'stationId', 'openedBy', 'closedBy']);
+
   // Seed Roles
   const rolesCount = getTable(SHEETS.ROLES).rows.length;
   if (rolesCount === 0) {
@@ -56,10 +66,10 @@ function setupDatabase() {
         roleName: 'ผู้ดูแลระบบ (Admin)',
         description: 'สิทธิ์สูงสุด เข้าถึงได้ทุกระบบ ทุกฟังก์ชัน',
         permissions: JSON.stringify({
-          sales: { view: true, create: true, void: true, discount: true, reprint: true },
+          sales: { view: true, create: true, void: true, discount: true, reprint: true, drawer: true },
           stock: { view: true, create: true, edit: true, delete: true, receive: true, adjust: true, transfer: true },
           reports: { view: true, export: true },
-          finance: { view: true, create: true, close: true, void: true, settings: true },
+          finance: { view: true, create: true, close: true, void: true, settings: true, dayControl: true },
           admin: { view: true, users: true, roles: true, config: true, printer: true, audit: true, backup: true }
         }),
         createdAt: new Date().toISOString()
@@ -69,10 +79,10 @@ function setupDatabase() {
         roleName: 'ผู้จัดการสาขา (Manager)',
         description: 'จัดการการขาย ยกเลิกบิล ปรับสต๊อก และดูรายงาน',
         permissions: JSON.stringify({
-          sales: { view: true, create: true, void: true, discount: true, reprint: true },
+          sales: { view: true, create: true, void: true, discount: true, reprint: true, drawer: true },
           stock: { view: true, create: true, edit: true, delete: false, receive: true, adjust: true, transfer: true },
           reports: { view: true, export: true },
-          finance: { view: true, create: true, close: true, void: true, settings: true },
+          finance: { view: true, create: true, close: true, void: true, settings: true, dayControl: true },
           admin: { view: false }
         }),
         createdAt: new Date().toISOString()
@@ -82,10 +92,10 @@ function setupDatabase() {
         roleName: 'พนักงานขาย (Cashier)',
         description: 'เข้าใช้งานหน้าขาย พิมพ์ใบเสร็จ ดูสต๊อกคงเหลือ',
         permissions: JSON.stringify({
-          sales: { view: true, create: true, void: false, discount: false, reprint: true },
+          sales: { view: true, create: true, void: false, discount: false, reprint: true, drawer: true },
           stock: { view: true, create: false, edit: false, delete: false, receive: false, adjust: false, transfer: false },
           reports: { view: false },
-          finance: { view: false, create: false, close: false, void: false, settings: false },
+          finance: { view: false, create: false, close: false, void: false, settings: false, dayControl: false },
           admin: { view: false }
         }),
         createdAt: new Date().toISOString()
@@ -95,10 +105,10 @@ function setupDatabase() {
         roleName: 'เจ้าหน้าที่สต๊อก (Stock Keeper)',
         description: 'จัดการสินค้า รับเข้า ปรับสต๊อก โอนย้าย ดูรายงานสต๊อก',
         permissions: JSON.stringify({
-          sales: { view: false },
+          sales: { view: false, drawer: false },
           stock: { view: true, create: true, edit: true, delete: false, receive: true, adjust: true, transfer: true },
           reports: { view: true, export: true },
-          finance: { view: false, create: false, close: false, void: false, settings: false },
+          finance: { view: false, create: false, close: false, void: false, settings: false, dayControl: false },
           admin: { view: false }
         }),
         createdAt: new Date().toISOString()
