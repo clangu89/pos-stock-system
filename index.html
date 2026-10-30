@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>ระบบขายสินค้าและสต๊อก (POS & Stock Management)</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <link rel="stylesheet" href="css/app.css?v=20261029-v13">
-  <link rel="stylesheet" href="css/receipt.css?v=20261029-v13">
+  <link rel="stylesheet" href="css/app.css?v=20261030-v14">
+  <link rel="stylesheet" href="css/receipt.css?v=20261030-v14">
 </head>
 <body class="bg-slate-50 text-slate-900 min-h-screen flex flex-col font-sans antialiased select-none">
 
@@ -673,6 +673,7 @@
               </optgroup>
               <optgroup label="⚙️ ระบบและเครือข่าย">
                 <option value="constants">⚙️ ค่าคงที่ระบบ</option>
+                <option value="backup">💾 สำรอง/กู้คืนฐานข้อมูล</option>
                 <option value="api">🌐 API URL</option>
               </optgroup>
             </select>
@@ -745,6 +746,9 @@
               <div class="space-y-1">
                 <button data-tab="constants" class="admin-tab-btn w-full px-3.5 py-2.5 rounded-2xl font-bold text-xs flex items-center gap-2.5 transition text-left cursor-pointer text-slate-600 hover:text-slate-900 hover:bg-slate-100/80">
                   <span class="text-sm">⚙️</span> <span class="flex-1">ค่าคงที่ระบบ</span>
+                </button>
+                <button data-tab="backup" class="admin-tab-btn w-full px-3.5 py-2.5 rounded-2xl font-bold text-xs flex items-center gap-2.5 transition text-left cursor-pointer text-slate-600 hover:text-slate-900 hover:bg-slate-100/80">
+                  <span class="text-sm">💾</span> <span class="flex-1">สำรอง/กู้คืนข้อมูล</span>
                 </button>
                 <button data-tab="api" class="admin-tab-btn w-full px-3.5 py-2.5 rounded-2xl font-bold text-xs flex items-center gap-2.5 transition text-left cursor-pointer text-slate-600 hover:text-slate-900 hover:bg-slate-100/80">
                   <span class="text-sm">🌐</span> <span class="flex-1">API Web App</span>
@@ -1344,6 +1348,269 @@
         </button>
       </div>
 
+
+      <!-- Tab Content 5.4: Database Backup & Restore -->
+      <div id="adminTab_backup" class="admin-tab-content hidden space-y-6">
+        
+        <!-- Section 1: Database Health & Summary Banner -->
+        <div class="bg-white rounded-3xl p-6 border border-slate-200/80 shadow-sm space-y-5">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-slate-100 gap-3">
+            <div>
+              <h3 class="font-bold text-base text-slate-900 flex items-center gap-2">
+                <span>💾</span> <span>ภาพรวมฐานข้อมูล (Database Overview & Status)</span>
+              </h3>
+              <p class="text-xs text-slate-500">ตรวจสอบสถานะความสมบูรณ์ ปริมาณข้อมูล และเวลาสำรอง/กู้คืนข้อมูลล่าสุด</p>
+            </div>
+            <div class="flex items-center gap-2">
+              <button onclick="AdminModule.loadBackupUI()" class="px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs transition flex items-center gap-1.5 cursor-pointer">
+                <span>🔄</span> <span>รีเฟรชสถานะ</span>
+              </button>
+              <a id="backupSpreadsheetLink" href="#" target="_blank" class="px-3.5 py-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 font-bold text-xs transition flex items-center gap-1.5 cursor-pointer">
+                <span>📊</span> <span>เปิด Google Sheets</span>
+              </a>
+            </div>
+          </div>
+
+          <!-- 4 Stat Metric Cards -->
+          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div class="p-4 rounded-2xl bg-slate-50 border border-slate-200">
+              <div class="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">สถานะฐานข้อมูล</div>
+              <div class="flex items-center gap-2">
+                <span class="w-3 h-3 rounded-full bg-emerald-500 animate-pulse"></span>
+                <span class="text-sm font-black text-slate-900">พร้อมใช้งาน (Online)</span>
+              </div>
+              <div class="text-[11px] font-mono text-slate-400 truncate mt-1" id="backupSpreadsheetName">-</div>
+            </div>
+
+            <div class="p-4 rounded-2xl bg-blue-50 border border-blue-200">
+              <div class="text-[11px] font-bold text-blue-700 uppercase tracking-wider mb-1">ปริมาณข้อมูลรวม</div>
+              <div class="text-2xl font-black font-mono text-blue-900" id="backupTotalRowsCount">0 แถว</div>
+              <div class="text-[11px] text-blue-600 mt-1" id="backupTableCountBadge">17 ตารางฐานข้อมูล</div>
+            </div>
+
+            <div class="p-4 rounded-2xl bg-slate-50 border border-slate-200" id="backupLastCard">
+              <div class="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">สำรองข้อมูลล่าสุด (Last Backup)</div>
+              <div class="text-sm font-bold text-slate-800" id="backupLastAtLabel">ยังไม่มีประวัติ</div>
+              <div class="text-[11px] text-slate-500 mt-1" id="backupLastByLabel">-</div>
+            </div>
+
+            <div class="p-4 rounded-2xl bg-slate-50 border border-slate-200">
+              <div class="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">กู้คืนข้อมูลล่าสุด (Last Restore)</div>
+              <div class="text-sm font-bold text-slate-800" id="restoreLastAtLabel">ยังไม่มีประวัติ</div>
+              <div class="text-[11px] text-slate-500 mt-1" id="restoreLastByLabel">-</div>
+            </div>
+          </div>
+
+          <!-- Per-table summary badges / collapsed grid -->
+          <div class="pt-2 border-t border-slate-100">
+            <div class="flex items-center justify-between cursor-pointer py-1" onclick="document.getElementById('backupTablesDetailGrid').classList.toggle('hidden'); document.getElementById('backupToggleIcon').textContent = document.getElementById('backupTablesDetailGrid').classList.contains('hidden') ? '▼' : '▲';">
+              <span class="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                <span>📋</span> <span>ดูจำนวนแถวแยกรายตาราง (17 ชีต)</span>
+              </span>
+              <span id="backupToggleIcon" class="text-xs text-slate-400">▼</span>
+            </div>
+            <div id="backupTablesDetailGrid" class="hidden grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2 pt-3 text-xs">
+              <!-- Rendered dynamically by AdminModule.renderBackupTablesStats() -->
+            </div>
+          </div>
+        </div>
+
+        <!-- Section 2: 2-Column Action Grid (Export Backup vs Import Restore) -->
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+          
+          <!-- Left Column: Export Backup Card (6 cols) -->
+          <div class="lg:col-span-6 bg-white rounded-3xl p-6 border border-slate-200/80 shadow-sm space-y-5">
+            <div class="pb-3 border-b border-slate-100">
+              <h3 class="font-bold text-base text-slate-900 flex items-center gap-2">
+                <span>📥</span> <span>สำรองฐานข้อมูล (Export Backup)</span>
+              </h3>
+              <p class="text-xs text-slate-500">ดาวน์โหลดข้อมูลทั้งหมดหรือบางตารางเก็บไว้เป็นไฟล์ .json มาตรฐานพร้อม Checksum SHA-256</p>
+            </div>
+
+            <!-- Preset Selector -->
+            <div>
+              <label class="block text-xs font-bold text-slate-700 mb-2">เลือกรูปแบบการสำรองข้อมูล:</label>
+              <div class="space-y-2">
+                <label class="flex items-start gap-3 p-3.5 rounded-2xl border-2 border-blue-600 bg-blue-50/50 cursor-pointer transition" id="presetLabel_full">
+                  <input type="radio" name="backupPresetOption" value="full" checked onchange="AdminModule.selectBackupPreset('full')" class="mt-0.5 text-blue-600">
+                  <div class="text-xs">
+                    <div class="font-bold text-slate-900">📦 สำรองข้อมูลทั้งระบบ (Full Database Backup - แนะนำ)</div>
+                    <div class="text-slate-500 mt-0.5">รวมครบทุกตารางหลัก (สินค้า, สต๊อก, ใบเสร็จ, ผู้ใช้, สิทธิ์, ตั้งค่าระบบ)</div>
+                  </div>
+                </label>
+
+                <label class="flex items-start gap-3 p-3.5 rounded-2xl border border-slate-200 hover:bg-slate-50 cursor-pointer transition" id="presetLabel_master">
+                  <input type="radio" name="backupPresetOption" value="master" onchange="AdminModule.selectBackupPreset('master')" class="mt-0.5 text-blue-600">
+                  <div class="text-xs">
+                    <div class="font-bold text-slate-900">⚙️ เฉพาะข้อมูลหลักและการตั้งค่า (Master & Settings Only)</div>
+                    <div class="text-slate-500 mt-0.5">สินค้า, หมวดหมู่, สาขา, ผู้ใช้, สิทธิ์, รูปแบบใบเสร็จ (ไม่รวมประวัติขายและสต๊อกเก่า เหมาะสำหรับตั้งต้นร้านใหม่)</div>
+                  </div>
+                </label>
+
+                <label class="flex items-start gap-3 p-3.5 rounded-2xl border border-slate-200 hover:bg-slate-50 cursor-pointer transition" id="presetLabel_custom">
+                  <input type="radio" name="backupPresetOption" value="custom" onchange="AdminModule.selectBackupPreset('custom')" class="mt-0.5 text-blue-600">
+                  <div class="text-xs">
+                    <div class="font-bold text-slate-900">🎯 กำหนดตารางเอง (Custom Table Selection)</div>
+                    <div class="text-slate-500 mt-0.5">เลือกเจาะจงเฉพาะชีตที่ต้องการสำรองข้อมูล</div>
+                  </div>
+                </label>
+              </div>
+            </div>
+
+            <!-- Custom Tables Checkbox Selector (shown when 'custom' is selected) -->
+            <div id="backupCustomTablesContainer" class="hidden p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
+              <div class="flex items-center justify-between text-xs font-bold text-slate-700 pb-2 border-b border-slate-200">
+                <span>เลือกตารางที่ต้องการสำรอง:</span>
+                <div class="flex gap-2">
+                  <button type="button" onclick="AdminModule.toggleAllBackupTables(true)" class="text-blue-600 hover:underline">เลือกทั้งหมด</button>
+                  <span>•</span>
+                  <button type="button" onclick="AdminModule.toggleAllBackupTables(false)" class="text-slate-500 hover:underline">ล้างทั้งหมด</button>
+                </div>
+              </div>
+              <div id="backupCustomCheckboxesList" class="grid grid-cols-2 gap-2 text-xs">
+                <!-- Checkboxes populated dynamically -->
+              </div>
+            </div>
+
+            <!-- Optional AuditLog checkbox -->
+            <div class="flex items-center gap-2 pt-1 text-xs font-medium text-slate-700">
+              <input type="checkbox" id="backupIncludeAuditLogCheck" checked class="rounded text-blue-600">
+              <label for="backupIncludeAuditLogCheck" class="cursor-pointer">รวมประวัติการใช้งานระบบ (AuditLog)</label>
+            </div>
+
+            <!-- Backup Note Input -->
+            <div>
+              <label class="block text-xs font-bold text-slate-700 mb-1">หมายเหตุบันทึกช่วยจำ (Optional Note)</label>
+              <input type="text" id="backupNoteInput" placeholder="เช่น สำรองก่อนปรับราคาสินค้า, ข้อมูลสิ้นเดือน..."
+                     class="w-full px-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs focus:bg-white focus:border-blue-600">
+            </div>
+
+            <!-- Submit Button -->
+            <button onclick="AdminModule.exportDatabaseBackup()" class="w-full py-3.5 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-xs shadow-md hover:shadow-lg transition flex items-center justify-center gap-2 cursor-pointer">
+              <span>📥</span>
+              <span>สร้างและดาวน์โหลดไฟล์สำรองข้อมูล (.json)</span>
+            </button>
+          </div>
+
+          <!-- Right Column: Import & Restore Card (6 cols) -->
+          <div class="lg:col-span-6 bg-white rounded-3xl p-6 border border-slate-200/80 shadow-sm space-y-5">
+            <div class="pb-3 border-b border-slate-100">
+              <h3 class="font-bold text-base text-slate-900 flex items-center gap-2">
+                <span>📤</span> <span>กู้คืนฐานข้อมูล (Restore Database)</span>
+              </h3>
+              <p class="text-xs text-slate-500">เลือกไฟล์ .json เพื่อตรวจสอบโครงสร้าง เปรียบเทียบข้อมูลเดิม และเขียนทับลงฐานข้อมูล</p>
+            </div>
+
+            <!-- Drag & Drop Zone -->
+            <div id="restoreDropZone"
+                 ondragover="AdminModule.handleRestoreDragOver(event)"
+                 ondragleave="AdminModule.handleRestoreDragLeave(event)"
+                 ondrop="AdminModule.handleRestoreDrop(event)"
+                 onclick="document.getElementById('restoreFileInput').click()"
+                 class="border-2 border-dashed border-slate-300 hover:border-blue-500 rounded-3xl p-6 text-center bg-slate-50/50 hover:bg-blue-50/30 transition cursor-pointer space-y-2">
+              <div class="text-3xl">📁</div>
+              <div class="text-xs font-bold text-slate-800">คลิกเพื่อเลือกไฟล์ Backup หรือลากไฟล์ .json มาวางที่นี่</div>
+              <div class="text-[11px] text-slate-400">รองรับไฟล์รูปแบบ .json จากระบบ POS & Stock Management</div>
+              <input type="file" id="restoreFileInput" accept=".json,application/json" onchange="AdminModule.handleRestoreFileSelect(event)" class="hidden">
+            </div>
+
+            <!-- File Inspector & Diff Comparison (Hidden until file selected) -->
+            <div id="restoreFileInspectorContainer" class="hidden space-y-4">
+              <!-- File Meta Header -->
+              <div class="p-4 rounded-2xl bg-slate-50 border border-slate-200 text-xs space-y-2">
+                <div class="flex items-center justify-between">
+                  <div class="font-black text-slate-900 flex items-center gap-1.5 truncate max-w-[220px]">
+                    <span>📄</span> <span id="restoreFileNameLabel">backup.json</span>
+                  </div>
+                  <button type="button" onclick="AdminModule.clearSelectedRestoreFile()" class="text-rose-600 hover:text-rose-800 font-bold text-[11px]">✕ เปลี่ยนไฟล์</button>
+                </div>
+                <div class="grid grid-cols-2 gap-2 text-slate-600 pt-1 border-t border-slate-200">
+                  <div>สำรองเมื่อ: <span class="font-bold text-slate-900" id="restoreFileExportedAt">-</span></div>
+                  <div>โดย: <span class="font-bold text-slate-900" id="restoreFileExportedBy">-</span></div>
+                  <div class="col-span-2">หมายเหตุ: <span class="font-medium text-slate-700 italic" id="restoreFileNote">-</span></div>
+                </div>
+                <div class="pt-2 border-t border-slate-200 flex items-center justify-between">
+                  <span class="text-[11px] text-slate-500">สถานะ Checksum:</span>
+                  <span id="restoreChecksumStatusBadge" class="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-800">✅ สมบูรณ์</span>
+                </div>
+              </div>
+
+              <!-- Diff Table Container -->
+              <div class="space-y-2">
+                <div class="flex items-center justify-between text-xs font-bold text-slate-700">
+                  <span>ตารางเปรียบเทียบข้อมูล (Diff Preview):</span>
+                  <div class="flex gap-2 text-[11px]">
+                    <button type="button" onclick="AdminModule.toggleAllRestoreTables(true)" class="text-blue-600 hover:underline">เลือกทุกตาราง</button>
+                    <span>•</span>
+                    <button type="button" onclick="AdminModule.toggleAllRestoreTables(false)" class="text-slate-500 hover:underline">ล้าง</button>
+                  </div>
+                </div>
+                <div class="max-h-56 overflow-y-auto rounded-2xl border border-slate-200">
+                  <table class="w-full text-left text-xs">
+                    <thead class="bg-slate-100 sticky top-0 font-bold text-slate-600">
+                      <tr>
+                        <th class="py-2 px-3 w-8 text-center">เลือก</th>
+                        <th class="py-2 px-2">ชื่อตาราง</th>
+                        <th class="py-2 px-2 text-right">ปัจจุบัน</th>
+                        <th class="py-2 px-2 text-right text-blue-700">ในไฟล์</th>
+                        <th class="py-2 px-3 text-center">ส่วนต่าง</th>
+                      </tr>
+                    </thead>
+                    <tbody id="restoreDiffTableBody" class="divide-y divide-slate-100 font-medium"></tbody>
+                  </table>
+                </div>
+              </div>
+
+              <!-- Safety Pre-Restore Checkbox -->
+              <div class="p-3.5 rounded-2xl bg-amber-50 border border-amber-200 text-xs space-y-1">
+                <label class="flex items-center gap-2 font-bold text-amber-900 cursor-pointer">
+                  <input type="checkbox" id="restoreSafetyBackupCheck" checked class="rounded text-amber-600">
+                  <span>🛡️ ดาวน์โหลดไฟล์สำรองข้อมูลปัจจุบันเก็บไว้ในเครื่องอัตโนมัติก่อนเริ่มกู้คืน</span>
+                </label>
+                <div class="text-[11px] text-amber-700 pl-5 leading-relaxed">
+                  แนะนำให้เปิดไว้เสมอ เพื่อให้มีไฟล์ฉุกเฉินนำกลับมาใช้ได้ทันทีหากต้องการยกเลิก
+                </div>
+              </div>
+
+              <!-- Action Button -->
+              <button onclick="AdminModule.openRestoreConfirmModal()" class="w-full py-3.5 rounded-2xl bg-rose-600 hover:bg-rose-700 text-white font-extrabold text-xs shadow-md transition flex items-center justify-center gap-2 cursor-pointer">
+                <span>⚠️</span>
+                <span>ดำเนินการกู้คืนข้อมูลที่เลือก (Restore Database)...</span>
+              </button>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Section 3: Backup & Restore History Table -->
+        <div class="bg-white rounded-3xl p-6 border border-slate-200/80 shadow-sm space-y-4">
+          <div class="flex items-center justify-between pb-3 border-b border-slate-100">
+            <div>
+              <h3 class="font-bold text-base text-slate-900 flex items-center gap-2">
+                <span>📋</span> <span>ประวัติการสำรองและกู้คืนข้อมูล (Backup & Restore History)</span>
+              </h3>
+              <p class="text-xs text-slate-500">บันทึกประวัติย้อนหลังจาก Audit Log เฉพาะรายการที่เกี่ยวข้องกับฐานข้อมูล</p>
+            </div>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full text-left text-xs">
+              <thead>
+                <tr class="border-b border-slate-200 text-slate-400 uppercase font-bold text-[11px]">
+                  <th class="py-2.5 px-3">วัน-เวลา</th>
+                  <th class="py-2.5 px-3">ประเภทรายการ</th>
+                  <th class="py-2.5 px-3">ผู้ดำเนินการ</th>
+                  <th class="py-2.5 px-3">รายละเอียด (ตาราง/แถว/หมายเหตุ)</th>
+                </tr>
+              </thead>
+              <tbody id="backupHistoryTableBody" class="divide-y divide-slate-100 font-medium">
+                <tr><td colspan="4" class="text-center py-6 text-slate-400">ยังไม่มีบันทึกประวัติการสำรองข้อมูล</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
+
         </div><!-- End Right Content Area (lg:col-span-9) -->
       </div><!-- End Main Admin 2-Column Grid -->
 
@@ -1858,22 +2125,59 @@
   </div>
 
   <!-- Hidden iframe for silent printing -->
+  
+  <!-- Modal: Restore Database Final Confirmation -->
+  <div id="restoreConfirmModal" class="hidden fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-4">
+      <div class="flex items-center justify-between pb-3 border-b border-slate-100">
+        <h3 class="font-black text-lg text-rose-700 flex items-center gap-2">
+          <span>⚠️</span> <span>ยืนยันการกู้คืนฐานข้อมูล</span>
+        </h3>
+        <button onclick="UI.closeModal('restoreConfirmModal')" class="text-slate-400 hover:text-slate-700 text-lg">✕</button>
+      </div>
+
+      <div class="p-4 rounded-2xl bg-rose-50 border border-rose-200 text-rose-900 text-xs leading-relaxed space-y-2">
+        <div class="font-bold text-sm">คำเตือน: ข้อมูลเดิมในตารางที่เลือกจะถูกเขียนทับทันที!</div>
+        <div class="text-[11px] text-rose-700" id="restoreConfirmSummaryText">
+          กำลังเตรียมกู้คืนข้อมูลจำนวน 0 ตาราง รวม 0 แถว
+        </div>
+      </div>
+
+      <div>
+        <label class="block text-xs font-bold text-slate-700 mb-1.5">
+          พิมพ์คำว่า <span class="font-mono text-rose-600 bg-rose-50 px-1.5 py-0.5 rounded border border-rose-200 select-all">RESTORE</span> เพื่อปลดล็อกปุ่มยืนยัน:
+        </label>
+        <input type="text" id="restoreConfirmPhraseInput" oninput="AdminModule.onRestoreConfirmInput(this.value)" placeholder="พิมพ์ RESTORE ตัวพิมพ์ใหญ่"
+               class="w-full px-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-sm font-mono font-bold uppercase focus:bg-white focus:border-rose-600">
+      </div>
+
+      <div class="grid grid-cols-2 gap-3 pt-2">
+        <button onclick="UI.closeModal('restoreConfirmModal')" class="py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs transition cursor-pointer">
+          ยกเลิก
+        </button>
+        <button id="restoreConfirmSubmitBtn" disabled onclick="AdminModule.executeRestoreDatabase()" class="py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 disabled:bg-slate-200 disabled:text-slate-400 disabled:cursor-not-allowed text-white font-extrabold text-xs shadow-md transition cursor-pointer">
+          ยืนยันการกู้คืนข้อมูล
+        </button>
+      </div>
+    </div>
+  </div>
+
   <iframe id="receiptPrintIframe" class="hidden"></iframe>
 
   <!-- ================= SCRIPTS ================= -->
-  <script src="config.js?v=20261029-v13"></script>
-  <script src="js/numberToThai.js?v=20261029-v13"></script>
-  <script src="js/sound.js?v=20261029-v13"></script>
-  <script src="js/print.js?v=20261029-v13"></script>
-  <script src="js/ui.js?v=20261029-v13"></script>
-  <script src="js/api.js?v=20261029-v13"></script>
-  <script src="js/auth.js?v=20261029-v13"></script>
-  <script src="js/modules/launcher.js?v=20261029-v13"></script>
-  <script src="js/modules/sales.js?v=20261029-v13"></script>
-  <script src="js/modules/stock.js?v=20261029-v13"></script>
-  <script src="js/modules/reports.js?v=20261029-v13"></script>
-  <script src="js/modules/admin.js?v=20261029-v13"></script>
-  <script src="js/router.js?v=20261029-v13"></script>
+  <script src="config.js?v=20261030-v14"></script>
+  <script src="js/numberToThai.js?v=20261030-v14"></script>
+  <script src="js/sound.js?v=20261030-v14"></script>
+  <script src="js/print.js?v=20261030-v14"></script>
+  <script src="js/ui.js?v=20261030-v14"></script>
+  <script src="js/api.js?v=20261030-v14"></script>
+  <script src="js/auth.js?v=20261030-v14"></script>
+  <script src="js/modules/launcher.js?v=20261030-v14"></script>
+  <script src="js/modules/sales.js?v=20261030-v14"></script>
+  <script src="js/modules/stock.js?v=20261030-v14"></script>
+  <script src="js/modules/reports.js?v=20261030-v14"></script>
+  <script src="js/modules/admin.js?v=20261030-v14"></script>
+  <script src="js/router.js?v=20261030-v14"></script>
 
   <script>
     // System Startup
