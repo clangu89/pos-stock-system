@@ -386,6 +386,18 @@ function createFinanceTxn(data = {}, sessionUser = {}) {
   const refDoc = String(data.refDoc || '').trim();
   const description = String(data.description || '').trim();
 
+  // Validate against Finance Settings
+  const settingsRes = getFinanceSettings(branchId);
+  const st = settingsRes.effective || DEFAULT_FINANCE_SETTINGS_;
+
+  if (type === 'EXPENSE' && payMethod === 'CASH' && st.maxCashExpensePerTxn > 0 && amount > st.maxCashExpensePerTxn) {
+    throw new Error(`ยอดเบิกจ่ายเงินสด (฿${amount.toFixed(2)}) เกินวงเงินสูงสุดที่กำหนดไว้ (฿${st.maxCashExpensePerTxn.toFixed(2)} ต่อรายการ)`);
+  }
+
+  if (type === 'EXPENSE' && st.requireRefDocAboveAmount > 0 && amount >= st.requireRefDocAboveAmount && !refDoc) {
+    throw new Error(`รายการจ่ายตั้งแต่ ฿${st.requireRefDocAboveAmount.toFixed(2)} ขึ้นไป ต้องระบุเลขที่เอกสาร/บิลอ้างอิง`);
+  }
+
   const lock = LockService.getScriptLock();
   lock.waitLock(15000);
   try {
@@ -556,18 +568,26 @@ function getCashClosingPreview(closeDateStr, branchId = '') {
     }
   });
 
-  // 3. Find suggested opening float from previous closing of this branch
+  // 3. Find suggested opening float based on settings and previous closing of this branch
   const closingsTable = getTable(SHEETS.CASH_CLOSINGS);
   const branchClosings = closingsTable.rows
     .filter(c => c.branchId === targetBranch && c.status !== 'VOID')
     .sort((a, b) => new Date(b.ts || 0).getTime() - new Date(a.ts || 0).getTime());
 
-  let suggestedFloat = parseFloat(getConfig('DEFAULT_OPENING_FLOAT', '1000')) || 1000;
-  if (branchClosings.length > 0) {
-    const prevCarry = parseFloat(branchClosings[0].carryForward);
-    if (!isNaN(prevCarry) && prevCarry >= 0) {
-      suggestedFloat = prevCarry;
+  const settingsRes = getFinanceSettings(targetBranch);
+  const st = settingsRes.effective || DEFAULT_FINANCE_SETTINGS_;
+
+  let suggestedFloat = st.openingFloatAmount !== undefined ? st.openingFloatAmount : 1000;
+  if (st.openingFloatMode === 'AUTO_CARRY') {
+    if (branchClosings.length > 0) {
+      const prevCarry = parseFloat(branchClosings[0].carryForward);
+      if (!isNaN(prevCarry) && prevCarry >= 0) {
+        suggestedFloat = prevCarry;
+      }
     }
+  } else {
+    // FIXED_FLOAT mode uses configured amount every day
+    suggestedFloat = st.openingFloatAmount !== undefined ? st.openingFloatAmount : 1000;
   }
 
   const existingClosings = branchClosings.filter(c => c.closeDate === closeDate);
@@ -589,7 +609,8 @@ function getCashClosingPreview(closeDateStr, branchId = '') {
     paidBillsCount: paidBillsCount,
     voidBillsCount: voidBillsCount,
     existingClosingsCount: existingClosings.length,
-    existingClosings: existingClosings
+    existingClosings: existingClosings,
+    settings: st
   };
 }
 
@@ -605,7 +626,17 @@ function saveCashClosing(data = {}, sessionUser = {}) {
   const actualCash = Math.max(0, parseFloat(data.actualCash) || 0);
   const cashDrop = Math.max(0, parseFloat(data.cashDrop) || 0);
   const note = String(data.note || '').trim();
-  const denomJson = typeof data.denomCounts === 'object' ? JSON.stringify(data.denomCounts) : String(data.denomJson || '{}');
+  const denomJson = typeof data.denomBreakdown === 'object' ? JSON.stringify(data.denomBreakdown) : (typeof data.denomCounts === 'object' ? JSON.stringify(data.denomCounts) : String(data.denomJson || '{}'));
+
+  const settingsRes = getFinanceSettings(branchId);
+  const st = settingsRes.effective || DEFAULT_FINANCE_SETTINGS_;
+
+  if (st.duplicateClosingPolicy === 'BLOCK') {
+    const existing = findRows(SHEETS.CASH_CLOSINGS, c => c.branchId === branchId && c.closeDate === closeDate && c.status !== 'VOID');
+    if (existing.length > 0) {
+      throw new Error(`สาขานี้ได้ทำการปิดยอดวันที่ ${closeDate} ไปแล้ว (นโยบายระบบไม่อนุญาตให้ปิดยอดซ้ำ)`);
+    }
+  }
 
   const lock = LockService.getScriptLock();
   lock.waitLock(15000);
@@ -615,6 +646,13 @@ function saveCashClosing(data = {}, sessionUser = {}) {
     const expectedCash = round2_(openingFloat + preview.cashSales + preview.cashIncome - preview.cashExpense);
     const variance = round2_(actualCash - expectedCash);
     const carryForward = round2_(Math.max(0, actualCash - cashDrop));
+
+    if (st.requireNoteOnVariance) {
+      const varianceVal = Math.abs(variance);
+      if (varianceVal > (st.varianceAlertThreshold || 0) && !note) {
+        throw new Error(`ยอดเงินสดที่นับได้มีผลต่าง ${variance > 0 ? '+' : ''}${variance.toFixed(2)} บาท กรุณาระบุหมายเหตุชี้แจง`);
+      }
+    }
 
     const yyyymmdd = closeDate.replace(/-/g, '');
     const counterKey = `CLS_${branchId}_${yyyymmdd}`;
@@ -707,4 +745,172 @@ function getCashClosingsList(options = {}) {
     ok: true,
     closings: matched.slice(0, limit)
   };
+}
+
+/**
+ * ค่าเริ่มต้นมาตรฐานสำหรับการตั้งค่าระบบการเงิน (Finance Settings Default)
+ */
+const DEFAULT_FINANCE_SETTINGS_ = {
+  // 1. เงินสดยกมา & เงินทอนลิ้นชักแคชเชียร์
+  openingFloatAmount: 1000,
+  openingFloatMode: 'AUTO_CARRY', // 'AUTO_CARRY' (ดึงยอดยกไปวันก่อน) หรือ 'FIXED_FLOAT' (ยอดคงที่ทุกวัน)
+  allowEditOpeningFloat: true,     // อนุญาตให้แก้ไขยอดเงินทอนยกมาหน้างานได้
+  
+  // 2. นโยบายปิดยอด & เงินสดนำส่ง
+  targetCarryForward: 1000,        // เงินทอนเป้าหมายที่ต้องการคงไว้ในลิ้นชัก
+  autoCalcCashDrop: true,          // คำนวณ Cash Drop อัตโนมัติ (ยอดนับจริง - targetCarryForward)
+  varianceAlertThreshold: 0,       // ผลต่างที่เริ่มเตือน (0 = ทุกผลต่าง)
+  requireNoteOnVariance: false,    // บังคับระบุหมายเหตุเมื่อเงินขาด/เกิน
+  duplicateClosingPolicy: 'WARN',  // 'WARN' (เตือนแต่ให้บันทึกซ้ำได้) หรือ 'BLOCK' (ล็อกห้ามบันทึกซ้ำวันเดียวกัน)
+  
+  // 3. หมวดหมู่รายรับ-รายจ่ายหน้าร้าน & วงเงินสดย่อย
+  expenseCategories: [
+    'ของใช้ในร้าน',
+    'เดินทาง/ค่าน้ำมัน',
+    'สาธารณูปโภค (น้ำ/ไฟ/เน็ต)',
+    'วัสดุอุปกรณ์สำนักงาน',
+    'ซ่อมแซมบำรุงรักษา',
+    'ค่าอาหาร/เครื่องดื่มรับรอง',
+    'ค่าจ้างชั่วคราว',
+    'ค่าใช้จ่ายเบ็ดเตล็ด'
+  ],
+  incomeCategories: [
+    'รับค่าบริการ',
+    'ขายเศษวัสดุ/กล่อง/ลัง',
+    'รับเงินรางวัล/ส่งเสริมการขาย',
+    'รายรับเบ็ดเตล็ด'
+  ],
+  maxCashExpensePerTxn: 0,         // วงเงินเบิกจ่ายเงินสดสูงสุดต่อครั้ง (0 = ไม่จำกัด)
+  requireRefDocAboveAmount: 0,     // บังคับกรอกเอกสารอ้างอิงเมื่อยอดเกินนี้ (0 = ไม่บังคับ)
+  defaultTxnPayMethod: 'CASH',     // CASH หรือ TRANSFER
+  defaultDateRangePreset: 'THIS_MONTH', // TODAY, LAST_7_DAYS, THIS_MONTH
+  
+  // 4. รูปแบบใบสรุปปิดยอดส่งเงินสด (Thermal Closing Slip)
+  closingSlipPaperWidth: '58mm',   // '58mm' หรือ '80mm'
+  autoPrintClosingSlip: false,     // พิมพ์อัตโนมัติหลังกดบันทึกปิดยอด
+  closingReceiverTitle: 'ผู้จัดการ / ผู้ตรวจรับเงิน',
+  closingSlipFooterNote: 'กรุณาเก็บเอกสารนี้ไว้เป็นหลักฐานการส่งเงินประจำวัน'
+};
+
+/**
+ * ดึงการตั้งค่าระบบการเงิน (ทั้งแบบค่ากลาง และแบบเจาะจงรายสาขา)
+ */
+function getFinanceSettings(branchId = '') {
+  ensureFinanceSheets_();
+  const rawGlobal = getConfig('FINANCE_SETTINGS_GLOBAL', '');
+  let globalObj = {};
+  try {
+    globalObj = rawGlobal ? JSON.parse(rawGlobal) : {};
+  } catch (e) {
+    globalObj = {};
+  }
+  
+  // Fallback to DEFAULT_OPENING_FLOAT if set in Config
+  if (globalObj.openingFloatAmount === undefined) {
+    const legacyFloat = parseFloat(getConfig('DEFAULT_OPENING_FLOAT', '1000'));
+    if (!isNaN(legacyFloat)) globalObj.openingFloatAmount = legacyFloat;
+  }
+
+  const mergedGlobal = Object.assign({}, DEFAULT_FINANCE_SETTINGS_, globalObj);
+
+  let branchObj = null;
+  if (branchId) {
+    const rawBranch = getConfig(`FINANCE_SETTINGS_BRANCH_${branchId}`, '');
+    if (rawBranch) {
+      try {
+        branchObj = JSON.parse(rawBranch);
+      } catch (e) {
+        branchObj = null;
+      }
+    }
+  }
+
+  const effective = Object.assign({}, mergedGlobal, branchObj || {});
+  const isBranchOverride = branchObj !== null;
+  const settingsObj = Object.assign({}, effective, {
+    isBranchOverride: isBranchOverride,
+    defaultPayMethod: effective.defaultTxnPayMethod || 'CASH',
+    defaultDatePreset: effective.defaultDateRangePreset || 'THIS_MONTH',
+    autoPrintOnClosing: !!effective.autoPrintClosingSlip
+  });
+
+  return {
+    ok: true,
+    branchId: branchId,
+    hasBranchOverride: isBranchOverride,
+    global: mergedGlobal,
+    branch: branchObj,
+    effective: effective,
+    settings: settingsObj
+  };
+}
+
+/**
+ * บันทึกการตั้งค่าระบบการเงิน (บันทึกค่ากลาง หรือบันทึกเฉพาะสาขา)
+ */
+function saveFinanceSettings(payload = {}, sessionUser = {}) {
+  ensureFinanceSheets_();
+  const branchId = String(payload.branchId || '').trim();
+  const settings = (payload.settings && typeof payload.settings === 'object') ? payload.settings : payload;
+
+  const cleanSettings = {};
+  if (settings.openingFloatAmount !== undefined) cleanSettings.openingFloatAmount = Math.max(0, parseFloat(settings.openingFloatAmount) || 0);
+  if (settings.openingFloatMode) cleanSettings.openingFloatMode = settings.openingFloatMode === 'FIXED_FLOAT' ? 'FIXED_FLOAT' : 'AUTO_CARRY';
+  if (settings.allowEditOpeningFloat !== undefined) cleanSettings.allowEditOpeningFloat = !!settings.allowEditOpeningFloat;
+  if (settings.targetCarryForward !== undefined) cleanSettings.targetCarryForward = Math.max(0, parseFloat(settings.targetCarryForward) || 0);
+  if (settings.autoCalcCashDrop !== undefined) cleanSettings.autoCalcCashDrop = !!settings.autoCalcCashDrop;
+  if (settings.varianceAlertThreshold !== undefined) cleanSettings.varianceAlertThreshold = Math.max(0, parseFloat(settings.varianceAlertThreshold) || 0);
+  if (settings.requireNoteOnVariance !== undefined) cleanSettings.requireNoteOnVariance = !!settings.requireNoteOnVariance;
+  if (settings.duplicateClosingPolicy) cleanSettings.duplicateClosingPolicy = settings.duplicateClosingPolicy === 'BLOCK' ? 'BLOCK' : 'WARN';
+  
+  if (Array.isArray(settings.expenseCategories)) {
+    cleanSettings.expenseCategories = settings.expenseCategories.map(c => String(c).trim()).filter(Boolean);
+  }
+  if (Array.isArray(settings.incomeCategories)) {
+    cleanSettings.incomeCategories = settings.incomeCategories.map(c => String(c).trim()).filter(Boolean);
+  }
+  if (settings.maxCashExpensePerTxn !== undefined) cleanSettings.maxCashExpensePerTxn = Math.max(0, parseFloat(settings.maxCashExpensePerTxn) || 0);
+  if (settings.requireRefDocAboveAmount !== undefined) cleanSettings.requireRefDocAboveAmount = Math.max(0, parseFloat(settings.requireRefDocAboveAmount) || 0);
+  
+  const payMethod = settings.defaultPayMethod || settings.defaultTxnPayMethod;
+  if (payMethod) cleanSettings.defaultTxnPayMethod = payMethod === 'TRANSFER' ? 'TRANSFER' : 'CASH';
+
+  const datePreset = settings.defaultDatePreset || settings.defaultDateRangePreset;
+  if (datePreset) cleanSettings.defaultDateRangePreset = ['TODAY', 'THIS_WEEK', 'LAST_7_DAYS', 'THIS_MONTH'].includes(datePreset) ? datePreset : 'THIS_MONTH';
+
+  if (settings.closingSlipPaperWidth) cleanSettings.closingSlipPaperWidth = settings.closingSlipPaperWidth === '80mm' ? '80mm' : '58mm';
+  
+  const autoPrint = settings.autoPrintOnClosing !== undefined ? settings.autoPrintOnClosing : settings.autoPrintClosingSlip;
+  if (autoPrint !== undefined) cleanSettings.autoPrintClosingSlip = !!autoPrint;
+
+  if (settings.closingReceiverTitle !== undefined) cleanSettings.closingReceiverTitle = String(settings.closingReceiverTitle).trim();
+  if (settings.closingSlipFooterNote !== undefined) cleanSettings.closingSlipFooterNote = String(settings.closingSlipFooterNote).trim();
+
+  const key = branchId ? `FINANCE_SETTINGS_BRANCH_${branchId}` : 'FINANCE_SETTINGS_GLOBAL';
+  const desc = branchId ? `การตั้งค่าระบบการเงิน สาขา ${branchId}` : 'การตั้งค่าระบบการเงิน ค่ากลางทุกสาขา';
+  
+  setConfig(key, JSON.stringify(cleanSettings), desc);
+  if (!branchId && cleanSettings.openingFloatAmount !== undefined) {
+    setConfig('DEFAULT_OPENING_FLOAT', String(cleanSettings.openingFloatAmount), 'ยอดเงินทอนตั้งต้นประจำวัน (บาท)');
+  }
+
+  logAudit(sessionUser.userId, 'SAVE_FINANCE_SETTINGS', 'Config', { branchId: branchId || 'GLOBAL', settings: cleanSettings });
+
+  return {
+    ok: true,
+    message: branchId ? `บันทึกการตั้งค่าการเงินสำหรับสาขา [${branchId}] สำเร็จ` : 'บันทึกการตั้งค่าการเงินค่ากลางสำเร็จ',
+    settings: cleanSettings
+  };
+}
+
+/**
+ * ลบการตั้งค่าเฉพาะสาขา เพื่อให้กลับไปใช้ค่ากลาง
+ */
+function resetBranchFinanceSettings(branchId, sessionUser = {}) {
+  if (!branchId) throw new Error('กรุณาระบุรหัสสาขาที่ต้องการรีเซ็ต');
+  const key = `FINANCE_SETTINGS_BRANCH_${branchId}`;
+  deleteRows(SHEETS.CONFIG, r => r.key === key);
+  _configCache = null;
+  logAudit(sessionUser.userId, 'RESET_BRANCH_FINANCE_SETTINGS', 'Config', { branchId });
+  return { ok: true, message: `รีเซ็ตการตั้งค่าสาขา [${branchId}] กลับไปใช้ค่ากลางเรียบร้อยแล้ว` };
 }

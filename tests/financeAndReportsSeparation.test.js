@@ -304,13 +304,18 @@ test('Finance & Reports Separation: Frontend UI Integrity & 5 Launcher Cards', (
   assert.ok(indexHtml.includes('id="financeTab_summary"'));
   assert.ok(indexHtml.includes('id="financeTab_ledger"'));
   assert.ok(indexHtml.includes('id="financeTab_closing"'));
+  assert.ok(indexHtml.includes('id="financeTab_settings"'));
+  assert.ok(indexHtml.includes('id="financeTabBtn_settings"'));
+  assert.ok(indexHtml.includes('id="financeModalCategoryChips"'));
+  assert.ok(indexHtml.includes('id="closingDuplicateWarningBanner"'));
+  assert.ok(indexHtml.includes('id="closeEditFloatBtn"'));
 
   // 5. Modals exist
   assert.ok(indexHtml.includes('id="financeTxnModal"'));
   assert.ok(indexHtml.includes('id="cashClosingDetailModal"'));
 
   // 6. Scripts import finance.js and router has finance route
-  assert.ok(indexHtml.includes('src="js/modules/finance.js?v=20261030-v18"'));
+  assert.ok(indexHtml.includes('src="js/modules/finance.js?v=20261030-v19"'));
   const routerJs = fs.readFileSync(path.join(frontendDir, 'js', 'router.js'), 'utf8');
   assert.ok(routerJs.includes("hash === 'finance' && !Auth.hasPerm('finance', 'view')"));
   assert.ok(routerJs.includes("FinanceModule.activate()"));
@@ -451,4 +456,160 @@ test('Finance & Reports Separation: POS Checkout of 46.00 THB reflects accuratel
 
   // Verify expenseByCategory is array
   assert.ok(Array.isArray(data.expenseByCategory), 'expenseByCategory must be an array');
+});
+
+test('Finance Settings: Global & Branch Override CRUD, Float Policies & Operational Limits', () => {
+  const { sandbox } = createGasMockContext();
+  sandbox.setupDatabase();
+  const adminLogin = sandbox.loginUser('admin', 'Admin1234!');
+  const cashierLogin = sandbox.loginUser('cashier', 'Cashier1234!');
+
+  // 1. Check default settings via finance:getSettings
+  const defRes = sandbox.routeAction('finance:getSettings', adminLogin.token, {}, {});
+  assert.strictEqual(defRes.ok, true);
+  const defSt = defRes.settings;
+  assert.strictEqual(defSt.openingFloatAmount, 1000);
+  assert.strictEqual(defSt.openingFloatMode, 'AUTO_CARRY');
+  assert.strictEqual(defSt.allowEditOpeningFloat, true);
+  assert.strictEqual(defSt.duplicateClosingPolicy, 'WARN');
+  assert.strictEqual(defSt.isBranchOverride, false);
+
+  // 2. Permission check: cashier should NOT be allowed to save settings
+  assert.throws(
+    () => sandbox.routeAction('finance:saveSettings', cashierLogin.token, {
+      openingFloatAmount: 2000
+    }, {}),
+    /FORBIDDEN/
+  );
+
+  // 3. Save Global Settings
+  const saveGlobalRes = sandbox.routeAction('finance:saveSettings', adminLogin.token, {
+    openingFloatAmount: 1500,
+    openingFloatMode: 'FIXED_FLOAT',
+    allowEditOpeningFloat: true,
+    targetCarryForward: 1200,
+    varianceAlertThreshold: 50,
+    duplicateClosingPolicy: 'BLOCK',
+    autoCalcCashDrop: true,
+    requireNoteOnVariance: true,
+    maxCashExpensePerTxn: 2500,
+    requireRefDocAboveAmount: 400,
+    defaultPayMethod: 'CASH',
+    defaultDatePreset: 'TODAY',
+    closingSlipPaperWidth: '80mm',
+    closingReceiverTitle: 'ผู้จัดการสาขา',
+    closingSlipFooterNote: 'ตรวจนับเรียบร้อย',
+    autoPrintOnClosing: true
+  }, {});
+  assert.strictEqual(saveGlobalRes.ok, true);
+
+  // Read back global settings
+  const readGlobal = sandbox.routeAction('finance:getSettings', adminLogin.token, {}, {});
+  assert.strictEqual(readGlobal.settings.openingFloatAmount, 1500);
+  assert.strictEqual(readGlobal.settings.openingFloatMode, 'FIXED_FLOAT');
+  assert.strictEqual(readGlobal.settings.closingSlipPaperWidth, '80mm');
+  assert.strictEqual(readGlobal.settings.isBranchOverride, false);
+
+  // 4. Save Branch Override for B02
+  const saveB02Res = sandbox.routeAction('finance:saveSettings', adminLogin.token, {
+    branchId: 'B02',
+    openingFloatAmount: 3000,
+    openingFloatMode: 'AUTO_CARRY',
+    closingSlipPaperWidth: '58mm'
+  }, {});
+  assert.strictEqual(saveB02Res.ok, true);
+
+  // Read B02 settings: should have openingFloatAmount = 3000 and isBranchOverride = true
+  const readB02 = sandbox.routeAction('finance:getSettings', adminLogin.token, { branchId: 'B02' }, {});
+  assert.strictEqual(readB02.settings.openingFloatAmount, 3000);
+  assert.strictEqual(readB02.settings.isBranchOverride, true);
+  // Unset values on B02 fall back to global
+  assert.strictEqual(readB02.settings.targetCarryForward, 1200);
+
+  // Read B01 settings: should still be Global
+  const readB01 = sandbox.routeAction('finance:getSettings', adminLogin.token, { branchId: 'B01' }, {});
+  assert.strictEqual(readB01.settings.openingFloatAmount, 1500);
+  assert.strictEqual(readB01.settings.isBranchOverride, false);
+
+  // 5. Reset Branch Override for B02
+  const resetRes = sandbox.routeAction('finance:resetBranchSettings', adminLogin.token, { branchId: 'B02' }, {});
+  assert.strictEqual(resetRes.ok, true);
+  const readB02AfterReset = sandbox.routeAction('finance:getSettings', adminLogin.token, { branchId: 'B02' }, {});
+  assert.strictEqual(readB02AfterReset.settings.openingFloatAmount, 1500);
+  assert.strictEqual(readB02AfterReset.settings.isBranchOverride, false);
+
+  // 6. Operational Limit: maxCashExpensePerTxn (limit is 2500)
+  assert.throws(
+    () => sandbox.routeAction('finance:createTxn', adminLogin.token, {
+      type: 'EXPENSE',
+      payMethod: 'CASH',
+      amount: 3000,
+      category: 'ค่าซ่อมบำรุง'
+    }, {}),
+    /เกินวงเงินสูงสุด/
+  );
+
+  // 7. Operational Limit: requireRefDocAboveAmount (limit is 400, require refDoc)
+  assert.throws(
+    () => sandbox.routeAction('finance:createTxn', adminLogin.token, {
+      type: 'EXPENSE',
+      payMethod: 'CASH',
+      amount: 600,
+      category: 'ค่าซ่อมบำรุง'
+      // refDoc omitted
+    }, {}),
+    /ต้องระบุเลขที่เอกสาร/
+  );
+
+  // Providing refDoc passes
+  const validExp = sandbox.routeAction('finance:createTxn', adminLogin.token, {
+    type: 'EXPENSE',
+    payMethod: 'CASH',
+    amount: 600,
+    category: 'ค่าซ่อมบำรุง',
+    refDoc: 'INV-999'
+  }, {});
+  assert.strictEqual(validExp.ok, true);
+
+  // 8. Closing policy: duplicateClosingPolicy === 'BLOCK' and requireNoteOnVariance
+  // Closing preview with openingFloatMode FIXED_FLOAT
+  const prev = sandbox.routeAction('finance:closingPreview', adminLogin.token, {
+    closeDate: '2026-10-30',
+    branchId: 'B01'
+  }, {});
+  assert.strictEqual(prev.ok, true);
+  assert.strictEqual(prev.openingFloat, 1500);
+
+  // Save closing with variance > 50 but no note -> should throw because requireNoteOnVariance is true
+  assert.throws(
+    () => sandbox.routeAction('finance:saveClosing', adminLogin.token, {
+      closeDate: '2026-10-30',
+      branchId: 'B01',
+      actualCash: 500, // expected is 1500 - 600 = 900 -> variance is -400 > 50 threshold
+      note: ''
+    }, {}),
+    /กรุณาระบุหมายเหตุชี้แจง/
+  );
+
+  // Save closing with note succeeds
+  const close1 = sandbox.routeAction('finance:saveClosing', adminLogin.token, {
+    closeDate: '2026-10-30',
+    branchId: 'B01',
+    actualCash: 500,
+    cashDrop: 0,
+    carryForward: 500,
+    note: 'เงินขาดเนื่องจากมีจ่ายค่าอุปกรณ์ด่วน'
+  }, {});
+  assert.strictEqual(close1.ok, true);
+
+  // Attempting second closing on same date when policy is BLOCK -> must throw
+  assert.throws(
+    () => sandbox.routeAction('finance:saveClosing', adminLogin.token, {
+      closeDate: '2026-10-30',
+      branchId: 'B01',
+      actualCash: 500,
+      note: 'ปิดซ้ำรอบสอง'
+    }, {}),
+    /ไม่อนุญาตให้ปิดยอดซ้ำ/
+  );
 });

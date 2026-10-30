@@ -243,6 +243,21 @@ function routeAction(action, token, data, reqContext) {
     return { ok: true, data: result, ...result };
   }
 
+  if (action === 'finance:getSettings') {
+    requireAuth(token, 'finance', 'view');
+    return getFinanceSettings(data.branchId);
+  }
+
+  if (action === 'finance:saveSettings') {
+    requireAuth(token, 'finance', 'settings');
+    return saveFinanceSettings(data, session);
+  }
+
+  if (action === 'finance:resetBranchSettings') {
+    requireAuth(token, 'finance', 'settings');
+    return resetBranchFinanceSettings(data.branchId, session);
+  }
+
   // --- Admin Operations ---
   if (action === 'admin:users') {
     requireAuth(token, 'admin', 'users');

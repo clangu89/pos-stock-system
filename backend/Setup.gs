@@ -59,7 +59,7 @@ function setupDatabase() {
           sales: { view: true, create: true, void: true, discount: true, reprint: true },
           stock: { view: true, create: true, edit: true, delete: true, receive: true, adjust: true, transfer: true },
           reports: { view: true, export: true },
-          finance: { view: true, create: true, close: true, void: true },
+          finance: { view: true, create: true, close: true, void: true, settings: true },
           admin: { view: true, users: true, roles: true, config: true, printer: true, audit: true, backup: true }
         }),
         createdAt: new Date().toISOString()
@@ -72,7 +72,7 @@ function setupDatabase() {
           sales: { view: true, create: true, void: true, discount: true, reprint: true },
           stock: { view: true, create: true, edit: true, delete: false, receive: true, adjust: true, transfer: true },
           reports: { view: true, export: true },
-          finance: { view: true, create: true, close: true, void: true },
+          finance: { view: true, create: true, close: true, void: true, settings: true },
           admin: { view: false }
         }),
         createdAt: new Date().toISOString()
@@ -85,7 +85,7 @@ function setupDatabase() {
           sales: { view: true, create: true, void: false, discount: false, reprint: true },
           stock: { view: true, create: false, edit: false, delete: false, receive: false, adjust: false, transfer: false },
           reports: { view: false },
-          finance: { view: false, create: false, close: false, void: false },
+          finance: { view: false, create: false, close: false, void: false, settings: false },
           admin: { view: false }
         }),
         createdAt: new Date().toISOString()
@@ -98,6 +98,7 @@ function setupDatabase() {
           sales: { view: false },
           stock: { view: true, create: true, edit: true, delete: false, receive: true, adjust: true, transfer: true },
           reports: { view: true, export: true },
+          finance: { view: false, create: false, close: false, void: false, settings: false },
           admin: { view: false }
         }),
         createdAt: new Date().toISOString()
@@ -234,7 +235,8 @@ function setupDatabase() {
     { key: 'VOICE_SOUND_ENABLED', value: 'true', description: 'เปิด/ปิดเสียงระบบ' },
     { key: 'VOICE_RATE', value: '1.0', description: 'ความเร็วการพูด (0.7 - 1.5)' },
     { key: 'VOICE_PITCH', value: '1.0', description: 'ระดับเสียงสูงต่ำ (0.7 - 1.5)' },
-    { key: 'VOICE_PARTICLE', value: 'ค่ะ', description: 'คำลงท้ายเสียงพูด (ค่ะ/ครับ)' }
+    { key: 'VOICE_PARTICLE', value: 'ค่ะ', description: 'คำลงท้ายเสียงพูด (ค่ะ/ครับ)' },
+    { key: 'DEFAULT_OPENING_FLOAT', value: '1000', description: 'ยอดเงินทอนตั้งต้นประจำวัน (บาท)' }
   ];
 
   for (const c of configs) {

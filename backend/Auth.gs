@@ -1,11 +1,14 @@
 function normalizeRolePermissions_(roleId, permissionsObj) {
   const p = JSON.parse(JSON.stringify(permissionsObj || {}));
+  const isPrivileged = (roleId === 'admin' || roleId === 'manager');
   if (p.finance === undefined) {
-    if (roleId === 'admin' || roleId === 'manager') {
-      p.finance = { view: true, create: true, close: true, void: true };
+    if (isPrivileged) {
+      p.finance = { view: true, create: true, close: true, void: true, settings: true };
     } else {
-      p.finance = { view: false, create: false, close: false, void: false };
+      p.finance = { view: false, create: false, close: false, void: false, settings: false };
     }
+  } else if (p.finance.settings === undefined) {
+    p.finance.settings = isPrivileged;
   }
   return p;
 }
