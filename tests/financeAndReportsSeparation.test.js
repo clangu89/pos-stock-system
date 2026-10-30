@@ -310,7 +310,7 @@ test('Finance & Reports Separation: Frontend UI Integrity & 5 Launcher Cards', (
   assert.ok(indexHtml.includes('id="cashClosingDetailModal"'));
 
   // 6. Scripts import finance.js and router has finance route
-  assert.ok(indexHtml.includes('src="js/modules/finance.js?v=20261030-v17"'));
+  assert.ok(indexHtml.includes('src="js/modules/finance.js?v=20261030-v18"'));
   const routerJs = fs.readFileSync(path.join(frontendDir, 'js', 'router.js'), 'utf8');
   assert.ok(routerJs.includes("hash === 'finance' && !Auth.hasPerm('finance', 'view')"));
   assert.ok(routerJs.includes("FinanceModule.activate()"));
@@ -321,6 +321,75 @@ test('Finance & Reports Separation: Frontend UI Integrity & 5 Launcher Cards', (
   assert.ok(adminJs.includes("finance?.view"));
   assert.ok(adminJs.includes("finance_view"));
   assert.ok(adminJs.includes("finance: {"));
+});
+
+test('Finance & Reports Separation: Cash Closing Preview & Closings API compatibility (res.data wrapping)', () => {
+  const { sandbox } = createGasMockContext();
+  sandbox.setupDatabase();
+  const adminLogin = sandbox.loginUser('admin', 'Admin1234!');
+
+  // Checkout 1 CASH sale
+  const p1 = sandbox.getTable('Products').rows.find(p => p.sku === 'P1001');
+  sandbox.checkoutSale({
+    branchId: 'B01',
+    payMethod: 'CASH',
+    received: 100,
+    subtotal: 100,
+    discount: 0,
+    vat: 0,
+    total: 100,
+    change: 0,
+    items: [{ sku: 'P1001', name: p1.name, unitPrice: 10, qty: 10, discount: 0, amount: 100 }]
+  }, adminLogin.user);
+
+  // Test 1: finance:closingPreview returns both res.data and root properties
+  const previewRes = sandbox.routeAction('finance:closingPreview', adminLogin.token, {
+    closeDate: '2026-10-30',
+    branchId: 'B01'
+  }, {});
+
+  assert.strictEqual(previewRes.ok, true);
+  assert.ok(previewRes.data, 'previewRes must contain data property');
+  assert.strictEqual(previewRes.data.cashSales, 100);
+  assert.strictEqual(previewRes.cashSales, 100, 'previewRes must also contain cashSales at root for backward compatibility');
+  assert.strictEqual(previewRes.data.expectedCash, 1100); // 1000 float + 100 cash
+
+  // Test 2: finance:saveClosing returns res.data, res.closingId, and root properties
+  const saveRes = sandbox.routeAction('finance:saveClosing', adminLogin.token, {
+    closeDate: '2026-10-30',
+    branchId: 'B01',
+    openingFloat: 1000,
+    cashSales: 100,
+    transferSales: 0,
+    qrSales: 0,
+    cashIncome: 0,
+    cashExpense: 0,
+    expectedCash: 1100,
+    actualCash: 1100,
+    variance: 0,
+    cashDrop: 100,
+    carryForward: 1000,
+    denomBreakdown: { 1000: 1, 100: 1 },
+    note: 'ทดสอบปิดยอดประจำวัน'
+  }, {});
+
+  assert.strictEqual(saveRes.ok, true);
+  assert.ok(saveRes.closingId, 'saveRes must contain closingId at root');
+  assert.ok(saveRes.closingId.startsWith('CLS-B01-20261030-'));
+  assert.ok(saveRes.data, 'saveRes must contain data property');
+
+  // Test 3: finance:closings returns both res.data.closings and res.closings
+  const historyRes = sandbox.routeAction('finance:closings', adminLogin.token, {
+    branchId: 'B01',
+    limit: 10
+  }, {});
+
+  assert.strictEqual(historyRes.ok, true);
+  assert.ok(historyRes.data, 'historyRes must contain data property');
+  assert.ok(Array.isArray(historyRes.data.closings), 'historyRes.data.closings must be an array');
+  assert.ok(Array.isArray(historyRes.closings), 'historyRes.closings must be an array at root');
+  assert.strictEqual(historyRes.data.closings.length, 1);
+  assert.strictEqual(historyRes.data.closings[0].closingId, saveRes.closingId);
 });
 
 test('Finance & Reports Separation: POS Checkout of 46.00 THB reflects accurately in Finance Overview', () => {

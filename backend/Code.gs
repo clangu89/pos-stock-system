@@ -226,17 +226,21 @@ function routeAction(action, token, data, reqContext) {
 
   if (action === 'finance:closingPreview') {
     requireAuth(token, 'finance', 'view');
-    return getCashClosingPreview(data.closeDate, data.branchId);
+    const preview = getCashClosingPreview(data.closeDate, data.branchId);
+    return { ok: true, data: preview, ...preview };
   }
 
   if (action === 'finance:saveClosing') {
     requireAuth(token, 'finance', 'close');
-    return saveCashClosing(data, session);
+    const result = saveCashClosing(data, session);
+    const closingId = (result.closing && result.closing.closingId) || result.closingId || '';
+    return { ok: true, data: result, closingId: closingId, ...result };
   }
 
   if (action === 'finance:closings') {
     requireAuth(token, 'finance', 'view');
-    return getCashClosingsList(data);
+    const result = getCashClosingsList(data);
+    return { ok: true, data: result, ...result };
   }
 
   // --- Admin Operations ---
