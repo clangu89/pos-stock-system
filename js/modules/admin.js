@@ -474,7 +474,8 @@ const AdminModule = {
               <label class="flex items-center gap-1.5 mb-1"><input type="checkbox" ${isAdmin || p.finance?.view ? 'checked' : ''} ${isAdmin ? 'disabled' : ''} id="perm_${r.roleId}_finance_view"> ดูข้อมูลการเงิน</label>
               <label class="flex items-center gap-1.5 mb-1"><input type="checkbox" ${isAdmin || p.finance?.create ? 'checked' : ''} ${isAdmin ? 'disabled' : ''} id="perm_${r.roleId}_finance_create"> บันทึกรายรับ-จ่าย</label>
               <label class="flex items-center gap-1.5 mb-1"><input type="checkbox" ${isAdmin || p.finance?.close ? 'checked' : ''} ${isAdmin ? 'disabled' : ''} id="perm_${r.roleId}_finance_close"> ปิดยอดนับเงินสด</label>
-              <label class="flex items-center gap-1.5"><input type="checkbox" ${isAdmin || p.finance?.void ? 'checked' : ''} ${isAdmin ? 'disabled' : ''} id="perm_${r.roleId}_finance_void"> ยกเลิกรายการ</label>
+              <label class="flex items-center gap-1.5 mb-1"><input type="checkbox" ${isAdmin || p.finance?.void ? 'checked' : ''} ${isAdmin ? 'disabled' : ''} id="perm_${r.roleId}_finance_void"> ยกเลิกรายการ</label>
+              <label class="flex items-center gap-1.5"><input type="checkbox" ${isAdmin || p.finance?.settings ? 'checked' : ''} ${isAdmin ? 'disabled' : ''} id="perm_${r.roleId}_finance_settings"> ตั้งค่าการเงิน</label>
             </div>
             <div class="bg-white p-3 rounded-xl border border-slate-200">
               <div class="font-bold text-slate-800 mb-2">⚙️ Admin (ระบบ)</div>
@@ -520,7 +521,8 @@ const AdminModule = {
         view: document.getElementById(`perm_${roleId}_finance_view`)?.checked || false,
         create: document.getElementById(`perm_${roleId}_finance_create`)?.checked || false,
         close: document.getElementById(`perm_${roleId}_finance_close`)?.checked || false,
-        void: document.getElementById(`perm_${roleId}_finance_void`)?.checked || false
+        void: document.getElementById(`perm_${roleId}_finance_void`)?.checked || false,
+        settings: document.getElementById(`perm_${roleId}_finance_settings`)?.checked || false
       },
       admin: {
         view: (

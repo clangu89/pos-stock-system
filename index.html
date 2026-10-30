@@ -750,6 +750,10 @@
                 class="finance-tab-btn px-4 py-2.5 rounded-xl font-bold text-xs bg-white text-slate-700 hover:bg-slate-100 border border-slate-200 transition cursor-pointer">
           🔐 ปิดยอด / นับเงินสดประจำวัน
         </button>
+        <button id="financeTabBtn_settings" onclick="FinanceModule.switchTab('settings')"
+                class="finance-tab-btn px-4 py-2.5 rounded-xl font-bold text-xs bg-white text-slate-700 hover:bg-slate-100 border border-slate-200 transition cursor-pointer">
+          ⚙️ ตั้งค่าระบบการเงิน
+        </button>
       </div>
 
       <!-- Tab Content 1: Cash Flow & Profit Summary -->
@@ -967,6 +971,15 @@
 
       <!-- Tab Content 3: Daily Cash Reconciliation & Closing -->
       <div id="financeTab_closing" class="finance-tab-content hidden space-y-6">
+        <!-- Duplicate Closing Warning Banner -->
+        <div id="closingDuplicateWarningBanner" class="hidden p-4 rounded-2xl bg-amber-50 border border-amber-300 text-amber-900 text-xs flex items-center justify-between gap-3">
+          <div class="flex items-center gap-2">
+            <span class="text-lg">⚠️</span>
+            <span id="closingDuplicateWarningText">วันนี้มีการบันทึกปิดยอดเงินสดไปแล้ว</span>
+          </div>
+          <span class="text-[11px] font-bold px-2 py-0.5 rounded bg-amber-200 text-amber-900" id="closingDuplicateBadge">ปิดยอดซ้ำ</span>
+        </div>
+
         <!-- Control Header -->
         <div class="bg-white p-4 rounded-3xl border border-slate-200/80 shadow-sm flex flex-wrap items-center justify-between gap-3">
           <div class="flex items-center gap-3 flex-wrap">
@@ -1001,7 +1014,13 @@
             <div class="space-y-2.5 text-xs">
               <div class="flex justify-between items-center py-1.5 border-b border-slate-100">
                 <span class="text-slate-600">เงินทอนยกมาจากรอบก่อนหน้า (Opening Float)</span>
-                <span id="closePreviewFloat" class="font-mono font-bold text-slate-800">฿0.00</span>
+                <div class="flex items-center gap-1.5">
+                  <span id="closePreviewFloat" class="font-mono font-bold text-slate-800">฿0.00</span>
+                  <input type="number" step="0.01" id="closeManualFloatInput" oninput="FinanceModule.onManualFloatChange()"
+                         class="hidden w-24 px-2 py-0.5 text-right font-mono font-bold text-xs rounded-lg border border-purple-300 bg-purple-50 text-purple-900 focus:outline-none" placeholder="0.00">
+                  <button type="button" id="closeEditFloatBtn" onclick="FinanceModule.toggleManualFloatEdit()"
+                          class="hidden text-[10px] px-1.5 py-0.5 rounded bg-slate-100 hover:bg-slate-200 text-slate-600 cursor-pointer" title="ปรับยอดเงินทอนตั้งต้น">✏️</button>
+                </div>
               </div>
               <div class="flex justify-between items-center py-1.5 border-b border-slate-100">
                 <span class="text-slate-600">ยอดขายเงินสดประจำวัน (Cash Sales)</span>
@@ -1170,6 +1189,248 @@
               </tbody>
             </table>
           </div>
+        </div>
+      </div>
+
+      <!-- Tab Content 4: Finance Settings (Global & Branch Override) -->
+      <div id="financeTab_settings" class="finance-tab-content hidden space-y-6">
+        <!-- Scope Toolbar -->
+        <div class="bg-white p-4 rounded-3xl border border-slate-200/80 shadow-sm flex flex-wrap items-center justify-between gap-3">
+          <div class="flex items-center gap-3 flex-wrap">
+            <div>
+              <label class="block text-[11px] font-bold text-slate-500 mb-0.5">ขอบเขตการตั้งค่า (Settings Scope)</label>
+              <select id="financeSettingsScopeSelect" onchange="FinanceModule.onSettingsScopeChange()" class="px-3 py-1.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-bold text-slate-800">
+                <option value="">🌐 การตั้งค่ากลางทุกสาขา (Global Default)</option>
+              </select>
+            </div>
+            <div id="financeSettingsScopeBadge" class="self-end px-3 py-1.5 rounded-xl text-xs font-bold bg-purple-50 text-purple-700 border border-purple-200">
+              ค่ากลางหลัก (Global)
+            </div>
+          </div>
+          <div class="flex items-center gap-2">
+            <button type="button" id="financeSettingsResetBtn" onclick="FinanceModule.resetBranchSettings()" class="hidden px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs border border-slate-200 transition cursor-pointer">
+              🔄 ใช้ค่ากลางตาม Global
+            </button>
+            <button type="button" onclick="FinanceModule.saveSettings()" class="px-5 py-2 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white font-extrabold text-xs shadow-md transition cursor-pointer flex items-center gap-1.5">
+              <span>💾</span> <span>บันทึกการตั้งค่าการเงิน</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- 4 Configuration Cards in Grid -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
+          
+          <!-- Card 1: Opening Float -->
+          <div class="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-sm space-y-4">
+            <div class="flex items-center gap-2 pb-2 border-b border-slate-100">
+              <span class="text-xl">💵</span>
+              <div>
+                <h3 class="font-extrabold text-sm text-slate-900">เงินสดยกมา / เงินทอนประจำลิ้นชัก</h3>
+                <p class="text-[11px] text-slate-500">กำหนดเงินทอนตั้งต้นและนโยบายการยกยอดเงินทอนในแต่ละวัน</p>
+              </div>
+            </div>
+
+            <div class="space-y-3 text-xs">
+              <div>
+                <label class="block font-bold text-slate-700 mb-1">จำนวนเงินทอนตั้งต้นมาตรฐาน (บาท) *</label>
+                <input type="number" step="0.01" min="0" id="st_openingFloatAmount" placeholder="1000.00"
+                       class="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 font-mono font-bold text-slate-900 focus:bg-white focus:border-purple-600">
+                <span class="text-[10px] text-slate-400 mt-1 block">ใช้เป็นเงินทอนเริ่มต้นในวันแรก หรือเมื่อเปิดลิ้นชักใหม่</span>
+              </div>
+
+              <div>
+                <label class="block font-bold text-slate-700 mb-1">โหมดการคำนวณเงินทอนยกมาต้นวัน</label>
+                <select id="st_openingFloatMode" class="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 font-bold">
+                  <option value="AUTO_CARRY">🔄 อัตโนมัติ (ยกยอดเงินทอนคงเหลือจากการปิดรอบก่อนหน้ามาใช้)</option>
+                  <option value="FIXED_FLOAT">📌 ยอดคงที่เสมอ (บังคับใช้ยอดเงินทอนตั้งต้นมาตรฐานทุกวัน)</option>
+                </select>
+              </div>
+
+              <div class="pt-2">
+                <label class="flex items-start gap-2.5 cursor-pointer">
+                  <input type="checkbox" id="st_allowEditOpeningFloat" class="mt-0.5 rounded text-purple-600 focus:ring-purple-500">
+                  <span class="text-xs text-slate-700">
+                    <span class="font-bold">อนุญาตให้ผู้ปิดยอดปรับแก้เงินทอนตั้งต้นได้</span>
+                    <span class="block text-[11px] text-slate-400">หากเปิดใช้งาน จะมีปุ่มดินสอให้กรอกเงินทอนจริงในหน้าปิดยอด</span>
+                  </span>
+                </label>
+              </div>
+            </div>
+          </div>
+
+          <!-- Card 2: Daily Closing & Drop Policy -->
+          <div class="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-sm space-y-4">
+            <div class="flex items-center gap-2 pb-2 border-b border-slate-100">
+              <span class="text-xl">🔐</span>
+              <div>
+                <h3 class="font-extrabold text-sm text-slate-900">การปิดยอดและนำส่งเงินสดประจำวัน</h3>
+                <p class="text-[11px] text-slate-500">กติกาการตัดส่งเงินสดและเกณฑ์ความปลอดภัยของผลต่างเงิน</p>
+              </div>
+            </div>
+
+            <div class="space-y-3 text-xs">
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label class="block font-bold text-slate-700 mb-1">เงินสดสำรองทอนที่ต้องการเหลือไว้ (บาท)</label>
+                  <input type="number" step="0.01" min="0" id="st_targetCarryForward" placeholder="1000.00"
+                         class="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 font-mono font-bold text-slate-900 focus:bg-white focus:border-purple-600">
+                </div>
+                <div>
+                  <label class="block font-bold text-slate-700 mb-1">เกณฑ์แจ้งเตือนเงินขาด/เกิน (บาท)</label>
+                  <input type="number" step="0.01" min="0" id="st_varianceAlertThreshold" placeholder="100.00"
+                         class="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 font-mono font-bold text-slate-900 focus:bg-white focus:border-purple-600">
+                </div>
+              </div>
+
+              <div>
+                <label class="block font-bold text-slate-700 mb-1">นโยบายเมื่อบันทึกปิดยอดซ้ำในวันเดียวกัน</label>
+                <select id="st_duplicateClosingPolicy" class="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 font-bold">
+                  <option value="WARN">⚠️ แจ้งเตือนแต่ยอมให้บันทึกเพิ่มได้</option>
+                  <option value="BLOCK">🚫 บล็อกไม่อนุญาตให้ปิดยอดซ้ำวันเดิม</option>
+                </select>
+              </div>
+
+              <div class="space-y-2 pt-1">
+                <label class="flex items-start gap-2.5 cursor-pointer">
+                  <input type="checkbox" id="st_autoCalcCashDrop" class="mt-0.5 rounded text-purple-600 focus:ring-purple-500">
+                  <span class="text-xs text-slate-700">
+                    <span class="font-bold">คำนวณยอดเงินสดนำส่ง (Cash Drop) อัตโนมัติ</span>
+                    <span class="block text-[11px] text-slate-400">คำนวณจาก (เงินสดที่นับได้ - เงินสำรองทอนที่ต้องการเหลือไว้)</span>
+                  </span>
+                </label>
+
+                <label class="flex items-start gap-2.5 cursor-pointer">
+                  <input type="checkbox" id="st_requireNoteOnVariance" class="mt-0.5 rounded text-purple-600 focus:ring-purple-500">
+                  <span class="text-xs text-slate-700">
+                    <span class="font-bold">บังคับระบุหมายเหตุเมื่อมีผลต่างเงินขาด/เกิน</span>
+                    <span class="block text-[11px] text-slate-400">หากผลต่างเกินเกณฑ์เตือน จะไม่ยอมให้บันทึกถ้าไม่กรอกเหตุผล</span>
+                  </span>
+                </label>
+              </div>
+            </div>
+          </div>
+
+          <!-- Card 3: Petty Cash Categories & Limits -->
+          <div class="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-sm space-y-4">
+            <div class="flex items-center gap-2 pb-2 border-b border-slate-100">
+              <span class="text-xl">🏷️</span>
+              <div>
+                <h3 class="font-extrabold text-sm text-slate-900">หมวดหมู่และวงเงินรายรับ-รายจ่ายหน้าร้าน</h3>
+                <p class="text-[11px] text-slate-500">กำหนดปุ่มเลือกหมวดหมู่อย่างรวดเร็วและเพดานวงเงินค่าใช้จ่าย</p>
+              </div>
+            </div>
+
+            <div class="space-y-3 text-xs">
+              <div>
+                <label class="block font-bold text-slate-700 mb-1">หมวดหมู่รายจ่ายหน้าร้าน (Expense Categories)</label>
+                <div id="stExpenseCategoryChips" class="flex flex-wrap gap-1.5 p-2 rounded-xl bg-slate-50 border border-slate-200 min-h-[44px]"></div>
+                <div class="flex items-center gap-2 mt-2">
+                  <input type="text" id="stNewExpenseCategoryInput" placeholder="พิมพ์ชื่อหมวดรายจ่ายใหม่..."
+                         class="flex-1 px-3 py-1.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-medium">
+                  <button type="button" onclick="FinanceModule.addCategoryChip('EXPENSE')"
+                          class="px-3 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs cursor-pointer">
+                    + เพิ่ม
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label class="block font-bold text-slate-700 mb-1">หมวดหมู่รายรับอื่น (Income Categories)</label>
+                <div id="stIncomeCategoryChips" class="flex flex-wrap gap-1.5 p-2 rounded-xl bg-slate-50 border border-slate-200 min-h-[44px]"></div>
+                <div class="flex items-center gap-2 mt-2">
+                  <input type="text" id="stNewIncomeCategoryInput" placeholder="พิมพ์ชื่อหมวดรายรับใหม่..."
+                         class="flex-1 px-3 py-1.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-medium">
+                  <button type="button" onclick="FinanceModule.addCategoryChip('INCOME')"
+                          class="px-3 py-1.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs cursor-pointer">
+                    + เพิ่ม
+                  </button>
+                </div>
+              </div>
+
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                <div>
+                  <label class="block font-bold text-slate-700 mb-1">เพดานจ่ายเงินสดสูงสุด / รายการ (บาท)</label>
+                  <input type="number" step="0.01" min="0" id="st_maxCashExpensePerTxn" placeholder="3000.00"
+                         class="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 font-mono font-bold text-slate-900 focus:bg-white focus:border-purple-600">
+                  <span class="text-[10px] text-slate-400 block mt-0.5">ระบุ 0 หากไม่จำกัดวงเงิน</span>
+                </div>
+                <div>
+                  <label class="block font-bold text-slate-700 mb-1">บังคับแนบเลขบิลเมื่อยอดเกิน (บาท)</label>
+                  <input type="number" step="0.01" min="0" id="st_requireRefDocAboveAmount" placeholder="500.00"
+                         class="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 font-mono font-bold text-slate-900 focus:bg-white focus:border-purple-600">
+                  <span class="text-[10px] text-slate-400 block mt-0.5">ระบุ 0 หากไม่บังคับ</span>
+                </div>
+              </div>
+
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label class="block font-bold text-slate-700 mb-1">ช่องทางชำระเงินเริ่มต้น</label>
+                  <select id="st_defaultPayMethod" class="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 font-bold">
+                    <option value="CASH">💵 เงินสดในลิ้นชัก</option>
+                    <option value="TRANSFER">🏦 โอนเงิน / ธนาคาร</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="block font-bold text-slate-700 mb-1">ช่วงวันเริ่มต้นรายงานการเงิน</label>
+                  <select id="st_defaultDatePreset" class="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 font-bold">
+                    <option value="TODAY">📅 วันนี้ (Today)</option>
+                    <option value="THIS_WEEK">📅 สัปดาห์นี้ (This Week)</option>
+                    <option value="THIS_MONTH">📅 เดือนนี้ (This Month)</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Card 4: Thermal Slip Settings (No Bank Account) -->
+          <div class="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-sm space-y-4">
+            <div class="flex items-center gap-2 pb-2 border-b border-slate-100">
+              <span class="text-xl">🖨️</span>
+              <div>
+                <h3 class="font-extrabold text-sm text-slate-900">รูปแบบใบปิดยอดและใบส่งเงิน (Thermal Slip)</h3>
+                <p class="text-[11px] text-slate-500">ขนาดกระดาษและข้อความหลักฐานการส่งมอบเงินสด</p>
+              </div>
+            </div>
+
+            <div class="space-y-3 text-xs">
+              <div>
+                <label class="block font-bold text-slate-700 mb-1">ขนาดหน้ากว้างกระดาษความร้อน</label>
+                <div class="grid grid-cols-2 gap-3">
+                  <label class="flex items-center gap-2 p-3 rounded-xl border border-slate-200 cursor-pointer hover:bg-slate-50">
+                    <input type="radio" name="st_closingSlipPaperWidth" value="80mm" class="text-purple-600 focus:ring-purple-500">
+                    <span class="font-bold text-slate-800">80 มม. (มาตรฐาน)</span>
+                  </label>
+                  <label class="flex items-center gap-2 p-3 rounded-xl border border-slate-200 cursor-pointer hover:bg-slate-50">
+                    <input type="radio" name="st_closingSlipPaperWidth" value="58mm" class="text-purple-600 focus:ring-purple-500">
+                    <span class="font-bold text-slate-800">58 มม. (ขนาดกะทัดรัด)</span>
+                  </label>
+                </div>
+              </div>
+
+              <div>
+                <label class="block font-bold text-slate-700 mb-1">ชื่อตำแหน่งผู้ตรวจรับมอบเงินในใบส่งเงิน</label>
+                <input type="text" id="st_closingReceiverTitle" placeholder="เช่น ผู้จัดการสาขา / ผู้ตรวจรับเงิน"
+                       class="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 font-bold text-slate-800">
+              </div>
+
+              <div>
+                <label class="block font-bold text-slate-700 mb-1">ข้อความหมายเหตุท้ายใบส่งเงิน</label>
+                <textarea id="st_closingSlipFooterNote" rows="2" placeholder="เช่น โปรดเก็บใบส่งเงินนี้ไว้เป็นหลักฐานการส่งมอบเงินสดประจำวัน..."
+                          class="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs font-medium"></textarea>
+              </div>
+
+              <div class="pt-2">
+                <label class="flex items-start gap-2.5 cursor-pointer">
+                  <input type="checkbox" id="st_autoPrintOnClosing" class="mt-0.5 rounded text-purple-600 focus:ring-purple-500">
+                  <span class="text-xs text-slate-700">
+                    <span class="font-bold">เปิดหน้าต่างพิมพ์ใบปิดยอดและใบส่งเงินอัตโนมัติ</span>
+                    <span class="block text-[11px] text-slate-400">เมื่อบันทึกปิดยอดเงินสดประจำวันสำเร็จ</span>
+                  </span>
+                </label>
+              </div>
+            </div>
+          </div>
+
         </div>
       </div>
     </section>
@@ -2666,7 +2927,7 @@
         <div class="grid grid-cols-2 gap-3">
           <div>
             <label class="block font-bold text-slate-700 mb-1">ประเภท</label>
-            <select id="financeTxnModalType" class="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 font-bold">
+            <select id="financeTxnModalType" onchange="FinanceModule.onTxnModalTypeChange()" class="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 font-bold">
               <option value="EXPENSE">รายจ่าย (Expense)</option>
               <option value="INCOME">รายรับอื่น (Income)</option>
             </select>
@@ -2693,6 +2954,7 @@
 
         <div>
           <label class="block font-bold text-slate-700 mb-1">หมวดหมู่รายการ</label>
+          <div id="financeModalCategoryChips" class="flex flex-wrap gap-1.5 mb-2"></div>
           <input type="text" id="financeTxnModalCategory" list="financeCategoryList" placeholder="เช่น ค่าอาหาร, ค่าน้ำมัน, ค่าซ่อมบำรุง, อุปกรณ์ร้าน"
                  class="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 font-bold">
           <datalist id="financeCategoryList">
@@ -2877,8 +3139,8 @@
   <script src="js/modules/sales.js?v=20261030-v16"></script>
   <script src="js/modules/stock.js?v=20261030-v16"></script>
   <script src="js/modules/reports.js?v=20261030-v16"></script>
-  <script src="js/modules/finance.js?v=20261030-v18"></script>
-  <script src="js/modules/admin.js?v=20261030-v16"></script>
+  <script src="js/modules/finance.js?v=20261030-v19"></script>
+  <script src="js/modules/admin.js?v=20261030-v19"></script>
   <script src="js/router.js?v=20261030-v16"></script>
 
   <script>
