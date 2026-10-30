@@ -15,7 +15,9 @@ const BACKUP_TEXT_COLUMNS = {
   [SHEETS.CONFIG]: ['key', 'value'],
   [SHEETS.RECEIPT_TEXTS]: ['scopeId', 'branchId', 'phone', 'taxId'],
   [SHEETS.PRINT_PROFILES]: ['profileId', 'branchId', 'stationId'],
-  [SHEETS.AUDIT_LOG]: ['userId']
+  [SHEETS.AUDIT_LOG]: ['userId'],
+  [SHEETS.FINANCE_TXNS]: ['txnId', 'txDate', 'branchId', 'refDoc', 'userId'],
+  [SHEETS.CASH_CLOSINGS]: ['closingId', 'closeDate', 'branchId', 'userId']
 };
 
 function computeBackupChecksum_(tablesPayload) {

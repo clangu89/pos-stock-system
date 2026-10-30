@@ -1,3 +1,15 @@
+function normalizeRolePermissions_(roleId, permissionsObj) {
+  const p = JSON.parse(JSON.stringify(permissionsObj || {}));
+  if (p.finance === undefined) {
+    if (roleId === 'admin' || roleId === 'manager') {
+      p.finance = { view: true, create: true, close: true, void: true };
+    } else {
+      p.finance = { view: false, create: false, close: false, void: false };
+    }
+  }
+  return p;
+}
+
 /**
  * Auth.gs - Authentication, Password hashing, Session management, Permissions
  */
@@ -104,6 +116,7 @@ function loginUser(username, password, clientInfo = {}) {
   } catch (e) {
     permissions = {};
   }
+  permissions = normalizeRolePermissions_(user.roleId, permissions);
 
   // Branches authorization
   const userBranchIds = String(user.branchIds || '').split(',').map(b => b.trim()).filter(Boolean);

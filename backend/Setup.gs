@@ -19,7 +19,9 @@ const DB_SCHEMAS = {
     [SHEETS.CONFIG]: ['key', 'value', 'description', 'updatedAt'],
     [SHEETS.RECEIPT_TEXTS]: ['scopeId', 'branchId', 'receiptTitle', 'storeName', 'subHeader', 'address', 'phone', 'taxId', 'footer', 'showAddress', 'showPhone', 'showTaxId', 'showCashier', 'showBranch', 'updatedBy', 'updatedAt'],
     [SHEETS.PRINT_PROFILES]: ['profileId', 'branchId', 'stationId', 'printerName', 'paperType', 'widthMm', 'heightMm', 'marginMm', 'fontSize', 'copies', 'autoPrint', 'showLogo', 'updatedAt'],
-    [SHEETS.AUDIT_LOG]: ['ts', 'userId', 'action', 'target', 'detail']
+    [SHEETS.AUDIT_LOG]: ['ts', 'userId', 'action', 'target', 'detail'],
+    [SHEETS.FINANCE_TXNS]: ['txnId', 'ts', 'txDate', 'branchId', 'type', 'category', 'amount', 'payMethod', 'refDoc', 'description', 'status', 'userId', 'userName', 'voidBy', 'voidAt', 'voidReason'],
+    [SHEETS.CASH_CLOSINGS]: ['closingId', 'ts', 'closeDate', 'branchId', 'openingFloat', 'cashSales', 'transferSales', 'qrSales', 'cashIncome', 'cashExpense', 'expectedCash', 'actualCash', 'variance', 'cashDrop', 'carryForward', 'denomJson', 'note', 'status', 'userId', 'userName']
 };
 
 function setupDatabase() {
@@ -57,6 +59,7 @@ function setupDatabase() {
           sales: { view: true, create: true, void: true, discount: true, reprint: true },
           stock: { view: true, create: true, edit: true, delete: true, receive: true, adjust: true, transfer: true },
           reports: { view: true, export: true },
+          finance: { view: true, create: true, close: true, void: true },
           admin: { view: true, users: true, roles: true, config: true, printer: true, audit: true, backup: true }
         }),
         createdAt: new Date().toISOString()
@@ -69,6 +72,7 @@ function setupDatabase() {
           sales: { view: true, create: true, void: true, discount: true, reprint: true },
           stock: { view: true, create: true, edit: true, delete: false, receive: true, adjust: true, transfer: true },
           reports: { view: true, export: true },
+          finance: { view: true, create: true, close: true, void: true },
           admin: { view: false }
         }),
         createdAt: new Date().toISOString()
@@ -81,6 +85,7 @@ function setupDatabase() {
           sales: { view: true, create: true, void: false, discount: false, reprint: true },
           stock: { view: true, create: false, edit: false, delete: false, receive: false, adjust: false, transfer: false },
           reports: { view: false },
+          finance: { view: false, create: false, close: false, void: false },
           admin: { view: false }
         }),
         createdAt: new Date().toISOString()

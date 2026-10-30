@@ -192,7 +192,9 @@ const Auth = {
           StockModule.activeBranchId = res.activeBranchId;
           StockModule.refreshData();
         } else if (Router.currentView === 'reports' && typeof ReportsModule !== 'undefined') {
-          ReportsModule.loadData();
+          ReportsModule.activate();
+        } else if (Router.currentView === 'finance' && typeof FinanceModule !== 'undefined') {
+          FinanceModule.activate();
         } else if (Router.currentView === 'admin' && typeof AdminModule !== 'undefined') {
           AdminModule.loadAdminData();
         }

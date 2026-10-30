@@ -49,6 +49,7 @@ function createGasMockContext(options = {}) {
           }
           return res;
         },
+        setValue: (val) => rangeObj.setValues([[val]]),
         setValues: (matrix) => {
           for (let r = 0; r < matrix.length; r++) {
             const rowIndex = row - 1 + r;
@@ -223,6 +224,7 @@ function createGasMockContext(options = {}) {
     'Sales.gs',
     'Admin.gs',
     'Backup.gs',
+    'Finance.gs',
     'Reports.gs',
     'Setup.gs',
     'Code.gs'

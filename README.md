@@ -1,7 +1,7 @@
 # ระบบขายสินค้าและสต๊อกสินค้า (POS & Stock Management System)
 **Google Apps Script (Backend & Google Sheets Database) + GitHub Pages (Frontend SPA)**
 
-ระบบเว็บแอปพลิเคชันจัดการการขายหน้าร้าน (POS) เชื่อมโยงสต๊อกสินค้าแบบ Real-time พร้อมระบบเสียงแจ้งยอดพูดไทย (ถอดแบบสถาปัตยกรรมจากโปรเจกต์ `clangu89/face-recognition`), การพิมพ์ใบเสร็จความร้อนแบบต่อเนื่องอัตโนมัติ และระบบผู้ดูแลระบบ (Admin) แยกสิทธิ์การใช้งานชัดเจน
+ระบบเว็บแอปพลิเคชันจัดการการขายหน้าร้าน (POS) เชื่อมโยงสต๊อกสินค้าแบบ Real-time พร้อมระบบเสียงแจ้งยอดพูดไทย (ถอดแบบสถาปัตยกรรมจากโปรเจกต์ `clangu89/face-recognition`), การพิมพ์ใบเสร็จความร้อนแบบต่อเนื่องอัตโนมัติ, ระบบรายงานสถิติวิเคราะห์ยอดขายและประวัติใบเสร็จ, ระบบบริหารการเงินและปิดยอดเงินสดประจำวันครบวงจร และระบบผู้ดูแลระบบ (Admin) แยกสิทธิ์การใช้งานชัดเจน
 
 ---
 
@@ -15,24 +15,23 @@
    - สื่อสารผ่าน `POST` แบบ `Content-Type: text/plain` ป้องกันปัญหา CORS Preflight
    - จัดการความปลอดภัยด้วย Session Token + Hash Salt SHA-256 + Role-based Permission Guard ทุก Action
    - ป้องกัน Stock Race Condition และเลขที่ใบเสร็จชนกันด้วย `LockService.getScriptLock()`
-3. **Database (Google Sheets)**:
-   - จัดเก็บข้อมูลทั้งหมดใน Google Spreadsheet ของคุณ (Users, Roles, Products, StockBalance, StockMovements, Sales, SaleItems, Counters, Config, PrintProfiles, AuditLog)
+3. **Database (Google Sheets - 19 ตาราง)**:
+   - จัดเก็บข้อมูลทั้งหมดใน Google Spreadsheet ของคุณ:
+     - `Users`, `Roles`, `Branches`, `Products`, `Categories`, `Units`
+     - `StockBalance`, `StockMovements`, `StockDocs`
+     - `Sales`, `SaleItems`, `Counters`, `Config`, `ReceiptTexts`, `PrintProfiles`, `AuditLog`, `Sessions`
+     - `FinanceTxns`, `CashClosings`
 
 ---
 
-## ฟังก์ชันการทำงานหลัก
+## 5 ระบบหลักในหน้าเลือกระบบ (Launcher Dashboard)
 
-### 1. หน้าจอเลือกระบบหลังเข้าสู่ระบบ (Launcher Dashboard)
-- แสดง 4 ไอคอนระบบขนาดใหญ่ตามสิทธิ์ของผู้ใช้งาน:
-  - 🛒 **งานขาย (POS)**
-  - 📦 **ระบบสต๊อกสินค้า**
-  - 📊 **รายงานและการเงิน**
-  - ⚙️ **ผู้ดูแลระบบ (Admin)**
-- หากผู้ใช้ไม่มีสิทธิ์ในระบบใด ไอคอนจะถูกล็อกและปิดการเข้าถึงโดยอัตโนมัติ
+ระบบแบ่งออกเป็น **5 ระบบอิสระ** ตามสิทธิ์การใช้งานของผู้ใช้:
 
-### 2. ระบบงานขาย (POS)
+### 1. 🛒 ระบบงานขาย (POS)
 - **ขายพร้อมกันหลายบิลไม่จำกัด**: กด `+ บิลใหม่ (F2)` เพื่อสลับบิลลูกค้าได้อิสระ โดยบันทึก Draft ใน `localStorage` อัตโนมัติ (รีเฟรชหน้าจอข้อมูลไม่หาย)
 - **สแกนบาร์โค้ด**: โฟกัสช่องสแกนอัตโนมัติ สแกนปุ๊บตัดยอดลงตะกร้าทันที พร้อมเสียง Beep สั้น
+- **ค้นหาสินค้าอัจฉริยะ**: ค้นหาด้วยชื่อ/SKU/บาร์โค้ด รองรับคำค้นหาหลายคำและการพิมพ์ตกวรรณยุกต์ไทย พร้อมระบบป้องกัน Browser Password Autofill
 - **เชื่อมโยงสต๊อก Real-time**: แสดงยอดคงเหลือของแต่ละสินค้า และแจ้งเตือนเมื่อสต๊อกไม่พอขาย
 - **เสียงแจ้งยอดภาษาไทย**:
   - ถอดแบบจาก `clangu89/face-recognition`: มีทั้ง Tone Presets (หญิงสุภาพ, หญิงประชาสัมพันธ์, ชายสุภาพ ฯลฯ) และเลือก System Voices ในอุปกรณ์
@@ -44,95 +43,64 @@
 - **พิมพ์ใบเสร็จความร้อนอัตโนมัติ (Auto Print)**:
   - รองรับขนาดกระดาษความร้อน 58 มม. และ 80 มม. พิมพ์ต่อเนื่องตามความยาวรายการจริงผ่าน CSS `@page`
   - รองรับโหมดพิมพ์เงียบอัตโนมัติด้วย Chrome Kiosk Printing (`--kiosk-printing`)
-- **ยกเลิกใบเสร็จ (Void)**:
-  - ค้นหาเลขที่ใบเสร็จ ระบุเหตุผล และคืนสต๊อกสินค้ากลับเข้าคลังอัตโนมัติ (เคลื่อนไหวใน Stock Movements Ledger)
+- **ยกเลิกใบเสร็จ (Void)**: ค้นหาเลขที่ใบเสร็จ ระบุเหตุผล และคืนสต๊อกสินค้ากลับเข้าคลังอัตโนมัติ
 
-### 3. ระบบสต๊อกสินค้า (Inventory)
+### 2. 📦 ระบบสต๊อกสินค้า (Stock & Inventory)
 - **แคตตาล็อกสินค้า**: เพิ่ม แก้ไข ลบ ค้นหาด้วยบาร์โค้ด/SKU/ชื่อสินค้า กำหนดราคาทุน ราคาขาย และจุดเตือนสต๊อกใกล้หมด
 - **รับสินค้าเข้าคลัง (Stock In)**: บันทึกใบรับสินค้า อัปเดตราคาทุน และเพิ่มยอดคงเหลือ
 - **ตรวจนับและปรับยอด (Adjust Stock)**: กรอกยอดที่นับได้จริง ระบบคำนวณส่วนต่างและบันทึกประวัติพร้อมเหตุผล
 - **โอนย้ายระหว่างสาขา (Transfer Stock)**: ตัดสต๊อกสาขาต้นทางและเพิ่มสาขาปลายทางใน Transaction เดียว
 - **Stock Card**: ตรวจสอบประวัติการเคลื่อนไหวทุกรายการของสินค้าแยกตามสาขา
 
-### 4. ระบบผู้ดูแลระบบ (Admin)
+### 3. 📊 ระบบรายงาน (Reports)
+- **ภาพรวมและยอดขายรายวัน**: สรุปยอดขายรวม กำไรขั้นต้น จำนวนบิล สัดส่วนเงินสด vs เงินโอน ตารางยอดขายรายวัน และ 15 อันดับสินค้าขายดี (Top Sellers)
+- **รายงานมูลค่าสต๊อกสินค้า**: ประเมินมูลค่าต้นทุนรวม ราคาขายรวม กำไรส่วนต่างคาดการณ์ และตารางเตือนสินค้าต่ำกว่าจุดสั่งซื้อขั้นต่ำ (Low Stock Alert)
+- **ตรวจสอบประวัติใบเสร็จและพิมพ์ซ้ำ (Reprint)**: ค้นหาและกรองใบเสร็จย้อนหลัง ดูรายละเอียดสินค้าในบิล ดูข้อมูลบิลที่ยกเลิก และกดพิมพ์ซ้ำใบเสร็จผ่าน Thermal Printer
+- **ส่งออกข้อมูล (Export CSV)**: ส่งออกข้อมูลยอดขายรายวัน, สินค้าขายดี, รายการสินค้าใกล้หมด และประวัติใบเสร็จเป็นไฟล์ CSV (UTF-8 BOM สำหรับเปิดใน MS Excel)
+
+### 4. 💰 ระบบการเงิน (Finance)
+- **สรุปกระแสเงินสดและกำไรสุทธิ**:
+  - สรุปยอดขายแยกช่องทาง เงินสด (`CASH`), โอนเงิน (`TRANSFER`), และ `QR Code`
+  - สรุปรายรับอื่นและรายจ่ายหน้าร้าน
+  - คำนวณกระแสเงินสดสุทธิ (Net Cash Flow) และกำไรจากการดำเนินงานสุทธิ (Net Operating Profit)
+  - ตารางกระแสเงินสดรายวัน และสัดส่วนค่าใช้จ่ายตามหมวดหมู่
+- **สมุดบัญชีรายรับ-รายจ่ายหน้าร้าน (Petty Cash Ledger)**:
+  - บันทึกค่าใช้จ่ายเบ็ดเตล็ดและรายรับอื่นหน้าร้าน แยกตามสาขาและช่องทางเงินสด/เงินโอน
+  - ระบบยกเลิกรายการ (Void) พร้อมบันทึกเหตุผลและ Audit Log
+- **ปิดยอด / นับเงินสดส่งประจำวัน (Cash Drawer Closing)**:
+  - ดึงยอดเงินสดคาดการณ์ตามระบบอัตโนมัติ (เงินทอนยกมา + ยอดขายสด + รายรับสด - รายจ่ายสด)
+  - เครื่องคิดเลขนับธนบัตรและเหรียญ (฿1,000 ถึง ฿1) พร้อมคำนวณยอดเงินสดนับจริงแบบ Real-time
+  - คำนวณส่วนต่างเงินเกิน/ขาด (Variance) แสดงสถานะ Over / Short / Exact Match
+  - กำหนดยอดเงินสดนำส่ง (Cash Drop) และคำนวณเงินทอนยกไปวันถัดไป (Carry Forward)
+  - Roll-over ยอดเงินทอนยกไปเป็นเงินทอนเริ่มต้นในวันถัดไปให้อัตโนมัติ
+  - พิมพ์ใบสรุปปิดยอดส่งเงินประจำวัน (Thermal Closing Slip 58mm/80mm)
+
+### 5. ⚙️ ระบบผู้ดูแลระบบ (Admin)
 - จัดการผู้ใช้งาน กำหนดบทบาท (Admin, Manager, Cashier, Stock Keeper)
-- กำหนดสิทธิ์รายเมทริกซ์ (เปิดดู, เพิ่ม, แก้ไข, ลบ, ยกเลิกบิล)
+- **บทบาทและสิทธิ์รายเมทริกซ์**: กำหนดสิทธิ์แยกอิสระครบ 5 โมดูล (`sales`, `stock`, `reports`, `finance`, `admin`)
 - กำหนดรูปแบบเลขที่ใบเสร็จด้วย Token เช่น `{PREFIX}{BRANCH}-{YYYY}{MM}{DD}-{RUN:5}` พร้อมตั้งรอบการรีเซ็ตเลขรันนิ่ง (รายวัน, รายเดือน, รายปี)
-- ตั้งค่าโปรไฟล์เครื่องพิมพ์ ขนาดกระดาษ ระยะขอบ และชื่อไดรเวอร์อ้างอิง
-- ตั้งค่าระบบเสียงพูด (Rate, Pitch, Voice Selection, Test Speech)
-- ตรวจสอบประวัติ Audit Logs
+- ปรับแต่งข้อความใบเสร็จ (หัวกระดาษ, ที่อยู่, เบอร์โทร, เลขภาษี, ท้ายบิล) รองรับค่ากลางและปรับแต่งรายสาขา
+- ตั้งค่าเครื่องพิมพ์ความร้อน ไดรเวอร์ ขนาดกระดาษ (58 มม. / 80 มม.) และเสียงพูดระบบ
+- **สำรองและกู้คืนฐานข้อมูล (Backup & Safe Restore)**: ส่งออกข้อมูลทั้ง 19 ตารางพร้อม SHA-256 Checksum และระบบความปลอดภัย 4 ชั้นป้องกันข้อมูลสูญหาย
 
 ---
 
-## ข้อมูลการเชื่อมต่อระบบที่ Deploy แล้ว
+## ลิงก์และข้อมูลสำหรับการติดตั้ง
 
-- **GitHub Pages Frontend**: [https://clangu89.github.io/pos-stock-system/](https://clangu89.github.io/pos-stock-system/)
-- **GitHub Repository**: [https://github.com/clangu89/pos-stock-system](https://github.com/clangu89/pos-stock-system)
 - **Google Spreadsheet Database**: [https://docs.google.com/spreadsheets/d/1YEVUjb74z9BmGPalcmOS7mfX9TzvUGx0sXKFfzgiYJc/edit](https://docs.google.com/spreadsheets/d/1YEVUjb74z9BmGPalcmOS7mfX9TzvUGx0sXKFfzgiYJc/edit)
 - **Google Apps Script Editor**: [https://script.google.com/d/10rMmH_47aiOvXCzDPBf2ih4z3-cDrf8URBuycGHiyiwV8i_TGNKWCcV4/edit](https://script.google.com/d/10rMmH_47aiOvXCzDPBf2ih4z3-cDrf8URBuycGHiyiwV8i_TGNKWCcV4/edit)
-- **Web App API Endpoint**: `https://script.google.com/macros/s/AKfycbzzUM7ML5EeQbJXa-CxiZCy6-nhtM6ib8MC70t9Ig-PuUlTUPxCe4C4lqYXYcIQBrmK/exec` (ตั้งค่าใน `frontend/config.js` เรียบร้อยแล้ว)
+- **Web App Endpoint (Version 13)**: `https://script.google.com/macros/s/AKfycbxFPqfj6B0Nsa-OQnziTygQrh7n899RYPCKmnlbjraAawPmSSNtlN4MbU-cPLs-u1C1/exec`
+- **GitHub Repository**: [https://github.com/clangu89/pos-stock-system](https://github.com/clangu89/pos-stock-system)
+- **GitHub Pages Live System**: [https://clangu89.github.io/pos-stock-system/](https://clangu89.github.io/pos-stock-system/)
 
 ---
 
-## ขั้นตอนการติดตั้งและเชื่อมต่อ
+## วิธีติดตั้งและเริ่มต้นใช้งาน
 
-### ขั้นตอนที่ 1: ให้สิทธิ์ Apps Script ครั้งแรก (Authorization)
 1. เปิดลิงก์ **[Google Apps Script Editor](https://script.google.com/d/10rMmH_47aiOvXCzDPBf2ih4z3-cDrf8URBuycGHiyiwV8i_TGNKWCcV4/edit)** (ล็อกอินด้วยบัญชี Google ของคุณ)
-2. ที่แถบเมนูด้านบน เลือกฟังก์ชัน **`setupDatabase`** แล้วกดปุ่ม **เรียกใช้ (Run)**
-3. จะมีหน้าต่างขึ้นมาแจ้งว่า *"จำเป็นต้องมีการให้สิทธิ์ (Authorization Required)"*:
-   - กดปุ่ม **ตรวจสอบสิทธิ์ (Review Permissions)**
-   - เลือกบัญชี Google ของคุณ
-   - กด **ขั้นสูง (Advanced)** -> กด **ไปที่ POS Stock Script (ไม่ปลอดภัย)**
-   - กด **อนุญาต (Allow)**
-4. เมื่อฟังก์ชัน `setupDatabase` ทำงานเสร็จสิ้น ตารางทั้งหมด (Users, Products, StockBalance, Sales ฯลฯ) จะถูกสร้างลงใน **[Google Sheet](https://docs.google.com/spreadsheets/d/1YEVUjb74z9BmGPalcmOS7mfX9TzvUGx0sXKFfzgiYJc/edit)** ทันที และระบบเว็บจะพร้อมใช้งาน 100%!
-
----
-
-### ขั้นตอนที่ 2: ตั้งค่า URL ในหน้าเว็บ Frontend
-1. เปิดไฟล์ `frontend/config.js` และใส่ Web app URL ลงในตัวแปร `API_URL`:
-   ```javascript
-   const CONFIG = {
-     API_URL: "https://script.google.com/macros/s/AKfycb.../exec",
-     ...
-   };
-   ```
-   *(หรือสามารถเปิดหน้าเว็บแล้วกดปุ่ม "⚙️ ตั้งค่า API URL" ในหน้า Login เพื่อใส่ URL ก็ได้เช่นกัน)*
-
----
-
-### ขั้นตอนที่ 3: บัญชีผู้ใช้งานเริ่มต้น
-| บทบาท | Username | Password | สิทธิ์ |
-|---|---|---|---|
-| **ผู้ดูแลระบบ (Admin)** | `admin` | `Admin1234!` | สูงสุด เข้าถึงได้ทุกระบบ |
-| **พนักงานขาย (Cashier)** | `cashier` | `Cashier1234!` | เข้าเฉพาะหน้าขาย (POS) |
-
----
-
-### ขั้นตอนที่ 4: การตั้งค่าพิมพ์ใบเสร็จออโต้แบบเงียบ (Kiosk Printing)
-1. ติดตั้งเครื่องพิมพ์ใบเสร็จความร้อน (เช่น ขนาด 58 มม. หรือ 80 มม.) ลงในเครื่องคอมพิวเตอร์
-2. ตั้งค่าเครื่องพิมพ์ใบเสร็จให้เป็น **Default Printer (เครื่องพิมพ์เริ่มต้น)** ใน Windows Settings
-3. รันไฟล์ `start-pos-kiosk.bat` ในโฟลเดอร์โปรเจกต์นี้
-   - สคริปต์จะเปิด Google Chrome พร้อมพารามิเตอร์ `--kiosk-printing`
-   - เมื่อทำการขายในหน้า POS ใบเสร็จจะถูกส่งพิมพ์ตรงไปยังเครื่องพิมพ์ทันทีโดยไม่เด้งหน้าต่างตัวอย่างการพิมพ์ขึ้นมารบกวน
-
----
-
-## การ Deploy สู่ GitHub Pages (`clangu89/pos-stock-system`)
-
-โปรเจกต์มี GitHub Actions Workflow อยู่ที่ `.github/workflows/pages.yml` ซึ่งจะนำโฟลเดอร์ `frontend/` ขึ้นสู่ GitHub Pages โดยอัตโนมัติเมื่อ Push ขึ้น Repository:
-
-```powershell
-# 1. สร้าง Git Repository
-git init
-git add .
-git commit -m "Initial commit POS & Stock Management System"
-
-# 2. สร้าง GitHub Repository และ Push (บัญชี clangu89)
-gh repo create clangu89/pos-stock-system --public --source . --push
-
-# 3. เปิดใช้งาน GitHub Pages ผ่าน GitHub Actions
-gh api -X POST repos/clangu89/pos-stock-system/pages -f build_type=workflow
-```
-
-เมื่อ Workflow รันเสร็จสิ้น เว็บไซต์จะพร้อมใช้งานที่:
-👉 **https://clangu89.github.io/pos-stock-system/**
+2. โค้ดทั้งหมดในโฟลเดอร์ `backend/` ได้รับการ Deploy สู่ Version 13 เรียบร้อยแล้ว
+3. ระบบจะสร้างชีตใหม่ (`FinanceTxns`, `CashClosings`) พร้อมจัดฟอร์แมตอัตโนมัติ
+4. เข้าใช้งานระบบผ่าน **[GitHub Pages](https://clangu89.github.io/pos-stock-system/)**
+5. เข้าสู่ระบบด้วยผู้ใช้งานเริ่มต้น:
+   - **Admin**: `admin` / `Admin1234!` (เข้าได้ครบทั้ง 5 ระบบ)
+   - **Cashier**: `cashier` / `Cashier1234!` (เฉพาะระบบงานขาย POS และระบบสต๊อกสินค้า)

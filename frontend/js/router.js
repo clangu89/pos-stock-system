@@ -45,6 +45,12 @@ const Router = {
       return;
     }
 
+    if (hash === 'finance' && !Auth.hasPerm('finance', 'view')) {
+      UI.showToast('คุณไม่มีสิทธิ์เข้าใช้งานระบบการเงิน', 'warning');
+      window.location.hash = '#launcher';
+      return;
+    }
+
     if (hash === 'admin' && !Auth.hasPerm('admin', 'view')) {
       UI.showToast('คุณไม่มีสิทธิ์เข้าใช้งานระบบผู้ดูแลระบบ (Admin)', 'warning');
       window.location.hash = '#launcher';
@@ -83,6 +89,8 @@ const Router = {
       StockModule.activate();
     } else if (viewName === 'reports' && typeof ReportsModule !== 'undefined') {
       ReportsModule.activate();
+    } else if (viewName === 'finance' && typeof FinanceModule !== 'undefined') {
+      FinanceModule.activate();
     } else if (viewName === 'admin' && typeof AdminModule !== 'undefined') {
       AdminModule.activate();
     }

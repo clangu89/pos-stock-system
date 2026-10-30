@@ -19,7 +19,9 @@ const SHEETS = {
   CONFIG: 'Config',
   RECEIPT_TEXTS: 'ReceiptTexts',
   PRINT_PROFILES: 'PrintProfiles',
-  AUDIT_LOG: 'AuditLog'
+  AUDIT_LOG: 'AuditLog',
+  FINANCE_TXNS: 'FinanceTxns',
+  CASH_CLOSINGS: 'CashClosings'
 };
 
 const DEFAULT_SPREADSHEET_ID = '1YEVUjb74z9BmGPalcmOS7mfX9TzvUGx0sXKFfzgiYJc';
@@ -100,6 +102,12 @@ function getSheet(sheetName) {
   let sheet = ss.getSheetByName(sheetName);
   if (!sheet) {
     sheet = ss.insertSheet(sheetName);
+    if (typeof DB_SCHEMAS !== 'undefined' && DB_SCHEMAS[sheetName]) {
+      const headers = DB_SCHEMAS[sheetName];
+      sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+      sheet.getRange(1, 1, 1, headers.length).setFontWeight('bold').setBackground('#2C3E50').setFontColor('#FFFFFF');
+      sheet.setFrozenRows(1);
+    }
   }
   _sheetCache[sheetName] = sheet;
   return sheet;

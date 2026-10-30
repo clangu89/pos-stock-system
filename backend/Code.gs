@@ -203,6 +203,42 @@ function routeAction(action, token, data, reqContext) {
     };
   }
 
+  // --- Finance Operations ---
+  if (action === 'finance:overview') {
+    requireAuth(token, 'finance', 'view');
+    return { ok: true, data: getFinanceOverview(data.startDate, data.endDate, data.branchId) };
+  }
+
+  if (action === 'finance:txns') {
+    requireAuth(token, 'finance', 'view');
+    return { ok: true, data: getFinanceTxns(data) };
+  }
+
+  if (action === 'finance:createTxn') {
+    requireAuth(token, 'finance', 'create');
+    return createFinanceTxn(data, session);
+  }
+
+  if (action === 'finance:voidTxn') {
+    requireAuth(token, 'finance', 'void');
+    return voidFinanceTxn(data, session);
+  }
+
+  if (action === 'finance:closingPreview') {
+    requireAuth(token, 'finance', 'view');
+    return getCashClosingPreview(data.closeDate, data.branchId);
+  }
+
+  if (action === 'finance:saveClosing') {
+    requireAuth(token, 'finance', 'close');
+    return saveCashClosing(data, session);
+  }
+
+  if (action === 'finance:closings') {
+    requireAuth(token, 'finance', 'view');
+    return getCashClosingsList(data);
+  }
+
   // --- Admin Operations ---
   if (action === 'admin:users') {
     requireAuth(token, 'admin', 'users');

@@ -26,11 +26,19 @@ const LauncherModule = {
       },
       {
         id: 'reports',
-        title: 'รายงานและการเงิน',
-        desc: 'สรุปยอดขาย กำไร-ต้นทุนรายวัน จัดอันดับสินค้าขายดี และสรุปมูลค่าสต๊อกสินค้าคงเหลือรวม',
+        title: 'ระบบรายงาน (Reports)',
+        desc: 'วิเคราะห์ยอดขายรายวัน จัดอันดับสินค้าขายดี รายงานมูลค่าสต๊อก/สินค้าใกล้หมด ตรวจสอบใบเสร็จ และพิมพ์ซ้ำ (Reprint) พร้อมส่งออก CSV',
         icon: '📊',
         color: 'from-amber-500 to-orange-600',
         allowed: Auth.hasPerm('reports', 'view')
+      },
+      {
+        id: 'finance',
+        title: 'ระบบการเงิน (Finance)',
+        desc: 'สรุปกระแสเงินสดแยกช่องทางชำระ (เงินสด/โอน/QR) บันทึกรายรับ-รายจ่ายหน้าร้าน และปิดยอดนับเงินสดส่งประจำวัน',
+        icon: '💰',
+        color: 'from-violet-600 to-purple-700',
+        allowed: Auth.hasPerm('finance', 'view')
       },
       {
         id: 'admin',

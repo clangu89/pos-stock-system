@@ -95,6 +95,9 @@ function getRolesList() {
     } catch (e) {
       p = {};
     }
+    if (typeof normalizeRolePermissions_ === 'function') {
+      p = normalizeRolePermissions_(r.roleId, p);
+    }
     return {
       roleId: r.roleId,
       roleName: r.roleName,
