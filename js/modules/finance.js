@@ -517,9 +517,9 @@ const FinanceModule = {
     const res = await Api.call('finance:closingPreview', { closeDate, branchId });
     UI.hideLoading();
 
-    if (res && res.ok && res.data) {
-      this.activeClosingPreview = res.data;
-      const d = res.data;
+    if (res && res.ok) {
+      const d = res.data || res;
+      this.activeClosingPreview = d;
 
       // Populate preview values
       const setTxt = (id, txt) => {
@@ -678,8 +678,9 @@ const FinanceModule = {
     if (res && res.ok) {
       UI.showToast('บันทึกปิดยอดส่งเงินเรียบร้อยแล้ว', 'success');
       await this.fetchClosingHistory();
-      if (res.closingId) {
-        this.openClosingDetail(res.closingId);
+      const closingId = (res.closing && res.closing.closingId) || res.closingId || (res.data && res.data.closing && res.data.closing.closingId) || (res.data && res.data.closingId);
+      if (closingId) {
+        this.openClosingDetail(closingId);
       }
     } else {
       UI.showToast(res.error || 'ไม่สามารถบันทึกปิดยอดได้', 'error');
@@ -692,8 +693,9 @@ const FinanceModule = {
     if (tbody) tbody.innerHTML = `<tr><td colspan="9" class="text-center py-6 text-slate-400">กำลังโหลดประวัติการปิดยอด...</td></tr>`;
 
     const res = await Api.call('finance:closings', { branchId, limit: 30 });
-    if (res && res.ok && res.data) {
-      this.cachedClosings = res.data.closings || [];
+    if (res && res.ok) {
+      const list = (res.data && res.data.closings) || res.closings || [];
+      this.cachedClosings = list;
       this.renderClosingHistoryTable(this.cachedClosings);
     } else {
       if (tbody) tbody.innerHTML = `<tr><td colspan="9" class="text-center py-6 text-slate-400">ไม่มีประวัติการปิดยอด</td></tr>`;
