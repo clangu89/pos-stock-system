@@ -10,6 +10,9 @@ const SalesModule = {
   selectedCategory: 'ALL',
   searchQuery: '',
   activeBranchId: 'B01',
+  stationId: 'POS-01',
+  dayDrawerStatus: null,
+  activeDrawerPreview: null,
   receiptStoreInfo: null,
   isSubmittingPayment: false,
   currentSuggestions: [],
@@ -18,6 +21,9 @@ const SalesModule = {
 
   async activate() {
     this.activeBranchId = localStorage.getItem(CONFIG.STORAGE_KEYS.BRANCH_ID) || CONFIG.DEFAULT_BRANCH_ID;
+    this.stationId = localStorage.getItem(CONFIG.STORAGE_KEYS.STATION_ID) || CONFIG.DEFAULT_STATION_ID;
+    const stLabel = document.getElementById('posStationLabel');
+    if (stLabel) stLabel.textContent = this.stationId;
     this.loadDraftBills();
     // ล้างค่าช่องค้นหาเพื่อป้องกัน Browser Password Autofill แอบใส่ username
     const searchInput = document.getElementById('posBarcodeSearchInput');
@@ -33,7 +39,7 @@ const SalesModule = {
 
   async refreshData() {
     UI.showLoading('กำลังโหลดข้อมูลสินค้าและสต๊อก...');
-    const res = await Api.call('pos:init', { branchId: this.activeBranchId });
+    const res = await Api.call('pos:init', { branchId: this.activeBranchId, stationId: this.stationId });
     UI.hideLoading();
 
     if (res && res.ok) {
@@ -44,6 +50,9 @@ const SalesModule = {
       }
       if (res.printProfiles) {
         PrintManager.init(res.printProfiles);
+      }
+      if (res.dayDrawerStatus) {
+        this.updateDayDrawerStatusUI(res.dayDrawerStatus);
       }
       this.populateCategoryFilter();
       this.renderProductGrid();
@@ -912,6 +921,19 @@ const SalesModule = {
       return;
     }
 
+    // Day & Drawer policy validation
+    const policy = (this.dayDrawerStatus && this.dayDrawerStatus.policy) || 'WARN';
+    const isDrawerOpen = !!(this.dayDrawerStatus && this.dayDrawerStatus.activeDrawer && this.dayDrawerStatus.activeDrawer.status === 'OPEN');
+    if (policy === 'STRICT' && !isDrawerOpen) {
+      UI.showToast('ไม่อนุญาตให้ชำระเงิน: บังคับเปิดวันทำการและลิ้นชักจุดขายก่อนขาย (STRICT)', 'error');
+      SoundManager.playErrorTone();
+      this.openDrawerModal();
+      return;
+    }
+    if (policy === 'WARN' && !isDrawerOpen) {
+      UI.showToast('คำเตือน: ยังไม่ได้เปิดลิ้นชักจุดขายสำหรับเครื่องนี้', 'warning');
+    }
+
     const subtotal = bill.items.reduce((s, it) => s + it.amount, 0);
     const discount = bill.discount || 0;
     const grandTotal = Math.max(0, subtotal - discount);
@@ -1000,7 +1022,9 @@ const SalesModule = {
 
     const payload = {
       branchId: this.activeBranchId,
-      stationId: localStorage.getItem(CONFIG.STORAGE_KEYS.STATION_ID) || CONFIG.DEFAULT_STATION_ID,
+      stationId: this.stationId || localStorage.getItem(CONFIG.STORAGE_KEYS.STATION_ID) || CONFIG.DEFAULT_STATION_ID,
+      dayId: (this.dayDrawerStatus && this.dayDrawerStatus.activeDay && this.dayDrawerStatus.activeDay.dayId) || '',
+      drawerId: (this.dayDrawerStatus && this.dayDrawerStatus.activeDrawer && this.dayDrawerStatus.activeDrawer.drawerId) || '',
       items: bill.items,
       discount: bill.discount || 0,
       received: calc.received,
@@ -1041,8 +1065,9 @@ const SalesModule = {
         PrintManager.previewReceiptModal(res.sale, res.items, storeInfo, prof);
       }
 
-      // 4. Background refresh stock balances
+      // 4. Background refresh stock balances and day/drawer status
       this.refreshProductsStockSilent();
+      this.refreshDayDrawerStatusSilent();
     } else {
       SoundManager.playErrorTone();
       UI.showToast(`ชำระเงินไม่สำเร็จ: ${(res && (res.error || res.message)) || 'ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์'}`, 'error');
@@ -1147,6 +1172,463 @@ const SalesModule = {
       SoundManager.playErrorTone();
       UI.showToast(`ยกเลิกไม่สำเร็จ: ${res.error || res.message}`, 'error');
     }
+  },
+
+  // ================= POS DAY & DRAWER CONTROLS =================
+
+  async promptSwitchStation() {
+    const current = this.stationId || 'POS-01';
+    const next = prompt('ระบุรหัสเครื่องจุดขาย (Station ID):', current);
+    if (!next) return;
+    const clean = next.trim().toUpperCase();
+    if (!clean || clean === current) return;
+    this.stationId = clean;
+    localStorage.setItem(CONFIG.STORAGE_KEYS.STATION_ID, clean);
+    const stLabel = document.getElementById('posStationLabel');
+    if (stLabel) stLabel.textContent = clean;
+    UI.showToast(`สลับเครื่องจุดขายเป็น ${clean} แล้ว`, 'info');
+    await this.refreshDayDrawerStatus();
+  },
+
+  async refreshDayDrawerStatus() {
+    const res = await Api.call('finance:dayStatus', {
+      branchId: this.activeBranchId,
+      stationId: this.stationId
+    });
+    if (res && res.ok) {
+      this.updateDayDrawerStatusUI(res);
+    }
+  },
+
+  async refreshDayDrawerStatusSilent() {
+    try {
+      const res = await Api.call('finance:dayStatus', {
+        branchId: this.activeBranchId,
+        stationId: this.stationId
+      });
+      if (res && res.ok) {
+        this.updateDayDrawerStatusUI(res);
+      }
+    } catch (e) {
+      console.warn('Failed to refresh day/drawer status silently:', e);
+    }
+  },
+
+  updateDayDrawerStatusUI(status) {
+    this.dayDrawerStatus = status || null;
+    const activeDay = status && status.activeDay;
+    const activeDrawer = status && status.activeDrawer;
+    const policy = (status && status.policy) || 'WARN';
+
+    // 1. Station Label
+    const stLabel = document.getElementById('posStationLabel');
+    if (stLabel) stLabel.textContent = this.stationId || 'POS-01';
+
+    // 2. Day Status Pill
+    const dayPill = document.getElementById('posDayStatusPill');
+    const dayDot = document.getElementById('posDayStatusDot');
+    const dayText = document.getElementById('posDayStatusText');
+    if (dayPill && dayDot && dayText) {
+      if (activeDay && activeDay.status === 'OPEN') {
+        dayDot.className = 'w-2 h-2 rounded-full bg-emerald-500 animate-pulse';
+        dayText.textContent = `เปิดวัน: ${activeDay.businessDate}`;
+        dayPill.className = 'flex items-center gap-1.5 px-3 py-1 rounded-xl bg-emerald-50 text-emerald-800 border border-emerald-200 font-bold';
+      } else if (activeDay && activeDay.status === 'CLOSED') {
+        dayDot.className = 'w-2 h-2 rounded-full bg-slate-400';
+        dayText.textContent = `ปิดวันแล้ว (${activeDay.businessDate})`;
+        dayPill.className = 'flex items-center gap-1.5 px-3 py-1 rounded-xl bg-slate-100 text-slate-600 border border-slate-200 font-bold';
+      } else {
+        dayDot.className = 'w-2 h-2 rounded-full bg-amber-400';
+        dayText.textContent = 'ยังไม่เปิดวันทำการ';
+        dayPill.className = 'flex items-center gap-1.5 px-3 py-1 rounded-xl bg-amber-50 text-amber-800 border border-amber-200 font-bold';
+      }
+    }
+
+    // 3. Drawer Status Pill & Manage Button
+    const drawerPill = document.getElementById('posDrawerStatusPill');
+    const drawerText = document.getElementById('posDrawerStatusText');
+    const manageBtnText = document.getElementById('posManageDrawerBtnText');
+    const manageBtn = document.getElementById('posManageDrawerBtn');
+    const warnBadge = document.getElementById('posPolicyWarnBadge');
+
+    const isDrawerOpen = !!(activeDrawer && activeDrawer.status === 'OPEN');
+    if (drawerPill && drawerText) {
+      if (isDrawerOpen) {
+        drawerText.textContent = `ลิ้นชักเปิด: ${activeDrawer.shift || 'ปกติ'}`;
+        drawerPill.className = 'flex items-center gap-1.5 px-3 py-1 rounded-xl bg-purple-50 text-purple-800 border border-purple-200 font-bold';
+        if (manageBtnText) manageBtnText.textContent = 'จัดการลิ้นชัก / ปิดกะ';
+        if (manageBtn) manageBtn.className = 'px-3.5 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold transition flex items-center gap-1.5 shadow-sm cursor-pointer';
+      } else {
+        drawerText.textContent = 'ลิ้นชักปิดอยู่';
+        drawerPill.className = 'flex items-center gap-1.5 px-3 py-1 rounded-xl bg-slate-100 text-slate-600 border border-slate-200 font-bold';
+        if (manageBtnText) manageBtnText.textContent = 'เปิดลิ้นชักขาย';
+        if (manageBtn) manageBtn.className = 'px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold transition flex items-center gap-1.5 shadow-sm cursor-pointer';
+      }
+    }
+
+    // 4. Policy Warning Badge
+    if (warnBadge) {
+      if (!isDrawerOpen) {
+        warnBadge.classList.remove('hidden');
+        if (policy === 'STRICT') {
+          warnBadge.textContent = '🚫 ล็อกการขาย (STRICT: ต้องเปิดวันและลิ้นชักก่อน)';
+          warnBadge.className = 'text-[11px] font-bold text-rose-700 bg-rose-50 px-2.5 py-1 rounded-lg border border-rose-200';
+        } else if (policy === 'WARN') {
+          warnBadge.textContent = '⚠️ ยังไม่ได้เปิดวัน/ลิ้นชัก';
+          warnBadge.className = 'text-[11px] font-bold text-amber-700 bg-amber-50 px-2.5 py-1 rounded-lg border border-amber-200';
+        } else {
+          warnBadge.classList.add('hidden');
+        }
+      } else {
+        warnBadge.classList.add('hidden');
+      }
+    }
+  },
+
+  async openDrawerModal() {
+    UI.showLoading('กำลังตรวจสอบสถานะลิ้นชัก...');
+    const res = await Api.call('finance:dayStatus', {
+      branchId: this.activeBranchId,
+      stationId: this.stationId
+    });
+    UI.hideLoading();
+
+    if (!res || !res.ok) {
+      UI.showToast(res && res.error ? res.error : 'ไม่สามารถโหลดสถานะลิ้นชักได้', 'error');
+      return;
+    }
+
+    this.updateDayDrawerStatusUI(res);
+
+    const sub = document.getElementById('posDrawerModalSubtitle');
+    if (sub) sub.textContent = `เครื่อง: ${this.stationId} | สาขา: ${this.activeBranchId}`;
+
+    const stateUnopened = document.getElementById('posDrawerState_unopened');
+    const stateOpened = document.getElementById('posDrawerState_opened');
+
+    if (res.activeDrawer && res.activeDrawer.status === 'OPEN') {
+      // Show Opened State
+      if (stateUnopened) stateUnopened.classList.add('hidden');
+      if (stateOpened) stateOpened.classList.remove('hidden');
+
+      // Fetch live closing preview
+      UI.showLoading('กำลังสรุปยอดเงินสดในลิ้นชัก...');
+      const prev = await Api.call('finance:drawerClosePreview', { drawerId: res.activeDrawer.drawerId });
+      UI.hideLoading();
+
+      if (prev && prev.ok) {
+        this.activeDrawerPreview = prev;
+        const d = prev.drawer || res.activeDrawer;
+
+        const shiftEl = document.getElementById('posActiveShiftLabel');
+        if (shiftEl) shiftEl.textContent = `${d.shift || 'ปกติ'} (แคชเชียร์: ${d.cashierName || d.cashierId || '-'})`;
+
+        const idEl = document.getElementById('posActiveDrawerId');
+        if (idEl) idEl.textContent = d.drawerId;
+
+        const expEl = document.getElementById('posActiveExpectedCash');
+        if (expEl) expEl.textContent = `฿${(prev.expectedCash || 0).toFixed(2)}`;
+
+        const fltEl = document.getElementById('posActiveFloat');
+        if (fltEl) fltEl.textContent = `฿${(prev.openingFloat || 0).toFixed(2)}`;
+
+        const saleEl = document.getElementById('posActiveCashSales');
+        if (saleEl) saleEl.textContent = `฿${(prev.cashSales || 0).toFixed(2)}`;
+
+        const inEl = document.getElementById('posActiveCashIn');
+        if (inEl) inEl.textContent = `+฿${(prev.cashIn || 0).toFixed(2)}`;
+
+        const dropEl = document.getElementById('posActiveCashDrop');
+        if (dropEl) dropEl.textContent = `-฿${(prev.cashDrop || 0).toFixed(2)}`;
+
+        // Clear denominations
+        [1000, 500, 100, 50, 20, 10, 5, 2, 1].forEach(dVal => {
+          const inp = document.getElementById(`posDenom_${dVal}`);
+          if (inp) inp.value = '';
+          const tot = document.getElementById(`posDenomTot_${dVal}`);
+          if (tot) tot.textContent = '฿0';
+        });
+
+        const actualInp = document.getElementById('posDrawerActualCashInput');
+        if (actualInp) actualInp.value = (prev.expectedCash || 0).toFixed(2);
+
+        const dropInp = document.getElementById('posDrawerCashDropInput');
+        const defaultDrop = Math.max(0, (prev.expectedCash || 0) - (prev.openingFloat || 0));
+        if (dropInp) dropInp.value = defaultDrop.toFixed(2);
+
+        const noteInp = document.getElementById('posCloseDrawerNoteInput');
+        if (noteInp) noteInp.value = '';
+
+        this.recalculateDrawerVariance();
+      }
+    } else {
+      // Show Unopened State
+      if (stateOpened) stateOpened.classList.add('hidden');
+      if (stateUnopened) stateUnopened.classList.remove('hidden');
+
+      const shiftInp = document.getElementById('posOpenDrawerShiftInput');
+      if (shiftInp && !shiftInp.value) shiftInp.value = 'กะเช้า';
+
+      const floatInp = document.getElementById('posOpenDrawerFloatInput');
+      const defFloat = (res.settings && res.settings.openingFloatAmount !== undefined) ? res.settings.openingFloatAmount : 1000;
+      if (floatInp) floatInp.value = defFloat;
+
+      const noteInp = document.getElementById('posOpenDrawerNoteInput');
+      if (noteInp) noteInp.value = '';
+    }
+
+    UI.openModal('posDrawerModal');
+  },
+
+  selectShiftPreset(shift) {
+    const input = document.getElementById('posOpenDrawerShiftInput');
+    if (input) input.value = shift;
+  },
+
+  async submitOpenDrawer() {
+    const shift = document.getElementById('posOpenDrawerShiftInput')?.value.trim() || 'ปกติ';
+    const openingFloat = parseFloat(document.getElementById('posOpenDrawerFloatInput')?.value);
+    const note = document.getElementById('posOpenDrawerNoteInput')?.value.trim() || '';
+
+    if (isNaN(openingFloat) || openingFloat < 0) {
+      UI.showToast('กรุณาระบุจำนวนเงินทอนตั้งต้นที่ถูกต้อง', 'warning');
+      return;
+    }
+
+    UI.showLoading('กำลังบันทึกเปิดลิ้นชักจุดขาย...');
+    const res = await Api.call('finance:openDrawer', {
+      branchId: this.activeBranchId,
+      stationId: this.stationId,
+      shift,
+      openingFloat,
+      note
+    });
+    UI.hideLoading();
+
+    if (res && res.ok) {
+      UI.closeModal('posDrawerModal');
+      UI.showToast(`เปิดลิ้นชัก ${shift} สำเร็จ! (เงินทอน: ฿${openingFloat.toFixed(2)})`, 'success');
+      await this.refreshDayDrawerStatus();
+    } else {
+      UI.showToast(res && res.error ? res.error : 'ไม่สามารถเปิดลิ้นชักได้', 'error');
+    }
+  },
+
+  async promptMovement(type) {
+    const dId = (this.activeDrawerPreview && this.activeDrawerPreview.drawer && this.activeDrawerPreview.drawer.drawerId) ||
+                (this.dayDrawerStatus && this.dayDrawerStatus.activeDrawer && this.dayDrawerStatus.activeDrawer.drawerId);
+
+    if (!dId) {
+      UI.showToast('ไม่พบข้อมูลลิ้นชักที่เปิดอยู่', 'error');
+      return;
+    }
+
+    let title = 'การเคลื่อนไหวเงินสด';
+    if (type === 'CASH_IN') title = 'เติมเงินทอนเข้าลิ้นชัก (Cash In)';
+    else if (type === 'CASH_OUT') title = 'นำเงินสดออกจากลิ้นชัก (Cash Out)';
+    else if (type === 'CASH_DROP') title = 'ดึงเงินสดส่งตู้เซฟกลางกะ (Cash Drop)';
+
+    const amtStr = prompt(`${title}\nระบุจำนวนเงิน (บาท):`);
+    if (amtStr === null) return;
+    const amount = parseFloat(amtStr);
+    if (isNaN(amount) || amount <= 0) {
+      UI.showToast('กรุณาระบุจำนวนเงินที่มากกว่า 0', 'warning');
+      return;
+    }
+
+    const note = prompt(`ระบุหมายเหตุ / เหตุผล (ถ้ามี):`, '') || '';
+
+    UI.showLoading('กำลังบันทึกการเคลื่อนไหวเงินสด...');
+    const res = await Api.call('finance:drawerMovement', {
+      drawerId: dId,
+      type,
+      amount,
+      note
+    });
+    UI.hideLoading();
+
+    if (res && res.ok) {
+      UI.showToast(`บันทึก ${title} เรียบร้อยแล้ว (฿${amount.toFixed(2)})`, 'success');
+      await this.openDrawerModal();
+    } else {
+      UI.showToast(res && res.error ? res.error : 'บันทึกรายการไม่สำเร็จ', 'error');
+    }
+  },
+
+  onDenomInput() {
+    const denoms = [1000, 500, 100, 50, 20, 10, 5, 2, 1];
+    let total = 0;
+    denoms.forEach(dVal => {
+      const input = document.getElementById(`posDenom_${dVal}`);
+      const count = parseInt(input?.value, 10) || 0;
+      const sub = count * dVal;
+      total += sub;
+      const display = document.getElementById(`posDenomTot_${dVal}`);
+      if (display) display.textContent = `฿${sub.toLocaleString()}`;
+    });
+
+    const actualInput = document.getElementById('posDrawerActualCashInput');
+    if (actualInput) actualInput.value = total.toFixed(2);
+
+    this.recalculateDrawerVariance();
+  },
+
+  onActualManualInput() {
+    this.recalculateDrawerVariance();
+  },
+
+  onCashDropInput() {
+    this.recalculateDrawerVariance();
+  },
+
+  recalculateDrawerVariance() {
+    const expected = (this.activeDrawerPreview && this.activeDrawerPreview.expectedCash) || 0;
+    const actual = parseFloat(document.getElementById('posDrawerActualCashInput')?.value) || 0;
+    const drop = parseFloat(document.getElementById('posDrawerCashDropInput')?.value) || 0;
+    const carry = Math.max(0, actual - drop);
+    const diff = actual - expected;
+
+    const carryEl = document.getElementById('posDrawerCarryForwardDisplay');
+    if (carryEl) carryEl.textContent = `฿${carry.toFixed(2)}`;
+
+    const varEl = document.getElementById('posDrawerVarianceDisplay');
+    if (varEl) varEl.textContent = `${diff >= 0 ? '+' : ''}฿${diff.toFixed(2)}`;
+
+    const badge = document.getElementById('posDrawerVarianceBadge');
+    if (badge) {
+      if (Math.abs(diff) < 0.01) {
+        badge.textContent = 'ตรงระบบ';
+        badge.className = 'px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800';
+      } else if (diff > 0) {
+        badge.textContent = `เงินเกิน (+฿${diff.toFixed(2)})`;
+        badge.className = 'px-2 py-0.5 rounded text-[10px] font-bold bg-blue-100 text-blue-800';
+      } else {
+        badge.textContent = `เงินขาด (฿${diff.toFixed(2)})`;
+        badge.className = 'px-2 py-0.5 rounded text-[10px] font-bold bg-rose-100 text-rose-800';
+      }
+    }
+  },
+
+  async submitCloseDrawer() {
+    const dId = (this.activeDrawerPreview && this.activeDrawerPreview.drawer && this.activeDrawerPreview.drawer.drawerId) ||
+                (this.dayDrawerStatus && this.dayDrawerStatus.activeDrawer && this.dayDrawerStatus.activeDrawer.drawerId);
+
+    if (!dId) {
+      UI.showToast('ไม่พบข้อมูลลิ้นชักที่เปิดอยู่', 'error');
+      return;
+    }
+
+    const actualCash = parseFloat(document.getElementById('posDrawerActualCashInput')?.value);
+    const cashDrop = parseFloat(document.getElementById('posDrawerCashDropInput')?.value) || 0;
+    const note = document.getElementById('posCloseDrawerNoteInput')?.value.trim() || '';
+
+    if (isNaN(actualCash) || actualCash < 0) {
+      UI.showToast('กรุณาระบุยอดเงินสดนับได้จริง', 'warning');
+      return;
+    }
+
+    const denoms = {};
+    [1000, 500, 100, 50, 20, 10, 5, 2, 1].forEach(dVal => {
+      const c = parseInt(document.getElementById(`posDenom_${dVal}`)?.value, 10) || 0;
+      if (c > 0) denoms[dVal] = c;
+    });
+
+    const confirmed = await UI.confirmDialog('ยืนยันปิดลิ้นชักส่งกะ', `ยอดเงินนับจริง: ฿${actualCash.toFixed(2)}\nยอดเงินสดนำส่งเซฟ: ฿${cashDrop.toFixed(2)}\nเงินทอนยกไป: ฿${Math.max(0, actualCash - cashDrop).toFixed(2)}\n\nต้องการยืนยันการปิดลิ้นชักใช่หรือไม่?`);
+    if (!confirmed) return;
+
+    UI.showLoading('กำลังบันทึกปิดลิ้นชักส่งกะ...');
+    const res = await Api.call('finance:closeDrawer', {
+      drawerId: dId,
+      actualCash,
+      denominations: denoms,
+      cashDrop,
+      note
+    });
+    UI.hideLoading();
+
+    if (res && res.ok && res.drawer) {
+      UI.closeModal('posDrawerModal');
+      UI.showToast(`ปิดลิ้นชัก ${res.drawer.drawerId} สำเร็จ!`, 'success');
+      this.printDrawerClosingSlip(res.drawer);
+      await this.refreshDayDrawerStatus();
+    } else {
+      UI.showToast(res && res.error ? res.error : 'ไม่สามารถปิดลิ้นชักได้', 'error');
+    }
+  },
+
+  printDrawerClosingSlip(drawer) {
+    if (!drawer) return;
+    const st = this.receiptStoreInfo || {};
+    const storeName = st.storeName || CONFIG.DEFAULT_STORE_NAME || 'POS System';
+    const branchName = drawer.branchId || 'B01';
+    const variance = parseFloat(drawer.variance) || 0;
+    const varText = variance === 0 ? '฿0.00 (ตรง)' : (variance > 0 ? `+฿${variance.toFixed(2)} (เกิน)` : `-฿${Math.abs(variance).toFixed(2)} (ขาด)`);
+
+    let denomObj = {};
+    try {
+      denomObj = typeof drawer.denominationsJson === 'string' ? JSON.parse(drawer.denominationsJson || '{}') : (drawer.denominationsJson || {});
+    } catch (e) {
+      denomObj = {};
+    }
+
+    const denomRows = Object.entries(denomObj).map(([face, count]) => `
+      <div style="display:flex; justify-content:space-between; font-size:10px;">
+        <span>฿${face} x ${count}</span>
+        <span>฿${(parseFloat(face) * count).toFixed(2)}</span>
+      </div>
+    `).join('');
+
+    const html = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <title>ใบปิดลิ้นชักส่งกะ - ${drawer.drawerId}</title>
+        <style>
+          @page { size: auto; margin: 2mm; }
+          body { font-family: monospace, sans-serif; font-size: 11px; margin: 0; padding: 4px; color: #000; }
+          .center { text-align: center; }
+          .right { text-align: right; }
+          .bold { font-weight: bold; }
+          .line { border-top: 1px dashed #000; margin: 4px 0; }
+          .double-line { border-top: 2px solid #000; margin: 5px 0; }
+          .row { display: flex; justify-content: space-between; margin: 2px 0; }
+        </style>
+      </head>
+      <body>
+        <div class="center bold" style="font-size:13px;">${escapeHtml(storeName)}</div>
+        <div class="center bold" style="font-size:12px;">ใบปิดลิ้นชักส่งกะ (Shift Closing)</div>
+        <div class="center" style="font-size:10px;">สาขา: ${escapeHtml(branchName)} | เครื่อง: ${escapeHtml(drawer.stationId || 'POS-01')}</div>
+        <div class="line"></div>
+        <div class="row"><span>รหัสลิ้นชัก:</span><span class="bold">${escapeHtml(drawer.drawerId)}</span></div>
+        <div class="row"><span>กะการทำงาน:</span><span>${escapeHtml(drawer.shift || '-')}</span></div>
+        <div class="row"><span>แคชเชียร์:</span><span>${escapeHtml(drawer.cashierName || drawer.cashierId || '-')}</span></div>
+        <div class="row"><span>เวลาเปิด:</span><span>${new Date(drawer.openedAt).toLocaleTimeString('th-TH')}</span></div>
+        <div class="row"><span>เวลาปิด:</span><span>${new Date(drawer.closedAt || Date.now()).toLocaleTimeString('th-TH')}</span></div>
+        <div class="line"></div>
+        <div class="row"><span>เงินทอนตั้งต้น:</span><span class="bold">฿${parseFloat(drawer.openingFloat || 0).toFixed(2)}</span></div>
+        <div class="row"><span>ยอดขายเงินสด:</span><span class="bold">฿${parseFloat(drawer.cashSales || 0).toFixed(2)}</span></div>
+        <div class="row"><span>เติมเงิน (+) / ออก (-):</span><span>฿${((parseFloat(drawer.cashIn) || 0) - (parseFloat(drawer.cashOut) || 0)).toFixed(2)}</span></div>
+        <div class="row"><span>ส่งเซฟกลางกะ (-):</span><span>-฿${parseFloat(drawer.cashDrop || 0).toFixed(2)}</span></div>
+        <div class="line"></div>
+        <div class="row bold" style="font-size:12px;"><span>เงินสดคาดการณ์:</span><span>฿${parseFloat(drawer.expectedCash || 0).toFixed(2)}</span></div>
+        <div class="row bold" style="font-size:12px;"><span>เงินสดนับได้จริง:</span><span>฿${parseFloat(drawer.actualCash || 0).toFixed(2)}</span></div>
+        <div class="row"><span>ผลต่าง:</span><span class="bold">${varText}</span></div>
+        <div class="double-line"></div>
+        <div class="row bold"><span>เงินสดส่งเซฟปิดกะ:</span><span>฿${parseFloat(drawer.finalDrop || 0).toFixed(2)}</span></div>
+        <div class="row bold"><span>เงินทอนยกไปกะถัดไป:</span><span>฿${parseFloat(drawer.carryForward || 0).toFixed(2)}</span></div>
+        ${denomRows ? `<div class="line"></div><div class="bold" style="font-size:10px; margin-bottom:2px;">รายละเอียดธนบัตร/เหรียญ:</div>${denomRows}` : ''}
+        ${drawer.note ? `<div class="line"></div><div style="font-size:10px;">หมายเหตุ: ${escapeHtml(drawer.note)}</div>` : ''}
+        <div class="line"></div>
+        <div style="margin-top:16px; display:flex; justify-content:space-between; font-size:10px; text-align:center;">
+          <div>........................<br>ผู้ส่งมอบเงิน (แคชเชียร์)</div>
+          <div>........................<br>ผู้รับมอบเงิน / ผจก.</div>
+        </div>
+      </body>
+      </html>
+    `;
+
+    PrintManager.printHtmlDocument(html);
   }
 };
 

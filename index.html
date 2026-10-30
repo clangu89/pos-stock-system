@@ -122,7 +122,40 @@
     </section>
 
     <!-- 3. POS SALES SCREEN (MULTIPLE BILLS + VOICE + PRINT) -->
-    <section id="view_sales" class="view-screen hidden flex-1 flex flex-col gap-4">
+    <section id="view_sales" class="view-screen hidden flex-1 flex flex-col gap-3">
+      <!-- POS Top Status & Control Bar -->
+      <div id="posDayDrawerStatusBar" class="bg-white px-4 py-2 rounded-2xl border border-slate-200/80 shadow-sm flex flex-wrap items-center justify-between gap-2.5 text-xs">
+        <div class="flex items-center gap-2 flex-wrap">
+          <!-- Station Pill -->
+          <div class="flex items-center gap-1.5 px-3 py-1 rounded-xl bg-slate-100 border border-slate-200 font-bold text-slate-700">
+            <span>🖥️</span>
+            <span>เครื่อง: <strong id="posStationLabel" class="text-blue-700 font-mono">POS-01</strong></span>
+            <button onclick="SalesModule.promptSwitchStation()" class="text-[10px] text-blue-600 hover:underline cursor-pointer ml-1 font-semibold" title="สลับเครื่องจุดขาย">(สลับ)</button>
+          </div>
+
+          <!-- Day Status Pill -->
+          <div id="posDayStatusPill" class="flex items-center gap-1.5 px-3 py-1 rounded-xl bg-slate-100 text-slate-600 border border-slate-200 font-bold">
+            <span class="w-2 h-2 rounded-full bg-slate-400" id="posDayStatusDot"></span>
+            <span id="posDayStatusText">กำลังตรวจสอบสถานะวัน...</span>
+          </div>
+
+          <!-- Drawer Status Pill -->
+          <div id="posDrawerStatusPill" class="flex items-center gap-1.5 px-3 py-1 rounded-xl bg-slate-100 text-slate-600 border border-slate-200 font-bold">
+            <span>🗄️</span>
+            <span id="posDrawerStatusText">กำลังตรวจสอบลิ้นชัก...</span>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <span id="posPolicyWarnBadge" class="hidden text-[11px] font-bold text-amber-700 bg-amber-50 px-2.5 py-1 rounded-lg border border-amber-200">
+            ⚠️ ยังไม่ได้เปิดวัน/ลิ้นชัก
+          </span>
+          <button onclick="SalesModule.openDrawerModal()" id="posManageDrawerBtn" class="px-3.5 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold transition flex items-center gap-1.5 shadow-sm cursor-pointer">
+            <span>🗄️</span> <span id="posManageDrawerBtnText">เปิด/ปิดลิ้นชัก</span>
+          </button>
+        </div>
+      </div>
+
       <div class="grid grid-cols-1 lg:grid-cols-12 gap-5 flex-1">
         
         <!-- Left: Product Catalog & Barcode Scanner (7 cols) -->
@@ -738,6 +771,10 @@
 
       <!-- Navigation Tabs -->
       <div class="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar">
+        <button id="financeTabBtn_day" onclick="FinanceModule.switchTab('day')"
+                class="finance-tab-btn px-4 py-2.5 rounded-xl font-bold text-xs bg-white text-slate-700 hover:bg-slate-100 border border-slate-200 transition cursor-pointer">
+          🌅 เปิด-ปิดวันทำการ
+        </button>
         <button id="financeTabBtn_summary" onclick="FinanceModule.switchTab('summary')"
                 class="finance-tab-btn px-4 py-2.5 rounded-xl font-bold text-xs bg-purple-600 text-white shadow-md transition cursor-pointer">
           💎 สรุปกระแสเงินสดและกำไร
@@ -748,12 +785,220 @@
         </button>
         <button id="financeTabBtn_closing" onclick="FinanceModule.switchTab('closing')"
                 class="finance-tab-btn px-4 py-2.5 rounded-xl font-bold text-xs bg-white text-slate-700 hover:bg-slate-100 border border-slate-200 transition cursor-pointer">
-          🔐 ปิดยอด / นับเงินสดประจำวัน
+          🗄️ เปิด-ปิดลิ้นชัก / นับเงินสด
         </button>
         <button id="financeTabBtn_settings" onclick="FinanceModule.switchTab('settings')"
                 class="finance-tab-btn px-4 py-2.5 rounded-xl font-bold text-xs bg-white text-slate-700 hover:bg-slate-100 border border-slate-200 transition cursor-pointer">
           ⚙️ ตั้งค่าระบบการเงิน
         </button>
+      </div>
+
+      <!-- Tab Content 0: Business Day Control & Drawer Monitor -->
+      <div id="financeTab_day" class="finance-tab-content hidden space-y-6">
+        <!-- Control Header & Active Day Banner -->
+        <div class="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-sm space-y-4">
+          <div class="flex flex-wrap items-center justify-between gap-3">
+            <div class="flex items-center gap-3 flex-wrap">
+              <div>
+                <label class="block text-[11px] font-bold text-slate-500 mb-0.5">สาขา</label>
+                <select id="financeDayBranchSelect" onchange="FinanceModule.loadDayStatus()" class="px-3 py-1.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-bold"></select>
+              </div>
+              <div>
+                <label class="block text-[11px] font-bold text-slate-500 mb-0.5">วันที่ทำการ</label>
+                <input type="date" id="financeDayDateInput" onchange="FinanceModule.loadDayStatus()" class="px-3 py-1.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-bold">
+              </div>
+              <div class="self-end">
+                <button onclick="FinanceModule.loadDayStatus()" class="px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs shadow-sm transition flex items-center gap-1.5 cursor-pointer">
+                  <span>🔄</span> <span>รีเฟรชสถานะ</span>
+                </button>
+              </div>
+            </div>
+            
+            <div id="financeDayStatusBannerBadge" class="px-4 py-2 rounded-2xl text-xs font-black flex items-center gap-2 bg-slate-100 text-slate-700 border border-slate-200">
+              <span class="w-2.5 h-2.5 rounded-full bg-slate-400" id="financeDayStatusDot"></span>
+              <span id="financeDayStatusText">กำลังตรวจสอบสถานะวัน...</span>
+            </div>
+          </div>
+
+          <!-- Open Day Form (Shown when day is UNOPENED) -->
+          <div id="financeOpenDayCard" class="hidden p-4 rounded-2xl bg-amber-50 border border-amber-200 space-y-3">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-2">
+                <span class="text-xl">🌅</span>
+                <div>
+                  <h4 class="font-bold text-amber-900 text-xs">สาขานี้ยังไม่ได้เปิดวันทำการ</h4>
+                  <p class="text-[11px] text-amber-700">กำหนดเงินสดกองกลาง/เงินทอนตั้งต้นเพื่อเปิดวันทำการให้แคชเชียร์เริ่มเปิดลิ้นชักขายสินค้าได้</p>
+                </div>
+              </div>
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end pt-1">
+              <div>
+                <label class="block text-[11px] font-bold text-amber-900 mb-1">เงินสดตั้งต้นประจำวัน (บาท) *</label>
+                <input type="number" step="0.01" min="0" id="financeOpenDayFloatInput" placeholder="1000.00" class="w-full px-3 py-2 rounded-xl bg-white border border-amber-300 font-mono font-bold text-amber-900 text-xs">
+              </div>
+              <div>
+                <label class="block text-[11px] font-bold text-amber-900 mb-1">หมายเหตุการเปิดวัน (ถ้ามี)</label>
+                <input type="text" id="financeOpenDayNoteInput" placeholder="เช่น เงินสดยกมาจากวันก่อน..." class="w-full px-3 py-2 rounded-xl bg-white border border-amber-300 text-xs">
+              </div>
+              <div>
+                <button onclick="FinanceModule.submitOpenDay()" class="w-full py-2.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-black text-xs shadow-md transition flex items-center justify-center gap-1.5 cursor-pointer">
+                  <span>🌅</span> <span>ยืนยันเปิดวันทำการ (Open Day)</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Active Day Details (Shown when day is OPEN) -->
+          <div id="financeActiveDayInfoCard" class="hidden grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+            <div class="bg-purple-50 p-3 rounded-2xl border border-purple-200">
+              <div class="text-slate-500 text-[11px] font-bold">รหัสวันทำการ</div>
+              <div id="activeDayIdLabel" class="font-mono font-bold text-purple-900 text-sm mt-0.5">-</div>
+            </div>
+            <div class="bg-purple-50 p-3 rounded-2xl border border-purple-200">
+              <div class="text-slate-500 text-[11px] font-bold">เงินทอนตั้งต้นวัน</div>
+              <div id="activeDayFloatLabel" class="font-mono font-black text-slate-800 text-sm mt-0.5">฿0.00</div>
+            </div>
+            <div class="bg-purple-50 p-3 rounded-2xl border border-purple-200">
+              <div class="text-slate-500 text-[11px] font-bold">ผู้เปิดวันทำการ</div>
+              <div id="activeDayUserLabel" class="font-bold text-slate-800 text-sm mt-0.5">-</div>
+            </div>
+            <div class="bg-purple-50 p-3 rounded-2xl border border-purple-200">
+              <div class="text-slate-500 text-[11px] font-bold">เวลาเปิดวัน</div>
+              <div id="activeDayTimeLabel" class="font-mono text-slate-600 text-sm mt-0.5">-</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Live Drawers Monitor for this Business Day -->
+        <div class="bg-white rounded-3xl border border-slate-200/80 shadow-sm overflow-hidden">
+          <div class="p-4 border-b border-slate-100 flex items-center justify-between flex-wrap gap-2">
+            <div>
+              <h3 class="font-extrabold text-sm text-slate-900 flex items-center gap-2">
+                <span>🗄️</span> <span>มอนิเตอร์ลิ้นชักจุดขายในสาขา (Cash Drawers Live Monitor)</span>
+              </h3>
+              <p class="text-[11px] text-slate-500">ติดตามสถานะลิ้นชักทุกเครื่องจุดขายและกะในวันทำการนี้</p>
+            </div>
+            <div class="flex items-center gap-2">
+              <span id="drawersOpenBadge" class="px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                0 เปิดอยู่
+              </span>
+              <button onclick="FinanceModule.openNewDrawerModal()" class="px-3.5 py-1.5 rounded-xl bg-purple-50 hover:bg-purple-100 text-purple-700 font-bold text-xs border border-purple-200 transition cursor-pointer flex items-center gap-1">
+                <span>+</span> <span>เปิดลิ้นชักใหม่</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="overflow-x-auto">
+            <table class="w-full text-left text-xs">
+              <thead class="bg-slate-50 text-slate-500 uppercase font-bold border-b border-slate-200">
+                <tr>
+                  <th class="py-2.5 px-3">รหัสลิ้นชัก</th>
+                  <th class="py-2.5 px-3">เครื่อง / กะ</th>
+                  <th class="py-2.5 px-3">แคชเชียร์</th>
+                  <th class="py-2.5 px-3 text-center">สถานะ</th>
+                  <th class="py-2.5 px-3 text-right">เงินทอนตั้งต้น</th>
+                  <th class="py-2.5 px-3 text-right">ขายเงินสด</th>
+                  <th class="py-2.5 px-3 text-right">เข้า/ออก/ดึงเก็บ</th>
+                  <th class="py-2.5 px-3 text-right">คาดการณ์</th>
+                  <th class="py-2.5 px-3 text-right">นับจริง / ผลต่าง</th>
+                  <th class="py-2.5 px-3 text-right">นำส่ง / ยกไป</th>
+                  <th class="py-2.5 px-3 text-center">จัดการ</th>
+                </tr>
+              </thead>
+              <tbody id="financeLiveDrawersTableBody" class="divide-y divide-slate-100">
+                <tr><td colspan="11" class="text-center py-6 text-slate-400">กำลังโหลดรายการลิ้นชัก...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- End-of-Day Z-Report Close Panel (Visible when Day is OPEN) -->
+        <div id="financeDayClosePanel" class="hidden bg-white p-5 rounded-3xl border border-slate-200/80 shadow-sm space-y-4">
+          <div class="flex items-center justify-between pb-3 border-b border-slate-100 flex-wrap gap-2">
+            <div>
+              <h3 class="font-extrabold text-sm text-slate-900 flex items-center gap-2">
+                <span>🔒</span> <span>สรุปปิดวันทำการประจำสาขา (End-of-Day Z-Report)</span>
+              </h3>
+              <p class="text-[11px] text-slate-500">ตรวจสอบความพร้อมของลิ้นชักทุกเครื่องและสรุปยอดเงินสดรวมประจำวัน</p>
+            </div>
+            <div id="dayPrecloseChecklistBadge" class="px-3 py-1 rounded-xl text-xs font-bold bg-amber-50 text-amber-800 border border-amber-200">
+              กำลังตรวจสอบความพร้อม...
+            </div>
+          </div>
+
+          <!-- Summary KPI Grid for Day Close -->
+          <div class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3 text-xs">
+            <div class="p-3 bg-slate-50 rounded-2xl border border-slate-200">
+              <div class="text-slate-400 font-bold text-[10px]">ยอดขายสดรวม</div>
+              <div id="zSummaryCashSales" class="font-mono font-bold text-emerald-600 text-sm mt-0.5">฿0.00</div>
+            </div>
+            <div class="p-3 bg-slate-50 rounded-2xl border border-slate-200">
+              <div class="text-slate-400 font-bold text-[10px]">ยอดขายโอน/QR</div>
+              <div id="zSummaryTransferSales" class="font-mono font-bold text-blue-600 text-sm mt-0.5">฿0.00</div>
+            </div>
+            <div class="p-3 bg-slate-50 rounded-2xl border border-slate-200">
+              <div class="text-slate-400 font-bold text-[10px]">รายรับสดอื่น</div>
+              <div id="zSummaryCashIncome" class="font-mono font-bold text-teal-600 text-sm mt-0.5">+฿0.00</div>
+            </div>
+            <div class="p-3 bg-slate-50 rounded-2xl border border-slate-200">
+              <div class="text-slate-400 font-bold text-[10px]">รายจ่ายสดหน้าร้าน</div>
+              <div id="zSummaryCashExpense" class="font-mono font-bold text-rose-600 text-sm mt-0.5">-฿0.00</div>
+            </div>
+            <div class="p-3 bg-slate-50 rounded-2xl border border-slate-200">
+              <div class="text-slate-400 font-bold text-[10px]">เงินสดส่งเซฟรวม</div>
+              <div id="zSummaryCashDrop" class="font-mono font-black text-purple-700 text-sm mt-0.5">฿0.00</div>
+            </div>
+            <div class="p-3 bg-slate-50 rounded-2xl border border-slate-200">
+              <div class="text-slate-400 font-bold text-[10px]">เงินทอนยกไปรวม</div>
+              <div id="zSummaryCarryForward" class="font-mono font-black text-slate-800 text-sm mt-0.5">฿0.00</div>
+            </div>
+          </div>
+
+          <div class="flex items-center justify-between pt-2 border-t border-slate-100 flex-wrap gap-3">
+            <div class="flex-1 max-w-md">
+              <input type="text" id="financeDayCloseNoteInput" placeholder="หมายเหตุการปิดวันทำการ (ถ้ามี)..." class="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs">
+            </div>
+            <div class="flex items-center gap-2">
+              <button onclick="FinanceModule.submitCloseDay()" id="financeSubmitCloseDayBtn" class="px-6 py-2.5 rounded-2xl bg-gradient-to-r from-purple-700 to-indigo-700 hover:from-purple-800 hover:to-indigo-800 text-white font-black text-xs shadow-lg transition flex items-center gap-1.5 cursor-pointer">
+                <span>🔒</span> <span>ยืนยันปิดวันทำการ (Close Business Day)</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Business Days History Table -->
+        <div class="bg-white rounded-3xl border border-slate-200/80 shadow-sm overflow-hidden">
+          <div class="p-4 border-b border-slate-100 flex items-center justify-between">
+            <h3 class="font-extrabold text-sm text-slate-900 flex items-center gap-2">
+              <span>📜</span> <span>ประวัติการเปิด-ปิดวันทำการย้อนหลัง</span>
+            </h3>
+            <button onclick="FinanceModule.loadBusinessDaysHistory()" class="px-3 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition">
+              🔄 รีเฟรชประวัติ
+            </button>
+          </div>
+          <div class="overflow-x-auto max-h-[500px] overflow-y-auto">
+            <table class="w-full text-left text-xs">
+              <thead class="bg-slate-50 text-slate-500 uppercase font-bold sticky top-0 border-b border-slate-200 z-10">
+                <tr>
+                  <th class="py-2.5 px-3">วันที่ทำการ</th>
+                  <th class="py-2.5 px-3">รหัสวันทำการ</th>
+                  <th class="py-2.5 px-3">สาขา</th>
+                  <th class="py-2.5 px-3 text-center">สถานะ</th>
+                  <th class="py-2.5 px-3 text-right">เงินทอนตั้งต้น</th>
+                  <th class="py-2.5 px-3 text-right">ขายเงินสด</th>
+                  <th class="py-2.5 px-3 text-right">ขายโอน/QR</th>
+                  <th class="py-2.5 px-3 text-right">นำส่งสุทธิ</th>
+                  <th class="py-2.5 px-3 text-right">เงินทอนยกไป</th>
+                  <th class="py-2.5 px-3 text-center">ผู้ปิดวัน</th>
+                  <th class="py-2.5 px-3 text-center">จัดการ</th>
+                </tr>
+              </thead>
+              <tbody id="businessDaysHistoryTableBody" class="divide-y divide-slate-100">
+                <tr><td colspan="11" class="text-center py-6 text-slate-400">กำลังโหลดประวัติวันทำการ...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
       </div>
 
       <!-- Tab Content 1: Cash Flow & Profit Summary -->
@@ -1425,6 +1670,55 @@
                   <span class="text-xs text-slate-700">
                     <span class="font-bold">เปิดหน้าต่างพิมพ์ใบปิดยอดและใบส่งเงินอัตโนมัติ</span>
                     <span class="block text-[11px] text-slate-400">เมื่อบันทึกปิดยอดเงินสดประจำวันสำเร็จ</span>
+                  </span>
+                </label>
+              </div>
+            </div>
+          </div>
+
+          <!-- Card 5: Business Day & Cash Drawer Policy (No Bank Account) -->
+          <div class="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-sm space-y-4 md:col-span-2">
+            <div class="flex items-center gap-2 pb-2 border-b border-slate-100">
+              <span class="text-xl">🌅</span>
+              <div>
+                <h3 class="font-extrabold text-sm text-slate-900">นโยบายเปิด-ปิดวันทำการ และเปิด-ปิดลิ้นชักจุดขาย</h3>
+                <p class="text-[11px] text-slate-500">ควบคุมวงจรเงินสดหน้าร้านแบบ 2 ระดับ (ระดับสาขา และระดับเครื่องจุดขาย/กะแคชเชียร์)</p>
+              </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+              <div>
+                <label class="block font-bold text-slate-700 mb-1">นโยบายการควบคุมหน้าขาย POS (POS Day & Drawer Policy)</label>
+                <select id="st_posDayDrawerPolicy" class="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 font-bold">
+                  <option value="WARN">⚠️ แจ้งเตือนบนหน้า POS (เตือนเมื่อยังไม่เปิดวัน/ลิ้นชัก แต่ยังขายต่อได้) [แนะนำ]</option>
+                  <option value="STRICT">🚫 เข้มงวดสูงสุด (STRICT - บล็อกการคิดเงินจนกว่าจะเปิดวันและลิ้นชัก)</option>
+                  <option value="NONE">⚪ อิสระ (ไม่แจ้งเตือนและไม่บล็อกหน้าขาย)</option>
+                </select>
+                <p class="text-[11px] text-slate-400 mt-1">โหมด STRICT จะช่วยป้องกันแคชเชียร์คิดเงินโดยไม่เปิดกะหรือยังไม่เปิดวันทำการ</p>
+              </div>
+
+              <div class="space-y-2.5 pt-1">
+                <label class="flex items-start gap-2.5 cursor-pointer">
+                  <input type="checkbox" id="st_requireCloseAllDrawersBeforeDayClose" class="mt-0.5 rounded text-purple-600 focus:ring-purple-500">
+                  <span class="text-xs text-slate-700">
+                    <span class="font-bold">บังคับปิดลิ้นชักครบทุกเครื่องก่อนปิดวันทำการ</span>
+                    <span class="block text-[11px] text-slate-400">หากยังมีลิ้นชักที่ยังเปิดขายอยู่ ผู้จัดการจะไม่สามารถกดปิดวัน (Z-Report) ได้</span>
+                  </span>
+                </label>
+
+                <label class="flex items-start gap-2.5 cursor-pointer">
+                  <input type="checkbox" id="st_lockLedgerAfterDayClose" class="mt-0.5 rounded text-purple-600 focus:ring-purple-500">
+                  <span class="text-xs text-slate-700">
+                    <span class="font-bold">ล็อกระบบหลังปิดวันทำการ (End-of-Day Lock)</span>
+                    <span class="block text-[11px] text-slate-400">ห้ามลงรายการขายหรือบันทึกรายรับ-รายจ่ายย้อนหลังในวันที่ปิดวันไปแล้ว</span>
+                  </span>
+                </label>
+
+                <label class="flex items-start gap-2.5 cursor-pointer">
+                  <input type="checkbox" id="st_autoOpenDayOnFirstDrawer" class="mt-0.5 rounded text-purple-600 focus:ring-purple-500">
+                  <span class="text-xs text-slate-700">
+                    <span class="font-bold">เปิดวันทำการอัตโนมัติเมื่อแคชเชียร์เปิดลิ้นชักแรก</span>
+                    <span class="block text-[11px] text-slate-400">กรณีผู้จัดการยังไม่ได้กดเปิดวัน เมื่อแคชเชียร์เปิดลิ้นชักแรกจะเปิดวันทำการให้ทันที</span>
                   </span>
                 </label>
               </div>
@@ -3125,6 +3419,238 @@
     </div>
   </div>
 
+  <!-- POS Cash Drawer Modal (Open / Mid-shift Movements / Close Drawer) -->
+  <div id="posDrawerModal" class="hidden fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 space-y-4 max-h-[90vh] overflow-y-auto">
+      <div class="flex items-center justify-between pb-3 border-b border-slate-100">
+        <div class="flex items-center gap-2">
+          <span class="text-xl">🗄️</span>
+          <div>
+            <h3 class="font-black text-base text-slate-900" id="posDrawerModalTitle">ลิ้นชักจุดขายและนับเงินสด</h3>
+            <div class="text-[11px] text-slate-500" id="posDrawerModalSubtitle">เครื่อง POS-01</div>
+          </div>
+        </div>
+        <button onclick="UI.closeModal('posDrawerModal')" class="text-slate-400 hover:text-slate-700 text-lg">✕</button>
+      </div>
+
+      <!-- State A: Drawer is NOT Open -> Open Drawer Form -->
+      <div id="posDrawerState_unopened" class="space-y-4 text-xs">
+        <div class="p-3.5 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 space-y-1">
+          <div class="font-bold flex items-center gap-1.5 text-xs">
+            <span>⚠️</span> <span>เครื่องนี้ยังไม่ได้เปิดลิ้นชักเก็บเงิน</span>
+          </div>
+          <p class="text-[11px] text-amber-700">กรุณาระบุเงินทอนตั้งต้นและชื่อกะเพื่อเปิดลิ้นชักเริ่มการขาย</p>
+        </div>
+
+        <div>
+          <label class="block font-bold text-slate-700 mb-1">ชื่อกะการทำงาน *</label>
+          <div class="grid grid-cols-3 gap-2">
+            <button type="button" onclick="SalesModule.selectShiftPreset('กะเช้า')" class="py-2 rounded-xl border border-slate-200 font-bold hover:bg-slate-50 text-slate-700">กะเช้า</button>
+            <button type="button" onclick="SalesModule.selectShiftPreset('กะบ่าย')" class="py-2 rounded-xl border border-slate-200 font-bold hover:bg-slate-50 text-slate-700">กะบ่าย</button>
+            <button type="button" onclick="SalesModule.selectShiftPreset('เต็มวัน')" class="py-2 rounded-xl border border-slate-200 font-bold hover:bg-slate-50 text-slate-700">เต็มวัน</button>
+          </div>
+          <input type="text" id="posOpenDrawerShiftInput" value="กะเช้า" class="w-full mt-2 px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 font-bold">
+        </div>
+
+        <div>
+          <label class="block font-bold text-slate-700 mb-1">เงินทอนตั้งต้นรับเข้าลิ้นชัก (บาท) *</label>
+          <input type="number" step="0.01" min="0" id="posOpenDrawerFloatInput" placeholder="1000.00" class="w-full px-3 py-2.5 rounded-xl bg-slate-50 border border-slate-200 font-mono font-bold text-sm text-slate-900">
+        </div>
+
+        <div>
+          <label class="block font-bold text-slate-700 mb-1">หมายเหตุ (ถ้ามี)</label>
+          <input type="text" id="posOpenDrawerNoteInput" placeholder="เช่น เงินทอนรับมาจากผู้จัดการ..." class="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200">
+        </div>
+
+        <button type="button" onclick="SalesModule.submitOpenDrawer()" class="w-full py-3 rounded-2xl bg-purple-600 hover:bg-purple-700 text-white font-extrabold text-xs shadow-md transition flex items-center justify-center gap-1.5 cursor-pointer">
+          <span>🔓</span> <span>ยืนยันเปิดลิ้นชักเริ่มขาย</span>
+        </button>
+      </div>
+
+      <!-- State B: Drawer IS Open -> Monitor, Movements, Denomination Counting & Close -->
+      <div id="posDrawerState_opened" class="hidden space-y-4 text-xs">
+        <!-- Live Shift Status Ribbon -->
+        <div class="p-3.5 bg-purple-50 rounded-2xl border border-purple-200 flex items-center justify-between">
+          <div>
+            <div class="font-black text-purple-900 text-xs" id="posActiveShiftLabel">กะเช้า</div>
+            <div class="text-[10px] text-purple-700 font-mono" id="posActiveDrawerId">-</div>
+          </div>
+          <div class="text-right">
+            <div class="text-[10px] text-purple-700 font-bold">เงินสดที่ต้องมีในลิ้นชัก</div>
+            <div class="text-lg font-black font-mono text-purple-900" id="posActiveExpectedCash">฿0.00</div>
+          </div>
+        </div>
+
+        <!-- In-shift Breakdown Ribbon -->
+        <div class="grid grid-cols-4 gap-2 text-[11px] text-center">
+          <div class="p-2 bg-slate-50 rounded-xl border border-slate-200">
+            <span class="text-slate-400 block text-[10px]">เงินทอน</span>
+            <span class="font-mono font-bold text-slate-700" id="posActiveFloat">฿0.00</span>
+          </div>
+          <div class="p-2 bg-slate-50 rounded-xl border border-slate-200">
+            <span class="text-slate-400 block text-[10px]">ขายเงินสด</span>
+            <span class="font-mono font-bold text-emerald-600" id="posActiveCashSales">฿0.00</span>
+          </div>
+          <div class="p-2 bg-slate-50 rounded-xl border border-slate-200">
+            <span class="text-slate-400 block text-[10px]">เติมเงิน (+)</span>
+            <span class="font-mono font-bold text-blue-600" id="posActiveCashIn">+฿0.00</span>
+          </div>
+          <div class="p-2 bg-slate-50 rounded-xl border border-slate-200">
+            <span class="text-slate-400 block text-[10px]">ดึงส่งเซฟ (-)</span>
+            <span class="font-mono font-bold text-rose-600" id="posActiveCashDrop">-฿0.00</span>
+          </div>
+        </div>
+
+        <!-- Mid-shift Quick Actions -->
+        <div class="p-3 bg-slate-50 rounded-2xl border border-slate-200/80 space-y-2">
+          <div class="font-bold text-[11px] text-slate-600 flex items-center justify-between">
+            <span>💵 การเคลื่อนไหวเงินสดระหว่างกะ</span>
+            <span class="text-[10px] text-slate-400">บันทึกเติมหรือนำส่งเงินเก็บ</span>
+          </div>
+          <div class="grid grid-cols-3 gap-2">
+            <button type="button" onclick="SalesModule.promptMovement('CASH_IN')" class="py-2 px-2 rounded-xl bg-white hover:bg-blue-50 text-blue-700 border border-slate-200 font-bold text-[11px] transition shadow-xs">
+              ➕ เติมเงินทอน
+            </button>
+            <button type="button" onclick="SalesModule.promptMovement('CASH_OUT')" class="py-2 px-2 rounded-xl bg-white hover:bg-rose-50 text-rose-700 border border-slate-200 font-bold text-[11px] transition shadow-xs">
+              ➖ นำเงินออก
+            </button>
+            <button type="button" onclick="SalesModule.promptMovement('CASH_DROP')" class="py-2 px-2 rounded-xl bg-white hover:bg-purple-50 text-purple-700 border border-slate-200 font-bold text-[11px] transition shadow-xs">
+              📥 ส่งเซฟกลางกะ
+            </button>
+          </div>
+        </div>
+
+        <!-- Denomination Counting & Close Drawer Section -->
+        <div class="space-y-3 pt-2 border-t border-slate-100">
+          <div class="flex items-center justify-between">
+            <h4 class="font-extrabold text-slate-800 text-xs flex items-center gap-1.5">
+              <span>🧮</span> <span>นับธนบัตรและเหรียญเพื่อปิดลิ้นชักส่งกะ</span>
+            </h4>
+            <span class="text-[10px] text-slate-400">กรอกจำนวนใบ/เหรียญ</span>
+          </div>
+
+          <!-- Denomination Table Mini -->
+          <div class="grid grid-cols-2 gap-2 text-[11px]">
+            <div class="bg-slate-50 p-2.5 rounded-xl border border-slate-200 space-y-1.5">
+              <div class="font-bold text-slate-600 text-[10px] uppercase">ธนบัตร</div>
+              <div class="flex items-center justify-between gap-1">
+                <span class="font-bold text-slate-700">฿1,000</span>
+                <input type="number" min="0" id="posDenom_1000" oninput="SalesModule.onDenomInput()" placeholder="0" class="w-14 px-1.5 py-0.5 text-center font-mono font-bold rounded border border-slate-200 bg-white">
+                <span id="posDenomTot_1000" class="font-mono text-right w-16 text-slate-800">฿0</span>
+              </div>
+              <div class="flex items-center justify-between gap-1">
+                <span class="font-bold text-slate-700">฿500</span>
+                <input type="number" min="0" id="posDenom_500" oninput="SalesModule.onDenomInput()" placeholder="0" class="w-14 px-1.5 py-0.5 text-center font-mono font-bold rounded border border-slate-200 bg-white">
+                <span id="posDenomTot_500" class="font-mono text-right w-16 text-slate-800">฿0</span>
+              </div>
+              <div class="flex items-center justify-between gap-1">
+                <span class="font-bold text-slate-700">฿100</span>
+                <input type="number" min="0" id="posDenom_100" oninput="SalesModule.onDenomInput()" placeholder="0" class="w-14 px-1.5 py-0.5 text-center font-mono font-bold rounded border border-slate-200 bg-white">
+                <span id="posDenomTot_100" class="font-mono text-right w-16 text-slate-800">฿0</span>
+              </div>
+              <div class="flex items-center justify-between gap-1">
+                <span class="font-bold text-slate-700">฿50</span>
+                <input type="number" min="0" id="posDenom_50" oninput="SalesModule.onDenomInput()" placeholder="0" class="w-14 px-1.5 py-0.5 text-center font-mono font-bold rounded border border-slate-200 bg-white">
+                <span id="posDenomTot_50" class="font-mono text-right w-16 text-slate-800">฿0</span>
+              </div>
+              <div class="flex items-center justify-between gap-1">
+                <span class="font-bold text-slate-700">฿20</span>
+                <input type="number" min="0" id="posDenom_20" oninput="SalesModule.onDenomInput()" placeholder="0" class="w-14 px-1.5 py-0.5 text-center font-mono font-bold rounded border border-slate-200 bg-white">
+                <span id="posDenomTot_20" class="font-mono text-right w-16 text-slate-800">฿0</span>
+              </div>
+            </div>
+
+            <div class="bg-slate-50 p-2.5 rounded-xl border border-slate-200 space-y-1.5">
+              <div class="font-bold text-slate-600 text-[10px] uppercase">เหรียญ</div>
+              <div class="flex items-center justify-between gap-1">
+                <span class="font-bold text-slate-700">฿10</span>
+                <input type="number" min="0" id="posDenom_10" oninput="SalesModule.onDenomInput()" placeholder="0" class="w-14 px-1.5 py-0.5 text-center font-mono font-bold rounded border border-slate-200 bg-white">
+                <span id="posDenomTot_10" class="font-mono text-right w-16 text-slate-800">฿0</span>
+              </div>
+              <div class="flex items-center justify-between gap-1">
+                <span class="font-bold text-slate-700">฿5</span>
+                <input type="number" min="0" id="posDenom_5" oninput="SalesModule.onDenomInput()" placeholder="0" class="w-14 px-1.5 py-0.5 text-center font-mono font-bold rounded border border-slate-200 bg-white">
+                <span id="posDenomTot_5" class="font-mono text-right w-16 text-slate-800">฿0</span>
+              </div>
+              <div class="flex items-center justify-between gap-1">
+                <span class="font-bold text-slate-700">฿2</span>
+                <input type="number" min="0" id="posDenom_2" oninput="SalesModule.onDenomInput()" placeholder="0" class="w-14 px-1.5 py-0.5 text-center font-mono font-bold rounded border border-slate-200 bg-white">
+                <span id="posDenomTot_2" class="font-mono text-right w-16 text-slate-800">฿0</span>
+              </div>
+              <div class="flex items-center justify-between gap-1">
+                <span class="font-bold text-slate-700">฿1</span>
+                <input type="number" min="0" id="posDenom_1" oninput="SalesModule.onDenomInput()" placeholder="0" class="w-14 px-1.5 py-0.5 text-center font-mono font-bold rounded border border-slate-200 bg-white">
+                <span id="posDenomTot_1" class="font-mono text-right w-16 text-slate-800">฿0</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Total Actual & Variance Ribbon -->
+          <div class="p-3 bg-slate-900 text-white rounded-2xl space-y-2">
+            <div class="flex justify-between items-center">
+              <span class="text-xs text-slate-300 font-bold">ยอดเงินสดนับได้จริง:</span>
+              <div class="flex items-center gap-1">
+                <span class="font-mono">฿</span>
+                <input type="number" step="0.01" id="posDrawerActualCashInput" oninput="SalesModule.onActualManualInput()" placeholder="0.00" class="w-28 px-2 py-1 text-right font-mono font-bold rounded-lg bg-slate-800 border border-slate-700 text-white">
+              </div>
+            </div>
+
+            <div class="flex justify-between items-center pt-1 border-t border-slate-800">
+              <span class="text-xs text-slate-300">ผลต่าง (จริง - คาดการณ์):</span>
+              <div class="flex items-center gap-1.5">
+                <span id="posDrawerVarianceBadge" class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800">ตรงระบบ</span>
+                <span id="posDrawerVarianceDisplay" class="font-mono font-bold text-emerald-400">฿0.00</span>
+              </div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-2 pt-1 border-t border-slate-800">
+              <div>
+                <label class="block text-[10px] text-slate-300 font-bold mb-0.5">เงินสดนำส่ง (Cash Drop)</label>
+                <input type="number" step="0.01" id="posDrawerCashDropInput" oninput="SalesModule.onCashDropInput()" placeholder="0.00" class="w-full px-2 py-1 text-right font-mono font-bold text-xs rounded-lg bg-slate-800 border border-slate-700 text-emerald-400">
+              </div>
+              <div>
+                <div class="text-[10px] text-slate-300 font-bold mb-0.5">เงินทอนยกไป (Carry Forward)</div>
+                <div id="posDrawerCarryForwardDisplay" class="px-2 py-1 text-right font-mono font-bold text-xs rounded-lg bg-slate-800 border border-slate-700 text-slate-300">฿0.00</div>
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <input type="text" id="posCloseDrawerNoteInput" placeholder="หมายเหตุการปิดลิ้นชัก (ถ้ามี)..." class="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs">
+          </div>
+
+          <button type="button" onclick="SalesModule.submitCloseDrawer()" class="w-full py-3 rounded-2xl bg-gradient-to-r from-purple-700 to-indigo-700 hover:from-purple-800 hover:to-indigo-800 text-white font-black text-xs shadow-md transition flex items-center justify-center gap-1.5 cursor-pointer">
+            <span>🔒</span> <span>บันทึกปิดลิ้นชักส่งกะ & พิมพ์ใบส่งเงิน</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Business Day Z-Report Detail Modal -->
+  <div id="dayCloseDetailModal" class="hidden fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-4 max-h-[90vh] overflow-y-auto">
+      <div class="flex items-center justify-between pb-3 border-b border-slate-100">
+        <div>
+          <h3 class="font-black text-base text-slate-900">ใบสรุปปิดวันทำการ (Z-Report)</h3>
+          <div class="text-[11px] font-mono text-purple-700" id="zModalDayId">-</div>
+        </div>
+        <button onclick="UI.closeModal('dayCloseDetailModal')" class="text-slate-400 hover:text-slate-700 text-lg">✕</button>
+      </div>
+
+      <div class="space-y-3 text-xs" id="zModalContent">
+        <!-- Rendered dynamically by FinanceModule.renderZReportModal() -->
+      </div>
+
+      <div class="pt-3 border-t border-slate-100 flex items-center justify-end gap-2">
+        <button onclick="UI.closeModal('dayCloseDetailModal')" class="px-4 py-2 rounded-xl bg-slate-100 text-slate-700 font-bold">ปิด</button>
+        <button onclick="FinanceModule.printZReportSlip()" class="px-5 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold shadow-md flex items-center gap-1.5">
+          <span>🖨️</span> <span>พิมพ์ใบสรุปปิดวัน (Z-Report Slip)</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
   <iframe id="receiptPrintIframe" class="hidden"></iframe>
 
   <!-- ================= SCRIPTS ================= -->
@@ -3135,13 +3661,13 @@
   <script src="js/ui.js?v=20261030-v16"></script>
   <script src="js/api.js?v=20261030-v16"></script>
   <script src="js/auth.js?v=20261030-v16"></script>
-  <script src="js/modules/launcher.js?v=20261030-v16"></script>
-  <script src="js/modules/sales.js?v=20261030-v16"></script>
-  <script src="js/modules/stock.js?v=20261030-v16"></script>
-  <script src="js/modules/reports.js?v=20261030-v16"></script>
-  <script src="js/modules/finance.js?v=20261030-v19"></script>
-  <script src="js/modules/admin.js?v=20261030-v19"></script>
-  <script src="js/router.js?v=20261030-v16"></script>
+  <script src="js/modules/launcher.js?v=20261031-v20"></script>
+  <script src="js/modules/sales.js?v=20261031-v20"></script>
+  <script src="js/modules/stock.js?v=20261031-v20"></script>
+  <script src="js/modules/reports.js?v=20261031-v20"></script>
+  <script src="js/modules/finance.js?v=20261031-v20"></script>
+  <script src="js/modules/admin.js?v=20261031-v20"></script>
+  <script src="js/router.js?v=20261031-v20"></script>
 
   <script>
     // System Startup

@@ -455,7 +455,8 @@ const AdminModule = {
               <div class="font-bold text-blue-700 mb-2">🛒 งานขาย (Sales)</div>
               <label class="flex items-center gap-1.5 mb-1"><input type="checkbox" ${isAdmin || p.sales?.view ? 'checked' : ''} ${isAdmin ? 'disabled' : ''} id="perm_${r.roleId}_sales_view"> ดูหน้าขาย</label>
               <label class="flex items-center gap-1.5 mb-1"><input type="checkbox" ${isAdmin || p.sales?.create ? 'checked' : ''} ${isAdmin ? 'disabled' : ''} id="perm_${r.roleId}_sales_create"> คิดเงิน/เปิดบิล</label>
-              <label class="flex items-center gap-1.5"><input type="checkbox" ${isAdmin || p.sales?.void ? 'checked' : ''} ${isAdmin ? 'disabled' : ''} id="perm_${r.roleId}_sales_void"> ยกเลิกใบเสร็จ</label>
+              <label class="flex items-center gap-1.5 mb-1"><input type="checkbox" ${isAdmin || p.sales?.void ? 'checked' : ''} ${isAdmin ? 'disabled' : ''} id="perm_${r.roleId}_sales_void"> ยกเลิกใบเสร็จ</label>
+              <label class="flex items-center gap-1.5"><input type="checkbox" ${isAdmin || p.sales?.drawer || (p.sales?.drawer === undefined && p.sales?.create) ? 'checked' : ''} ${isAdmin ? 'disabled' : ''} id="perm_${r.roleId}_sales_drawer"> เปิด/ปิดลิ้นชักจุดขาย</label>
             </div>
             <div class="bg-white p-3 rounded-xl border border-slate-200">
               <div class="font-bold text-emerald-700 mb-2">📦 สต๊อก (Stock)</div>
@@ -474,6 +475,7 @@ const AdminModule = {
               <label class="flex items-center gap-1.5 mb-1"><input type="checkbox" ${isAdmin || p.finance?.view ? 'checked' : ''} ${isAdmin ? 'disabled' : ''} id="perm_${r.roleId}_finance_view"> ดูข้อมูลการเงิน</label>
               <label class="flex items-center gap-1.5 mb-1"><input type="checkbox" ${isAdmin || p.finance?.create ? 'checked' : ''} ${isAdmin ? 'disabled' : ''} id="perm_${r.roleId}_finance_create"> บันทึกรายรับ-จ่าย</label>
               <label class="flex items-center gap-1.5 mb-1"><input type="checkbox" ${isAdmin || p.finance?.close ? 'checked' : ''} ${isAdmin ? 'disabled' : ''} id="perm_${r.roleId}_finance_close"> ปิดยอดนับเงินสด</label>
+              <label class="flex items-center gap-1.5 mb-1"><input type="checkbox" ${isAdmin || p.finance?.dayControl || (p.finance?.dayControl === undefined && r.roleId === 'manager') ? 'checked' : ''} ${isAdmin ? 'disabled' : ''} id="perm_${r.roleId}_finance_dayControl"> เปิด/ปิดวันทำการ</label>
               <label class="flex items-center gap-1.5 mb-1"><input type="checkbox" ${isAdmin || p.finance?.void ? 'checked' : ''} ${isAdmin ? 'disabled' : ''} id="perm_${r.roleId}_finance_void"> ยกเลิกรายการ</label>
               <label class="flex items-center gap-1.5"><input type="checkbox" ${isAdmin || p.finance?.settings ? 'checked' : ''} ${isAdmin ? 'disabled' : ''} id="perm_${r.roleId}_finance_settings"> ตั้งค่าการเงิน</label>
             </div>
@@ -505,7 +507,8 @@ const AdminModule = {
       sales: {
         view: document.getElementById(`perm_${roleId}_sales_view`)?.checked || false,
         create: document.getElementById(`perm_${roleId}_sales_create`)?.checked || false,
-        void: document.getElementById(`perm_${roleId}_sales_void`)?.checked || false
+        void: document.getElementById(`perm_${roleId}_sales_void`)?.checked || false,
+        drawer: document.getElementById(`perm_${roleId}_sales_drawer`)?.checked || false
       },
       stock: {
         view: document.getElementById(`perm_${roleId}_stock_view`)?.checked || false,
@@ -521,6 +524,7 @@ const AdminModule = {
         view: document.getElementById(`perm_${roleId}_finance_view`)?.checked || false,
         create: document.getElementById(`perm_${roleId}_finance_create`)?.checked || false,
         close: document.getElementById(`perm_${roleId}_finance_close`)?.checked || false,
+        dayControl: document.getElementById(`perm_${roleId}_finance_dayControl`)?.checked || false,
         void: document.getElementById(`perm_${roleId}_finance_void`)?.checked || false,
         settings: document.getElementById(`perm_${roleId}_finance_settings`)?.checked || false
       },
