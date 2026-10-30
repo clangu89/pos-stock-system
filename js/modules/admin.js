@@ -450,7 +450,7 @@ const AdminModule = {
             </div>
             <span class="text-xs font-mono font-bold text-slate-400">ID: ${r.roleId}</span>
           </div>
-          <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 text-xs">
             <div class="bg-white p-3 rounded-xl border border-slate-200">
               <div class="font-bold text-blue-700 mb-2">🛒 งานขาย (Sales)</div>
               <label class="flex items-center gap-1.5 mb-1"><input type="checkbox" ${isAdmin || p.sales?.view ? 'checked' : ''} ${isAdmin ? 'disabled' : ''} id="perm_${r.roleId}_sales_view"> ดูหน้าขาย</label>
@@ -466,8 +466,15 @@ const AdminModule = {
             </div>
             <div class="bg-white p-3 rounded-xl border border-slate-200">
               <div class="font-bold text-amber-700 mb-2">📊 รายงาน (Reports)</div>
-              <label class="flex items-center gap-1.5 mb-1"><input type="checkbox" ${isAdmin || p.reports?.view ? 'checked' : ''} ${isAdmin ? 'disabled' : ''} id="perm_${r.roleId}_reports_view"> ดูรายงานยอดขาย</label>
-              <label class="flex items-center gap-1.5"><input type="checkbox" ${isAdmin || p.reports?.export ? 'checked' : ''} ${isAdmin ? 'disabled' : ''} id="perm_${r.roleId}_reports_export"> ส่งออกข้อมูล</label>
+              <label class="flex items-center gap-1.5 mb-1"><input type="checkbox" ${isAdmin || p.reports?.view ? 'checked' : ''} ${isAdmin ? 'disabled' : ''} id="perm_${r.roleId}_reports_view"> ดูรายงานยอดขาย/ใบเสร็จ</label>
+              <label class="flex items-center gap-1.5"><input type="checkbox" ${isAdmin || p.reports?.export ? 'checked' : ''} ${isAdmin ? 'disabled' : ''} id="perm_${r.roleId}_reports_export"> ส่งออกข้อมูล CSV</label>
+            </div>
+            <div class="bg-white p-3 rounded-xl border border-slate-200">
+              <div class="font-bold text-violet-700 mb-2">💰 การเงิน (Finance)</div>
+              <label class="flex items-center gap-1.5 mb-1"><input type="checkbox" ${isAdmin || p.finance?.view ? 'checked' : ''} ${isAdmin ? 'disabled' : ''} id="perm_${r.roleId}_finance_view"> ดูข้อมูลการเงิน</label>
+              <label class="flex items-center gap-1.5 mb-1"><input type="checkbox" ${isAdmin || p.finance?.create ? 'checked' : ''} ${isAdmin ? 'disabled' : ''} id="perm_${r.roleId}_finance_create"> บันทึกรายรับ-จ่าย</label>
+              <label class="flex items-center gap-1.5 mb-1"><input type="checkbox" ${isAdmin || p.finance?.close ? 'checked' : ''} ${isAdmin ? 'disabled' : ''} id="perm_${r.roleId}_finance_close"> ปิดยอดนับเงินสด</label>
+              <label class="flex items-center gap-1.5"><input type="checkbox" ${isAdmin || p.finance?.void ? 'checked' : ''} ${isAdmin ? 'disabled' : ''} id="perm_${r.roleId}_finance_void"> ยกเลิกรายการ</label>
             </div>
             <div class="bg-white p-3 rounded-xl border border-slate-200">
               <div class="font-bold text-slate-800 mb-2">⚙️ Admin (ระบบ)</div>
@@ -509,10 +516,23 @@ const AdminModule = {
         view: document.getElementById(`perm_${roleId}_reports_view`)?.checked || false,
         export: document.getElementById(`perm_${roleId}_reports_export`)?.checked || false
       },
+      finance: {
+        view: document.getElementById(`perm_${roleId}_finance_view`)?.checked || false,
+        create: document.getElementById(`perm_${roleId}_finance_create`)?.checked || false,
+        close: document.getElementById(`perm_${roleId}_finance_close`)?.checked || false,
+        void: document.getElementById(`perm_${roleId}_finance_void`)?.checked || false
+      },
       admin: {
+        view: (
+          (document.getElementById(`perm_${roleId}_admin_users`)?.checked || false) ||
+          (document.getElementById(`perm_${roleId}_admin_config`)?.checked || false) ||
+          (document.getElementById(`perm_${roleId}_admin_printer`)?.checked || false) ||
+          (document.getElementById(`perm_${roleId}_admin_backup`)?.checked || false)
+        ),
         users: document.getElementById(`perm_${roleId}_admin_users`)?.checked || false,
         config: document.getElementById(`perm_${roleId}_admin_config`)?.checked || false,
-        printer: document.getElementById(`perm_${roleId}_admin_printer`)?.checked || false
+        printer: document.getElementById(`perm_${roleId}_admin_printer`)?.checked || false,
+        backup: document.getElementById(`perm_${roleId}_admin_backup`)?.checked || false
       }
     };
 

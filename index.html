@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>ระบบขายสินค้าและสต๊อก (POS & Stock Management)</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <link rel="stylesheet" href="css/app.css?v=20261030-v15">
-  <link rel="stylesheet" href="css/receipt.css?v=20261030-v15">
+  <link rel="stylesheet" href="css/app.css?v=20261030-v16">
+  <link rel="stylesheet" href="css/receipt.css?v=20261030-v16">
 </head>
 <body class="bg-slate-50 text-slate-900 min-h-screen flex flex-col font-sans antialiased select-none">
 
@@ -116,7 +116,7 @@
       </div>
 
       <!-- Icon Cards Grid -->
-      <div id="launcherCardsContainer" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 pt-4">
+      <div id="launcherCardsContainer" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pt-4">
         <!-- Rendered dynamically by launcher.js -->
       </div>
     </section>
@@ -420,12 +420,12 @@
 
     </section>
 
-    <!-- 5. REPORTS SCREEN -->
-        <section id="view_reports" class="view-screen hidden space-y-5 flex-1">
+        <!-- 5. REPORTS SCREEN -->
+    <section id="view_reports" class="view-screen hidden space-y-5 flex-1">
       <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-slate-200 gap-3">
         <div>
-          <h1 class="text-2xl font-black text-slate-900 tracking-tight">รายงานและการเงิน</h1>
-          <p class="text-xs text-slate-500">สรุปยอดขาย กำไร-ต้นทุน ตรวจสอบใบเสร็จ และพิมพ์ซ้ำ (Reprint)</p>
+          <h1 class="text-2xl font-black text-slate-900 tracking-tight">ระบบรายงาน (Reports)</h1>
+          <p class="text-xs text-slate-500">วิเคราะห์ยอดขาย สินค้าขายดี มูลค่าสต๊อก สินค้าใกล้หมด และตรวจสอบประวัติใบเสร็จ</p>
         </div>
       </div>
 
@@ -433,7 +433,11 @@
       <div class="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar">
         <button id="reportsTabBtn_overview" onclick="ReportsModule.switchTab('overview')"
                 class="reports-tab-btn px-4 py-2.5 rounded-xl font-bold text-xs bg-amber-600 text-white shadow-md transition cursor-pointer">
-          📊 ภาพรวมและสรุปยอดขาย
+          📊 ยอดขายและสินค้าขายดี
+        </button>
+        <button id="reportsTabBtn_stock" onclick="ReportsModule.switchTab('stock')"
+                class="reports-tab-btn px-4 py-2.5 rounded-xl font-bold text-xs bg-white text-slate-700 hover:bg-slate-100 border border-slate-200 transition cursor-pointer">
+          📦 รายงานสต๊อกและสินค้าใกล้หมด
         </button>
         <button id="reportsTabBtn_receipts" onclick="ReportsModule.switchTab('receipts')"
                 class="reports-tab-btn px-4 py-2.5 rounded-xl font-bold text-xs bg-white text-slate-700 hover:bg-slate-100 border border-slate-200 transition cursor-pointer">
@@ -453,9 +457,11 @@
             <label class="text-xs font-bold text-slate-500 ml-2">สาขา:</label>
             <select id="reportBranchSelect" class="px-3 py-1.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-bold"></select>
           </div>
-          <button onclick="ReportsModule.generateReport()" class="px-5 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs shadow-sm transition cursor-pointer">
-            คำนวณรายงาน
-          </button>
+          <div class="flex items-center gap-2">
+            <button onclick="ReportsModule.generateReport()" class="px-5 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs shadow-sm transition cursor-pointer">
+              คำนวณรายงาน
+            </button>
+          </div>
         </div>
 
         <!-- KPI Summary Cards -->
@@ -488,7 +494,12 @@
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <!-- Daily Sales Table -->
           <div class="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-sm space-y-3">
-            <h3 class="font-bold text-sm text-slate-900">สรุปยอดขายรายวัน</h3>
+            <div class="flex items-center justify-between">
+              <h3 class="font-bold text-sm text-slate-900">สรุปยอดขายรายวัน</h3>
+              <button onclick="ReportsModule.exportDailySalesCsv()" class="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-[11px] border border-slate-200 transition cursor-pointer flex items-center gap-1">
+                📥 <span>Export CSV</span>
+              </button>
+            </div>
             <div class="max-h-80 overflow-y-auto">
               <table class="w-full text-left text-xs">
                 <thead>
@@ -508,7 +519,12 @@
 
           <!-- Top Selling Table -->
           <div class="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-sm space-y-3">
-            <h3 class="font-bold text-sm text-slate-900">15 อันดับสินค้าขายดี (Top Sellers)</h3>
+            <div class="flex items-center justify-between">
+              <h3 class="font-bold text-sm text-slate-900">15 อันดับสินค้าขายดี (Top Sellers)</h3>
+              <button onclick="ReportsModule.exportTopSellingCsv()" class="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-[11px] border border-slate-200 transition cursor-pointer flex items-center gap-1">
+                📥 <span>Export CSV</span>
+              </button>
+            </div>
             <div class="max-h-80 overflow-y-auto">
               <table class="w-full text-left text-xs">
                 <thead>
@@ -527,7 +543,81 @@
         </div>
       </div>
 
-      <!-- Tab Content 2: Receipts & Reprint -->
+      <!-- Tab Content 2: Stock Valuation & Low Stock Alerts -->
+      <div id="reportsTab_stock" class="reports-tab-content hidden space-y-6">
+        <!-- Stock Filter Toolbar -->
+        <div class="flex flex-wrap items-center justify-between bg-white p-4 rounded-3xl border border-slate-200/80 shadow-sm gap-3">
+          <div class="flex items-center gap-2">
+            <label class="text-xs font-bold text-slate-500">สาขาที่ประเมิน:</label>
+            <select id="reportStockValuationBranchSelect" class="px-3 py-1.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-bold"></select>
+          </div>
+          <div class="flex items-center gap-2">
+            <button onclick="ReportsModule.fetchStockValuation()" class="px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs shadow-sm transition cursor-pointer">
+              🔄 คำนวณมูลค่าสต๊อก
+            </button>
+            <button onclick="ReportsModule.exportLowStockCsv()" class="px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs border border-slate-200 transition cursor-pointer flex items-center gap-1">
+              📥 <span>Export สินค้าใกล้หมด (CSV)</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Stock Valuation KPI Cards -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+          <div class="bg-white p-4 rounded-3xl border border-slate-200/80 shadow-sm">
+            <div class="text-[11px] font-bold text-slate-400">จำนวนสินค้าคงคลังรวม</div>
+            <div id="repStockUnits" class="text-xl font-black text-slate-800 font-mono mt-1">0 ชิ้น</div>
+          </div>
+          <div class="bg-white p-4 rounded-3xl border border-slate-200/80 shadow-sm">
+            <div class="text-[11px] font-bold text-slate-400">มูลค่าต้นทุนรวม (Cost)</div>
+            <div id="repStockCost" class="text-xl font-black text-amber-600 font-mono mt-1">฿0.00</div>
+          </div>
+          <div class="bg-white p-4 rounded-3xl border border-slate-200/80 shadow-sm">
+            <div class="text-[11px] font-bold text-slate-400">มูลค่าราคาขายรวม (Retail)</div>
+            <div id="repStockRetail" class="text-xl font-black text-blue-600 font-mono mt-1">฿0.00</div>
+          </div>
+          <div class="bg-white p-4 rounded-3xl border border-slate-200/80 shadow-sm">
+            <div class="text-[11px] font-bold text-slate-400">กำไรคาดการณ์ (Margin)</div>
+            <div id="repStockProfit" class="text-xl font-black text-emerald-600 font-mono mt-1">฿0.00</div>
+          </div>
+          <div class="bg-white p-4 rounded-3xl border border-slate-200/80 shadow-sm">
+            <div class="text-[11px] font-bold text-rose-500">สินค้าใกล้หมด/หมดสต๊อก</div>
+            <div id="repStockLowCount" class="text-xl font-black text-rose-600 font-mono mt-1">0 รายการ</div>
+          </div>
+        </div>
+
+        <!-- Low Stock Items Alert Table -->
+        <div class="bg-white rounded-3xl border border-slate-200/80 shadow-sm overflow-hidden">
+          <div class="p-4 border-b border-slate-100 flex items-center justify-between">
+            <h3 class="font-bold text-sm text-slate-900 flex items-center gap-2">
+              <span>⚠️</span> <span>รายการสินค้าต่ำกว่าจุดสั่งซื้อขั้นต่ำ (Low Stock Alert)</span>
+              <span id="reportLowStockBadgeCount" class="px-2 py-0.5 rounded-full text-xs font-black bg-rose-100 text-rose-700">0</span>
+            </h3>
+            <button onclick="ReportsModule.exportLowStockCsv()" class="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-[11px] border border-slate-200 transition cursor-pointer flex items-center gap-1">
+              📥 <span>Export CSV</span>
+            </button>
+          </div>
+          <div class="overflow-x-auto max-h-[500px] overflow-y-auto">
+            <table class="w-full text-left text-xs">
+              <thead class="bg-slate-50 text-slate-500 uppercase font-bold sticky top-0 border-b border-slate-200 z-10">
+                <tr>
+                  <th class="py-2.5 px-3 text-center">#</th>
+                  <th class="py-2.5 px-3">SKU</th>
+                  <th class="py-2.5 px-3">บาร์โค้ด</th>
+                  <th class="py-2.5 px-3">ชื่อสินค้า</th>
+                  <th class="py-2.5 px-3 text-center">คงเหลือปัจจุบัน</th>
+                  <th class="py-2.5 px-3 text-center">จุดสั่งซื้อ (Min)</th>
+                  <th class="py-2.5 px-3 text-center">สถานะ</th>
+                </tr>
+              </thead>
+              <tbody id="reportLowStockTableBody" class="divide-y divide-slate-100">
+                <tr><td colspan="7" class="text-center py-8 text-slate-400">กำลังตรวจสอบข้อมูลสินค้า...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tab Content 3: Receipts & Reprint -->
       <div id="reportsTab_receipts" class="reports-tab-content hidden space-y-5">
         <!-- Receipts Filter Toolbar -->
         <div class="bg-white p-4 rounded-3xl border border-slate-200/80 shadow-sm space-y-3">
@@ -573,6 +663,9 @@
             <div class="flex items-center gap-2">
               <button onclick="ReportsModule.resetReceiptFilters()" class="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs transition cursor-pointer">
                 ล้างตัวกรอง
+              </button>
+              <button onclick="ReportsModule.exportReceiptsCsv()" class="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs border border-slate-200 transition cursor-pointer flex items-center gap-1">
+                📥 <span>Export CSV</span>
               </button>
               <button onclick="ReportsModule.fetchReceipts()" class="px-4 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-sm transition flex items-center gap-1.5 cursor-pointer">
                 <span>🔍</span> <span>ค้นหาใบเสร็จ</span>
@@ -627,6 +720,453 @@
                 <tr>
                   <td colspan="8" class="text-center py-10 text-slate-400">กำลังโหลดรายการใบเสร็จ...</td>
                 </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 6. FINANCE SCREEN -->
+    <section id="view_finance" class="view-screen hidden space-y-5 flex-1">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-slate-200 gap-3">
+        <div>
+          <h1 class="text-2xl font-black text-slate-900 tracking-tight">ระบบการเงิน (Finance)</h1>
+          <p class="text-xs text-slate-500">บริหารกระแสเงินสด บันทึกรายรับ-รายจ่ายหน้าร้าน ปิดยอดนับเงินสด และพิมพ์ใบส่งเงิน</p>
+        </div>
+      </div>
+
+      <!-- Navigation Tabs -->
+      <div class="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar">
+        <button id="financeTabBtn_summary" onclick="FinanceModule.switchTab('summary')"
+                class="finance-tab-btn px-4 py-2.5 rounded-xl font-bold text-xs bg-purple-600 text-white shadow-md transition cursor-pointer">
+          💎 สรุปกระแสเงินสดและกำไร
+        </button>
+        <button id="financeTabBtn_ledger" onclick="FinanceModule.switchTab('ledger')"
+                class="finance-tab-btn px-4 py-2.5 rounded-xl font-bold text-xs bg-white text-slate-700 hover:bg-slate-100 border border-slate-200 transition cursor-pointer">
+          📝 บันทึกรายรับ-รายจ่าย (Petty Cash)
+        </button>
+        <button id="financeTabBtn_closing" onclick="FinanceModule.switchTab('closing')"
+                class="finance-tab-btn px-4 py-2.5 rounded-xl font-bold text-xs bg-white text-slate-700 hover:bg-slate-100 border border-slate-200 transition cursor-pointer">
+          🔐 ปิดยอด / นับเงินสดประจำวัน
+        </button>
+      </div>
+
+      <!-- Tab Content 1: Cash Flow & Profit Summary -->
+      <div id="financeTab_summary" class="finance-tab-content space-y-6">
+        <!-- Filter Toolbar -->
+        <div class="flex flex-wrap items-center justify-between bg-white p-4 rounded-3xl border border-slate-200/80 shadow-sm gap-3">
+          <div class="flex items-center gap-2 flex-wrap">
+            <label class="text-xs font-bold text-slate-500">ช่วงวันที่:</label>
+            <input type="date" id="financeStartDate" class="px-3 py-1.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-bold">
+            <span class="text-xs text-slate-400">ถึง</span>
+            <input type="date" id="financeEndDate" class="px-3 py-1.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-bold">
+            <label class="text-xs font-bold text-slate-500 ml-2">สาขา:</label>
+            <select id="financeBranchSelect" class="px-3 py-1.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-bold"></select>
+          </div>
+          <div class="flex items-center gap-2">
+            <button onclick="FinanceModule.fetchSummary()" class="px-5 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs shadow-sm transition cursor-pointer">
+              คำนวณการเงิน
+            </button>
+            <button onclick="FinanceModule.exportDailyFlowCsv()" class="px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs border border-slate-200 transition cursor-pointer flex items-center gap-1">
+              📥 <span>Export กระแสเงินสด (CSV)</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- KPI Summary Cards -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div class="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-sm">
+            <div class="text-xs font-bold text-slate-400 mb-1">ยอดขายรวมสุทธิ (Sales)</div>
+            <div id="finCardTotalSales" class="text-2xl font-black text-blue-600 font-mono">฿0.00</div>
+            <div id="finCardSalesBreakdown" class="text-[11px] text-slate-500 mt-2 truncate">เงินสด: ฿0 | โอน: ฿0 | QR: ฿0</div>
+          </div>
+          <div class="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-sm">
+            <div class="text-xs font-bold text-slate-400 mb-1">รายรับอื่น vs รายจ่ายหน้าร้าน</div>
+            <div class="flex items-baseline justify-between mt-0.5">
+              <span id="finCardTotalIncome" class="text-lg font-black text-emerald-600 font-mono">+฿0.00</span>
+              <span id="finCardTotalExpense" class="text-lg font-black text-rose-600 font-mono">-฿0.00</span>
+            </div>
+            <div class="text-[11px] text-slate-500 mt-2">รายจ่ายเบ็ดเตล็ดหักจากกำไร</div>
+          </div>
+          <div class="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-sm">
+            <div class="text-xs font-bold text-slate-400 mb-1">กระแสเงินสดสุทธิ (Net Cash Flow)</div>
+            <div id="finCardNetCashFlow" class="text-2xl font-black text-emerald-600 font-mono">฿0.00</div>
+            <div id="finCardCashFlowBreakdown" class="text-[11px] text-slate-500 mt-2 truncate">เงินสด: ฿0 | บัญชีธนาคาร: ฿0</div>
+          </div>
+          <div class="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-sm">
+            <div class="text-xs font-bold text-slate-400 mb-1">กำไรจากการดำเนินงานสุทธิ</div>
+            <div id="finCardNetProfit" class="text-2xl font-black text-purple-600 font-mono">฿0.00</div>
+            <div id="finCardGrossProfit" class="text-[11px] text-slate-500 mt-2 truncate">กำไรขั้นต้น - รายจ่าย</div>
+          </div>
+        </div>
+
+        <!-- Tables Grid: Daily Flow vs Expense Categories -->
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+          <!-- Daily Flow Table (8 cols) -->
+          <div class="lg:col-span-8 bg-white p-5 rounded-3xl border border-slate-200/80 shadow-sm space-y-3">
+            <div class="flex items-center justify-between">
+              <h3 class="font-bold text-sm text-slate-900">กระแสเงินสดรายวัน (Daily Cash Flow)</h3>
+              <button onclick="FinanceModule.exportDailyFlowCsv()" class="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-[11px] border border-slate-200 transition cursor-pointer flex items-center gap-1">
+                📥 <span>CSV</span>
+              </button>
+            </div>
+            <div class="max-h-80 overflow-y-auto">
+              <table class="w-full text-left text-xs">
+                <thead>
+                  <tr class="border-b border-slate-200 text-slate-400 uppercase font-bold sticky top-0 bg-white">
+                    <th class="py-2 px-3">วันที่</th>
+                    <th class="py-2 px-3 text-right">ยอดขายสด</th>
+                    <th class="py-2 px-3 text-right">ยอดขายโอน/QR</th>
+                    <th class="py-2 px-3 text-right">รายรับอื่น</th>
+                    <th class="py-2 px-3 text-right">รายจ่าย</th>
+                    <th class="py-2 px-3 text-right">เงินสดสุทธิ</th>
+                    <th class="py-2 px-3 text-center">สถานะ</th>
+                  </tr>
+                </thead>
+                <tbody id="financeDailyFlowTableBody">
+                  <tr><td colspan="7" class="text-center py-6 text-slate-400">กดคำนวณการเงินเพื่อดูข้อมูล</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Expense by Category (4 cols) -->
+          <div class="lg:col-span-4 bg-white p-5 rounded-3xl border border-slate-200/80 shadow-sm space-y-3">
+            <h3 class="font-bold text-sm text-slate-900">สัดส่วนค่าใช้จ่ายตามหมวด</h3>
+            <div class="max-h-80 overflow-y-auto">
+              <table class="w-full text-left text-xs">
+                <thead>
+                  <tr class="border-b border-slate-200 text-slate-400 uppercase font-bold sticky top-0 bg-white">
+                    <th class="py-2 px-3">หมวดหมู่</th>
+                    <th class="py-2 px-3 text-right">จำนวนเงิน</th>
+                    <th class="py-2 px-3 text-right">สัดส่วน</th>
+                  </tr>
+                </thead>
+                <tbody id="financeExpenseCategoryTableBody">
+                  <tr><td colspan="3" class="text-center py-6 text-slate-400">ไม่มีข้อมูลค่าใช้จ่าย</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tab Content 2: Petty Cash & Expense Ledger -->
+      <div id="financeTab_ledger" class="finance-tab-content hidden space-y-5">
+        <!-- Ledger Filter & Action Toolbar -->
+        <div class="bg-white p-4 rounded-3xl border border-slate-200/80 shadow-sm space-y-3">
+          <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2.5">
+            <div>
+              <label class="block text-[11px] font-bold text-slate-500 mb-1">วันที่เริ่มต้น</label>
+              <input type="date" id="financeTxnStartDate" class="w-full px-3 py-1.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-bold">
+            </div>
+            <div>
+              <label class="block text-[11px] font-bold text-slate-500 mb-1">ถึงวันที่</label>
+              <input type="date" id="financeTxnEndDate" class="w-full px-3 py-1.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-bold">
+            </div>
+            <div>
+              <label class="block text-[11px] font-bold text-slate-500 mb-1">สาขา</label>
+              <select id="financeTxnBranchFilter" class="w-full px-3 py-1.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-bold"></select>
+            </div>
+            <div>
+              <label class="block text-[11px] font-bold text-slate-500 mb-1">ประเภท</label>
+              <select id="financeTxnTypeFilter" class="w-full px-3 py-1.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-bold">
+                <option value="">ทั้งหมด (รับและจ่าย)</option>
+                <option value="EXPENSE">รายจ่าย (Expense)</option>
+                <option value="INCOME">รายรับ (Income)</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-[11px] font-bold text-slate-500 mb-1">ช่องทางเงิน</label>
+              <select id="financeTxnPayMethodFilter" class="w-full px-3 py-1.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-bold">
+                <option value="">ทั้งหมด</option>
+                <option value="CASH">เงินสดในลิ้นชัก</option>
+                <option value="TRANSFER">เงินโอน / บัญชี</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-[11px] font-bold text-slate-500 mb-1">ค้นหาหมวด/รายละเอียด</label>
+              <input type="search" id="financeTxnSearchInput" placeholder="ค้นหา..."
+                     onkeyup="if(event.key === 'Enter') FinanceModule.fetchTxns()"
+                     class="w-full px-3 py-1.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-bold">
+            </div>
+          </div>
+
+          <div class="flex items-center justify-between pt-2 border-t border-slate-100 flex-wrap gap-2">
+            <div class="flex items-center gap-2">
+              <button onclick="FinanceModule.fetchTxns()" class="px-4 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs shadow-sm transition flex items-center gap-1.5 cursor-pointer">
+                <span>🔍</span> <span>ค้นหารายการ</span>
+              </button>
+              <button onclick="FinanceModule.exportTxnsCsv()" class="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs border border-slate-200 transition cursor-pointer flex items-center gap-1">
+                📥 <span>Export CSV</span>
+              </button>
+            </div>
+            <div class="flex items-center gap-2">
+              <button onclick="FinanceModule.openCreateTxnModal('EXPENSE')" class="px-4 py-2 rounded-2xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs shadow-md transition flex items-center gap-1.5 cursor-pointer">
+                <span>-</span> <span>บันทึกรายจ่ายหน้าร้าน</span>
+              </button>
+              <button onclick="FinanceModule.openCreateTxnModal('INCOME')" class="px-4 py-2 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-md transition flex items-center gap-1.5 cursor-pointer">
+                <span>+</span> <span>บันทึกรายรับอื่น</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Ledger Summary Ribbon -->
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div class="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm">
+            <div class="text-[11px] font-bold text-slate-400">รายรับรวม (ช่วงเวลาที่เลือก)</div>
+            <div id="finTxnSumIncome" class="text-xl font-black text-emerald-600 font-mono mt-0.5">+฿0.00</div>
+          </div>
+          <div class="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm">
+            <div class="text-[11px] font-bold text-slate-400">รายจ่ายรวม (ช่วงเวลาที่เลือก)</div>
+            <div id="finTxnSumExpense" class="text-xl font-black text-rose-600 font-mono mt-0.5">-฿0.00</div>
+          </div>
+          <div class="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm">
+            <div class="text-[11px] font-bold text-slate-400">ผลรวมสุทธิ</div>
+            <div id="finTxnSumNet" class="text-xl font-black text-slate-900 font-mono mt-0.5">฿0.00</div>
+          </div>
+          <div class="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm">
+            <div class="text-[11px] font-bold text-slate-400">จำนวนรายการ</div>
+            <div id="finTxnCountLabel" class="text-xl font-black text-slate-800 font-mono mt-0.5">0 รายการ</div>
+          </div>
+        </div>
+
+        <!-- Ledger Table -->
+        <div class="bg-white rounded-3xl border border-slate-200/80 shadow-sm overflow-hidden">
+          <div class="p-4 border-b border-slate-100 flex items-center justify-between">
+            <h3 class="font-bold text-sm text-slate-900 flex items-center gap-2">
+              <span>📋</span> <span>สมุดบัญชีรายรับ-รายจ่ายหน้าร้าน</span>
+            </h3>
+          </div>
+          <div class="overflow-x-auto max-h-[600px] overflow-y-auto">
+            <table class="w-full text-left text-xs">
+              <thead class="bg-slate-50 text-slate-500 uppercase font-bold sticky top-0 border-b border-slate-200 z-10">
+                <tr>
+                  <th class="py-3 px-3">วันที่</th>
+                  <th class="py-3 px-3">เลขที่เอกสาร</th>
+                  <th class="py-3 px-3">สาขา</th>
+                  <th class="py-3 px-3 text-center">ประเภท</th>
+                  <th class="py-3 px-3">หมวดหมู่</th>
+                  <th class="py-3 px-3 text-center">ช่องทาง</th>
+                  <th class="py-3 px-3 text-right">จำนวนเงิน</th>
+                  <th class="py-3 px-3">รายละเอียด/อ้างอิง</th>
+                  <th class="py-3 px-3">ผู้บันทึก</th>
+                  <th class="py-3 px-3 text-center">สถานะ</th>
+                  <th class="py-3 px-3 text-center">จัดการ</th>
+                </tr>
+              </thead>
+              <tbody id="financeTxnsTableBody" class="divide-y divide-slate-100">
+                <tr><td colspan="11" class="text-center py-8 text-slate-400">กำลังโหลดรายการ...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tab Content 3: Daily Cash Reconciliation & Closing -->
+      <div id="financeTab_closing" class="finance-tab-content hidden space-y-6">
+        <!-- Control Header -->
+        <div class="bg-white p-4 rounded-3xl border border-slate-200/80 shadow-sm flex flex-wrap items-center justify-between gap-3">
+          <div class="flex items-center gap-3 flex-wrap">
+            <div>
+              <label class="block text-[11px] font-bold text-slate-500 mb-0.5">วันที่ปิดยอด</label>
+              <input type="date" id="closingDateInput" class="px-3 py-1.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-bold">
+            </div>
+            <div>
+              <label class="block text-[11px] font-bold text-slate-500 mb-0.5">สาขา</label>
+              <select id="financeClosingBranchSelect" class="px-3 py-1.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-bold"></select>
+            </div>
+            <div class="self-end">
+              <button onclick="FinanceModule.loadClosingPreview()" class="px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs shadow-sm transition flex items-center gap-1.5 cursor-pointer">
+                <span>🔄</span> <span>ดึงข้อมูลระบบ (Preview)</span>
+              </button>
+            </div>
+          </div>
+          <div class="text-xs text-slate-500">
+            ระบบคำนวณเงินสดในลิ้นชักตามจริง เทียบกับยอดนับจริงแบบ Real-time
+          </div>
+        </div>
+
+        <!-- 2 Columns: Expected Cash Breakdown vs Actual Cash Denomination Counter -->
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+          
+          <!-- Left: Expected Cash Breakdown (5 cols) -->
+          <div class="lg:col-span-5 bg-white p-5 rounded-3xl border border-slate-200/80 shadow-sm space-y-4">
+            <h3 class="font-extrabold text-sm text-slate-900 flex items-center gap-2">
+              <span>📊</span> <span>ยอดเงินสดในระบบ (System Expected)</span>
+            </h3>
+
+            <div class="space-y-2.5 text-xs">
+              <div class="flex justify-between items-center py-1.5 border-b border-slate-100">
+                <span class="text-slate-600">เงินทอนยกมาจากรอบก่อนหน้า (Opening Float)</span>
+                <span id="closePreviewFloat" class="font-mono font-bold text-slate-800">฿0.00</span>
+              </div>
+              <div class="flex justify-between items-center py-1.5 border-b border-slate-100">
+                <span class="text-slate-600">ยอดขายเงินสดประจำวัน (Cash Sales)</span>
+                <span id="closePreviewSales" class="font-mono font-bold text-emerald-600">฿0.00</span>
+              </div>
+              <div class="flex justify-between items-center py-1.5 border-b border-slate-100">
+                <span class="text-slate-600">รายรับเงินสดอื่นหน้าร้าน (Cash Income)</span>
+                <span id="closePreviewIncome" class="font-mono font-bold text-teal-600">+฿0.00</span>
+              </div>
+              <div class="flex justify-between items-center py-1.5 border-b border-slate-100">
+                <span class="text-slate-600">รายจ่ายเงินสดหน้าร้าน (Cash Expense)</span>
+                <span id="closePreviewExpense" class="font-mono font-bold text-rose-600">-฿0.00</span>
+              </div>
+            </div>
+
+            <div class="p-4 rounded-2xl bg-purple-50 border border-purple-200 flex items-baseline justify-between">
+              <div>
+                <span class="text-xs font-black text-purple-900 uppercase">เงินสดที่ต้องมีในลิ้นชัก</span>
+                <div class="text-[10px] text-purple-700 mt-0.5" id="closePreviewNonCash">(ยอดโอน/QR จะไม่รวมในลิ้นชัก)</div>
+              </div>
+              <span id="closePreviewExpectedCash" class="text-2xl font-black font-mono text-purple-700">฿0.00</span>
+            </div>
+
+            <!-- Notes & Summary Info -->
+            <div class="pt-2">
+              <label class="block text-xs font-bold text-slate-700 mb-1">หมายเหตุการปิดยอด (ถ้ามี)</label>
+              <textarea id="closingNoteInput" rows="2" placeholder="เช่น ส่งเงินเข้าบัญชีธนาคารแล้ว หรือ หมายเหตุเงินขาด/เกิน..."
+                        class="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs font-medium"></textarea>
+            </div>
+          </div>
+
+          <!-- Right: Actual Cash Counter (7 cols) -->
+          <div class="lg:col-span-7 bg-white p-5 rounded-3xl border border-slate-200/80 shadow-sm space-y-4">
+            <div class="flex items-center justify-between">
+              <h3 class="font-extrabold text-sm text-slate-900 flex items-center gap-2">
+                <span>💵</span> <span>เครื่องคิดเลขนับธนบัตรและเหรียญ (Denominations)</span>
+              </h3>
+              <span class="text-[11px] text-slate-400">กรอกจำนวนใบ/เหรียญ</span>
+            </div>
+
+            <!-- Denomination Inputs Grid -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+              <!-- Banknotes Column -->
+              <div class="space-y-2 bg-slate-50 p-3 rounded-2xl border border-slate-200/60">
+                <div class="font-black text-[11px] text-slate-700 uppercase tracking-wider mb-2">ธนบัตร (Banknotes)</div>
+                <div class="flex items-center justify-between gap-2">
+                  <span class="font-bold w-16 text-slate-700">฿1,000</span>
+                  <input type="number" min="0" id="denomCount_1000" oninput="FinanceModule.onDenomChange()" placeholder="0" class="w-16 px-2 py-1 text-center font-mono font-bold rounded-lg border border-slate-200 bg-white">
+                  <span id="denomTotal_1000" class="font-mono text-right w-24 font-bold text-slate-800">฿0.00</span>
+                </div>
+                <div class="flex items-center justify-between gap-2">
+                  <span class="font-bold w-16 text-slate-700">฿500</span>
+                  <input type="number" min="0" id="denomCount_500" oninput="FinanceModule.onDenomChange()" placeholder="0" class="w-16 px-2 py-1 text-center font-mono font-bold rounded-lg border border-slate-200 bg-white">
+                  <span id="denomTotal_500" class="font-mono text-right w-24 font-bold text-slate-800">฿0.00</span>
+                </div>
+                <div class="flex items-center justify-between gap-2">
+                  <span class="font-bold w-16 text-slate-700">฿100</span>
+                  <input type="number" min="0" id="denomCount_100" oninput="FinanceModule.onDenomChange()" placeholder="0" class="w-16 px-2 py-1 text-center font-mono font-bold rounded-lg border border-slate-200 bg-white">
+                  <span id="denomTotal_100" class="font-mono text-right w-24 font-bold text-slate-800">฿0.00</span>
+                </div>
+                <div class="flex items-center justify-between gap-2">
+                  <span class="font-bold w-16 text-slate-700">฿50</span>
+                  <input type="number" min="0" id="denomCount_50" oninput="FinanceModule.onDenomChange()" placeholder="0" class="w-16 px-2 py-1 text-center font-mono font-bold rounded-lg border border-slate-200 bg-white">
+                  <span id="denomTotal_50" class="font-mono text-right w-24 font-bold text-slate-800">฿0.00</span>
+                </div>
+                <div class="flex items-center justify-between gap-2">
+                  <span class="font-bold w-16 text-slate-700">฿20</span>
+                  <input type="number" min="0" id="denomCount_20" oninput="FinanceModule.onDenomChange()" placeholder="0" class="w-16 px-2 py-1 text-center font-mono font-bold rounded-lg border border-slate-200 bg-white">
+                  <span id="denomTotal_20" class="font-mono text-right w-24 font-bold text-slate-800">฿0.00</span>
+                </div>
+              </div>
+
+              <!-- Coins Column -->
+              <div class="space-y-2 bg-slate-50 p-3 rounded-2xl border border-slate-200/60">
+                <div class="font-black text-[11px] text-slate-700 uppercase tracking-wider mb-2">เหรียญ (Coins)</div>
+                <div class="flex items-center justify-between gap-2">
+                  <span class="font-bold w-16 text-slate-700">฿10</span>
+                  <input type="number" min="0" id="denomCount_10" oninput="FinanceModule.onDenomChange()" placeholder="0" class="w-16 px-2 py-1 text-center font-mono font-bold rounded-lg border border-slate-200 bg-white">
+                  <span id="denomTotal_10" class="font-mono text-right w-24 font-bold text-slate-800">฿0.00</span>
+                </div>
+                <div class="flex items-center justify-between gap-2">
+                  <span class="font-bold w-16 text-slate-700">฿5</span>
+                  <input type="number" min="0" id="denomCount_5" oninput="FinanceModule.onDenomChange()" placeholder="0" class="w-16 px-2 py-1 text-center font-mono font-bold rounded-lg border border-slate-200 bg-white">
+                  <span id="denomTotal_5" class="font-mono text-right w-24 font-bold text-slate-800">฿0.00</span>
+                </div>
+                <div class="flex items-center justify-between gap-2">
+                  <span class="font-bold w-16 text-slate-700">฿2</span>
+                  <input type="number" min="0" id="denomCount_2" oninput="FinanceModule.onDenomChange()" placeholder="0" class="w-16 px-2 py-1 text-center font-mono font-bold rounded-lg border border-slate-200 bg-white">
+                  <span id="denomTotal_2" class="font-mono text-right w-24 font-bold text-slate-800">฿0.00</span>
+                </div>
+                <div class="flex items-center justify-between gap-2">
+                  <span class="font-bold w-16 text-slate-700">฿1</span>
+                  <input type="number" min="0" id="denomCount_1" oninput="FinanceModule.onDenomChange()" placeholder="0" class="w-16 px-2 py-1 text-center font-mono font-bold rounded-lg border border-slate-200 bg-white">
+                  <span id="denomTotal_1" class="font-mono text-right w-24 font-bold text-slate-800">฿0.00</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Total Actual Cash + Variance Ribbon -->
+            <div class="p-4 rounded-2xl bg-slate-900 text-white space-y-3">
+              <div class="flex justify-between items-center">
+                <span class="text-xs font-bold text-slate-300">ยอดเงินสดนับได้จริง (Actual Cash):</span>
+                <div class="flex items-center gap-1.5">
+                  <span class="text-xl font-bold font-mono">฿</span>
+                  <input type="number" step="0.01" id="closingActualCashInput" oninput="FinanceModule.onActualCashManualChange()" placeholder="0.00"
+                         class="w-36 px-3 py-1.5 text-right font-mono font-black text-xl rounded-xl bg-slate-800 border border-slate-700 text-white focus:outline-none focus:border-purple-400">
+                </div>
+              </div>
+
+              <div class="flex justify-between items-center pt-2 border-t border-slate-800">
+                <span class="text-xs text-slate-300">ผลต่าง (Variance = จริง - คาดการณ์):</span>
+                <div class="flex items-center gap-2">
+                  <span id="closingVarianceBadge" class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">ตรงระบบ</span>
+                  <span id="closingVarianceDisplay" class="font-mono font-black text-xl text-emerald-400">฿0.00</span>
+                </div>
+              </div>
+
+              <div class="grid grid-cols-2 gap-3 pt-2 border-t border-slate-800">
+                <div>
+                  <label class="block text-[11px] font-bold text-slate-300 mb-1">ยอดเงินสดนำส่ง (Cash Drop)</label>
+                  <input type="number" step="0.01" id="closingCashDropInput" oninput="FinanceModule.onCashDropChange()" placeholder="0.00"
+                         class="w-full px-3 py-1.5 text-right font-mono font-bold text-sm rounded-xl bg-slate-800 border border-slate-700 text-emerald-400 focus:outline-none">
+                </div>
+                <div>
+                  <div class="text-[11px] font-bold text-slate-300 mb-1">เงินทอนยกไป (Carry Forward)</div>
+                  <div id="closingCarryForwardDisplay" class="px-3 py-2 text-right font-mono font-bold text-sm rounded-xl bg-slate-800 border border-slate-700 text-slate-300">
+                    ฿0.00
+                  </div>
+                </div>
+              </div>
+
+              <button onclick="FinanceModule.submitCashClosing()" class="w-full py-3 rounded-2xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white font-black text-sm shadow-xl transition cursor-pointer flex items-center justify-center gap-2 mt-2">
+                <span>💾</span> <span>บันทึกปิดยอดเงินสดประจำวัน</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Closing History Table -->
+        <div class="bg-white rounded-3xl border border-slate-200/80 shadow-sm overflow-hidden">
+          <div class="p-4 border-b border-slate-100 flex items-center justify-between">
+            <h3 class="font-bold text-sm text-slate-900 flex items-center gap-2">
+              <span>📜</span> <span>ประวัติการปิดยอดและส่งเงินประจำวัน</span>
+            </h3>
+            <button onclick="FinanceModule.fetchClosingHistory()" class="px-3 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs transition">
+              🔄 รีเฟรช
+            </button>
+          </div>
+          <div class="overflow-x-auto max-h-[500px] overflow-y-auto">
+            <table class="w-full text-left text-xs">
+              <thead class="bg-slate-50 text-slate-500 uppercase font-bold sticky top-0 border-b border-slate-200 z-10">
+                <tr>
+                  <th class="py-2.5 px-3">วันที่ปิด</th>
+                  <th class="py-2.5 px-3">เลขที่เอกสาร</th>
+                  <th class="py-2.5 px-3">สาขา</th>
+                  <th class="py-2.5 px-3 text-right">คาดการณ์</th>
+                  <th class="py-2.5 px-3 text-right">นับได้จริง</th>
+                  <th class="py-2.5 px-3 text-right">ผลต่าง (Variance)</th>
+                  <th class="py-2.5 px-3 text-right">ยอดส่งเงิน</th>
+                  <th class="py-2.5 px-3 text-right">เงินทอนยกไป</th>
+                  <th class="py-2.5 px-3 text-center">จัดการ</th>
+                </tr>
+              </thead>
+              <tbody id="financeClosingHistoryTableBody" class="divide-y divide-slate-100">
+                <tr><td colspan="9" class="text-center py-6 text-slate-400">กำลังโหลดประวัติ...</td></tr>
               </tbody>
             </table>
           </div>
@@ -2113,6 +2653,167 @@
     </div>
   </div>
 
+  
+  <!-- 11. Finance Transaction Modal (Income / Expense) -->
+  <div id="financeTxnModal" class="hidden fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-4">
+      <div class="flex items-center justify-between pb-3 border-b border-slate-100">
+        <h3 id="financeTxnModalTitle" class="font-black text-base text-slate-900">บันทึกรายจ่ายหน้าร้าน</h3>
+        <button onclick="UI.closeModal('financeTxnModal')" class="text-slate-400 hover:text-slate-700">✕</button>
+      </div>
+
+      <div class="space-y-3 text-xs">
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block font-bold text-slate-700 mb-1">ประเภท</label>
+            <select id="financeTxnModalType" class="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 font-bold">
+              <option value="EXPENSE">รายจ่าย (Expense)</option>
+              <option value="INCOME">รายรับอื่น (Income)</option>
+            </select>
+          </div>
+          <div>
+            <label class="block font-bold text-slate-700 mb-1">วันที่ทำรายการ</label>
+            <input type="date" id="financeTxnModalDate" class="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 font-bold">
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block font-bold text-slate-700 mb-1">สาขา</label>
+            <select id="financeTxnModalBranch" class="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 font-bold"></select>
+          </div>
+          <div>
+            <label class="block font-bold text-slate-700 mb-1">ช่องทางชำระ</label>
+            <select id="financeTxnModalPayMethod" class="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 font-bold">
+              <option value="CASH">💵 เงินสดในลิ้นชัก</option>
+              <option value="TRANSFER">🏦 โอนเงิน / ธนาคาร</option>
+            </select>
+          </div>
+        </div>
+
+        <div>
+          <label class="block font-bold text-slate-700 mb-1">หมวดหมู่รายการ</label>
+          <input type="text" id="financeTxnModalCategory" list="financeCategoryList" placeholder="เช่น ค่าอาหาร, ค่าน้ำมัน, ค่าซ่อมบำรุง, อุปกรณ์ร้าน"
+                 class="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 font-bold">
+          <datalist id="financeCategoryList">
+            <option value="ค่าอาหารและเครื่องดื่มพนักงาน">
+            <option value="ค่าเดินทางและค่าน้ำมัน">
+            <option value="ค่าสาธารณูปโภค (น้ำ/ไฟ/เน็ต)">
+            <option value="ค่าวัสดุและอุปกรณ์สิ้นเปลือง">
+            <option value="ค่าซ่อมแซมและบำรุงรักษา">
+            <option value="ค่าธรรมเนียมและเบ็ดเตล็ด">
+            <option value="รายรับค่าบริการ">
+            <option value="รายรับอื่นทั่วไป">
+          </datalist>
+        </div>
+
+        <div>
+          <label class="block font-bold text-slate-700 mb-1">จำนวนเงิน (บาท) *</label>
+          <input type="number" step="0.01" min="0.01" id="financeTxnModalAmount" placeholder="0.00"
+                 class="w-full px-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 font-mono font-black text-base text-slate-900 focus:bg-white focus:border-purple-600">
+        </div>
+
+        <div>
+          <label class="block font-bold text-slate-700 mb-1">เอกสารอ้างอิง / บิลใบเสร็จ (ถ้ามี)</label>
+          <input type="text" id="financeTxnModalRefDoc" placeholder="เช่น INV-0012, ใบกำกับภาษีเลขที่..."
+                 class="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 font-mono">
+        </div>
+
+        <div>
+          <label class="block font-bold text-slate-700 mb-1">รายละเอียดเพิ่มเติม</label>
+          <textarea id="financeTxnModalDesc" rows="2" placeholder="ระบุเหตุผลหรือรายละเอียดการใช้จ่าย..."
+                    class="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200"></textarea>
+        </div>
+
+        <button onclick="FinanceModule.submitCreateTxn()" class="w-full py-3 rounded-2xl bg-purple-600 hover:bg-purple-700 text-white font-extrabold text-xs shadow-md mt-2 cursor-pointer">
+          ยืนยันการบันทึกรายการ
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 12. Cash Closing Detail Slip Modal -->
+  <div id="cashClosingDetailModal" class="hidden fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-4">
+      <div class="flex items-center justify-between pb-3 border-b border-slate-100">
+        <div>
+          <h3 class="font-black text-base text-slate-900">ใบสรุปปิดยอดส่งเงินประจำวัน</h3>
+          <div class="text-[11px] font-mono text-purple-700" id="cdModalId">-</div>
+        </div>
+        <button onclick="UI.closeModal('cashClosingDetailModal')" class="text-slate-400 hover:text-slate-700 text-lg">✕</button>
+      </div>
+
+      <div class="space-y-3 text-xs">
+        <div class="grid grid-cols-2 gap-2 text-slate-600 bg-slate-50 p-3 rounded-2xl border border-slate-100">
+          <div>สาขา: <span class="font-bold text-slate-800" id="cdModalBranch">-</span></div>
+          <div>วันที่ปิด: <span class="font-bold text-slate-800 font-mono" id="cdModalDate">-</span></div>
+          <div>ผู้บันทึก: <span class="font-bold text-slate-800" id="cdModalUser">-</span></div>
+          <div>เวลา: <span class="font-mono text-slate-500" id="cdModalTimestamp">-</span></div>
+        </div>
+
+        <div class="space-y-1.5 py-1 border-y border-slate-100">
+          <div class="flex justify-between">
+            <span class="text-slate-500">เงินทอนยกมา:</span>
+            <span class="font-mono font-bold" id="cdModalFloat">฿0.00</span>
+          </div>
+          <div class="flex justify-between">
+            <span class="text-slate-500">ยอดขายเงินสด:</span>
+            <span class="font-mono font-bold text-emerald-600" id="cdModalSales">฿0.00</span>
+          </div>
+          <div class="flex justify-between">
+            <span class="text-slate-500">รายรับเงินสดอื่น:</span>
+            <span class="font-mono font-bold text-teal-600" id="cdModalIncome">฿0.00</span>
+          </div>
+          <div class="flex justify-between">
+            <span class="text-slate-500">รายจ่ายเงินสดหน้าร้าน:</span>
+            <span class="font-mono font-bold text-rose-600" id="cdModalExpense">฿0.00</span>
+          </div>
+          <div class="flex justify-between font-bold pt-1 border-t border-dashed border-slate-200">
+            <span>ยอดเงินสดในระบบที่คาดหวัง:</span>
+            <span class="font-mono" id="cdModalExpected">฿0.00</span>
+          </div>
+          <div class="flex justify-between font-bold text-sm text-slate-900">
+            <span>ยอดเงินสดนับได้จริง:</span>
+            <span class="font-mono" id="cdModalActual">฿0.00</span>
+          </div>
+          <div class="flex justify-between font-bold">
+            <span>ผลต่าง (Variance):</span>
+            <span class="font-mono" id="cdModalVariance">฿0.00</span>
+          </div>
+        </div>
+
+        <div class="p-3 bg-purple-50 rounded-2xl border border-purple-200 space-y-1">
+          <div class="flex justify-between font-bold text-purple-900">
+            <span>ยอดเงินสดนำส่ง (Cash Drop):</span>
+            <span class="font-mono text-emerald-700" id="cdModalDrop">฿0.00</span>
+          </div>
+          <div class="flex justify-between font-bold text-purple-900">
+            <span>เงินทอนยกไปรอบถัดไป:</span>
+            <span class="font-mono" id="cdModalCarry">฿0.00</span>
+          </div>
+        </div>
+
+        <div>
+          <div class="font-bold text-slate-700 mb-1">รายละเอียดการนับเงิน:</div>
+          <div id="cdModalDenomList" class="max-h-28 overflow-y-auto pr-1"></div>
+        </div>
+
+        <div class="text-[11px] text-slate-500">
+          หมายเหตุ: <span id="cdModalNote" class="text-slate-700 font-medium">-</span>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3 pt-2">
+          <button onclick="UI.closeModal('cashClosingDetailModal')" class="py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs transition cursor-pointer">
+            ปิดหน้าต่าง
+          </button>
+          <button onclick="FinanceModule.printClosingSlip()" class="py-2.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-extrabold text-xs shadow-md transition flex items-center justify-center gap-1.5 cursor-pointer">
+            <span>🖨️</span> <span>พิมพ์ใบส่งเงิน</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Global Toast Notifications Container -->
   <div id="toastContainer" class="fixed top-5 right-5 z-[100] flex flex-col gap-2 max-w-sm w-full pointer-events-none"></div>
 
@@ -2165,19 +2866,20 @@
   <iframe id="receiptPrintIframe" class="hidden"></iframe>
 
   <!-- ================= SCRIPTS ================= -->
-  <script src="config.js?v=20261030-v15"></script>
-  <script src="js/numberToThai.js?v=20261030-v15"></script>
-  <script src="js/sound.js?v=20261030-v15"></script>
-  <script src="js/print.js?v=20261030-v15"></script>
-  <script src="js/ui.js?v=20261030-v15"></script>
-  <script src="js/api.js?v=20261030-v15"></script>
-  <script src="js/auth.js?v=20261030-v15"></script>
-  <script src="js/modules/launcher.js?v=20261030-v15"></script>
-  <script src="js/modules/sales.js?v=20261030-v15"></script>
-  <script src="js/modules/stock.js?v=20261030-v15"></script>
-  <script src="js/modules/reports.js?v=20261030-v15"></script>
-  <script src="js/modules/admin.js?v=20261030-v15"></script>
-  <script src="js/router.js?v=20261030-v15"></script>
+  <script src="config.js?v=20261030-v16"></script>
+  <script src="js/numberToThai.js?v=20261030-v16"></script>
+  <script src="js/sound.js?v=20261030-v16"></script>
+  <script src="js/print.js?v=20261030-v16"></script>
+  <script src="js/ui.js?v=20261030-v16"></script>
+  <script src="js/api.js?v=20261030-v16"></script>
+  <script src="js/auth.js?v=20261030-v16"></script>
+  <script src="js/modules/launcher.js?v=20261030-v16"></script>
+  <script src="js/modules/sales.js?v=20261030-v16"></script>
+  <script src="js/modules/stock.js?v=20261030-v16"></script>
+  <script src="js/modules/reports.js?v=20261030-v16"></script>
+  <script src="js/modules/finance.js?v=20261030-v16"></script>
+  <script src="js/modules/admin.js?v=20261030-v16"></script>
+  <script src="js/router.js?v=20261030-v16"></script>
 
   <script>
     // System Startup
