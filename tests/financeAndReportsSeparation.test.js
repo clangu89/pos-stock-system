@@ -310,7 +310,7 @@ test('Finance & Reports Separation: Frontend UI Integrity & 5 Launcher Cards', (
   assert.ok(indexHtml.includes('id="cashClosingDetailModal"'));
 
   // 6. Scripts import finance.js and router has finance route
-  assert.ok(indexHtml.includes('src="js/modules/finance.js?v=20261030-v16"'));
+  assert.ok(indexHtml.includes('src="js/modules/finance.js?v=20261030-v17"'));
   const routerJs = fs.readFileSync(path.join(frontendDir, 'js', 'router.js'), 'utf8');
   assert.ok(routerJs.includes("hash === 'finance' && !Auth.hasPerm('finance', 'view')"));
   assert.ok(routerJs.includes("FinanceModule.activate()"));
@@ -321,4 +321,65 @@ test('Finance & Reports Separation: Frontend UI Integrity & 5 Launcher Cards', (
   assert.ok(adminJs.includes("finance?.view"));
   assert.ok(adminJs.includes("finance_view"));
   assert.ok(adminJs.includes("finance: {"));
+});
+
+test('Finance & Reports Separation: POS Checkout of 46.00 THB reflects accurately in Finance Overview', () => {
+  const { sandbox } = createGasMockContext();
+  sandbox.setupDatabase();
+  const adminLogin = sandbox.loginUser('admin', 'Admin1234!');
+
+  // Checkout exact sale matching user scenario: 46.00 THB CASH
+  const p1 = sandbox.getTable('Products').rows.find(p => p.sku === 'P1001'); // 10 THB
+  const p2 = sandbox.getTable('Products').rows.find(p => p.sku === 'P1002'); // 16 THB
+
+  const checkoutRes = sandbox.checkoutSale({
+    branchId: 'B01',
+    payMethod: 'CASH',
+    received: 50,
+    subtotal: 46,
+    discount: 0,
+    vat: 0,
+    total: 46,
+    change: 4,
+    items: [
+      { sku: 'P1001', name: p1.name, unitPrice: 10, qty: 3, discount: 0, amount: 30 },
+      { sku: 'P1002', name: p2.name, unitPrice: 16, qty: 1, discount: 0, amount: 16 }
+    ]
+  }, adminLogin.user);
+
+  assert.strictEqual(checkoutRes.ok, true);
+  assert.strictEqual(checkoutRes.sale.total, 46);
+  assert.strictEqual(checkoutRes.sale.payMethod, 'CASH');
+
+  // Query finance:overview API
+  const overviewRes = sandbox.routeAction('finance:overview', adminLogin.token, {
+    startDate: '2026-10-01',
+    endDate: '2026-10-31',
+    branchId: 'B01'
+  }, {});
+
+  assert.strictEqual(overviewRes.ok, true);
+  const data = overviewRes.data;
+  assert.ok(data, 'overviewRes must include data property');
+  assert.ok(data.summary, 'data must include a top-level summary object');
+  assert.strictEqual(data.summary.totalSales, 46.00, 'totalSales must equal 46.00');
+  assert.strictEqual(data.summary.cashSales, 46.00, 'cashSales must equal 46.00');
+  assert.strictEqual(data.summary.transferSales, 0, 'transferSales must be 0');
+  assert.strictEqual(data.summary.qrSales, 0, 'qrSales must be 0');
+  assert.strictEqual(data.summary.netCashInflow, 46.00, 'netCashInflow must equal 46.00');
+  assert.strictEqual(data.summary.totalNetCashFlow, 46.00, 'totalNetCashFlow must equal 46.00');
+  assert.strictEqual(data.summary.paidBills, 1, 'paidBills must be 1');
+
+  // Verify dailyFlow
+  assert.ok(Array.isArray(data.dailyFlow), 'dailyFlow must be an array');
+  assert.strictEqual(data.dailyFlow.length, 1);
+  const day = data.dailyFlow[0];
+  assert.strictEqual(day.cashSales, 46.00);
+  assert.strictEqual(day.transferSales, 0);
+  assert.strictEqual(day.qrSales, 0);
+  assert.strictEqual(day.netCashFlow, 46.00);
+  assert.strictEqual(day.netFlow, 46.00);
+
+  // Verify expenseByCategory is array
+  assert.ok(Array.isArray(data.expenseByCategory), 'expenseByCategory must be an array');
 });

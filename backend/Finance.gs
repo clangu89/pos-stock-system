@@ -38,8 +38,9 @@ function ensureFinanceSheets_() {
 function getFinanceOverview(startDateStr, endDateStr, branchId = '') {
   ensureFinanceSheets_();
 
-  const start = startDateStr ? new Date(startDateStr + 'T00:00:00') : new Date(Date.now() - 30 * 86400000);
-  const end = endDateStr ? new Date(endDateStr + 'T23:59:59') : new Date();
+  const todayBangkok = Utilities.formatDate(new Date(), 'Asia/Bangkok', 'yyyy-MM-dd');
+  const sStart = startDateStr || '';
+  const sEnd = endDateStr || todayBangkok;
 
   // 1. Sales Data
   const salesTable = getTable(SHEETS.SALES);
@@ -47,8 +48,11 @@ function getFinanceOverview(startDateStr, endDateStr, branchId = '') {
 
   const inRange = (s) => {
     if (branchId && s.branchId !== branchId) return false;
-    const sDate = new Date(s.ts);
-    return sDate >= start && sDate <= end;
+    const sDateStr = s.ts ? Utilities.formatDate(new Date(s.ts), 'Asia/Bangkok', 'yyyy-MM-dd') : '';
+    if (!sDateStr) return false;
+    if (sStart && sDateStr < sStart) return false;
+    if (sEnd && sDateStr > sEnd) return false;
+    return true;
   };
 
   const validSales = salesTable.rows.filter(s => s.status !== 'VOID' && inRange(s));
@@ -86,26 +90,41 @@ function getFinanceOverview(startDateStr, endDateStr, branchId = '') {
     totalCost += cost;
 
     const pm = String(s.payMethod || '').toUpperCase();
-    if (pm === 'CASH') cashSales += t;
-    else if (pm === 'TRANSFER') transferSales += t;
-    else if (pm === 'QR') qrSales += t;
-    else otherSales += t;
-
     const dayKey = Utilities.formatDate(new Date(s.ts), 'Asia/Bangkok', 'yyyy-MM-dd');
     if (!dailyMap[dayKey]) {
       dailyMap[dayKey] = {
         date: dayKey,
         cashSales: 0,
+        transferSales: 0,
+        qrSales: 0,
+        otherSales: 0,
         bankSales: 0,
+        income: 0,
         otherIncome: 0,
         expense: 0,
         salesCost: 0,
+        netCashFlow: 0,
         netFlow: 0,
         netProfit: 0
       };
     }
-    if (pm === 'CASH') dailyMap[dayKey].cashSales += t;
-    else dailyMap[dayKey].bankSales += t;
+
+    if (pm === 'CASH') {
+      cashSales += t;
+      dailyMap[dayKey].cashSales += t;
+    } else if (pm === 'TRANSFER') {
+      transferSales += t;
+      dailyMap[dayKey].transferSales += t;
+      dailyMap[dayKey].bankSales += t;
+    } else if (pm === 'QR') {
+      qrSales += t;
+      dailyMap[dayKey].qrSales += t;
+      dailyMap[dayKey].bankSales += t;
+    } else {
+      otherSales += t;
+      dailyMap[dayKey].otherSales += t;
+      dailyMap[dayKey].bankSales += t;
+    }
     dailyMap[dayKey].salesCost += cost;
   });
 
@@ -127,25 +146,38 @@ function getFinanceOverview(startDateStr, endDateStr, branchId = '') {
 
     // Check date (txDate or ts)
     const txDateStr = tx.txDate || (tx.ts ? Utilities.formatDate(new Date(tx.ts), 'Asia/Bangkok', 'yyyy-MM-dd') : '');
-    if (txDateStr) {
-      const d = new Date(txDateStr + 'T12:00:00');
-      if (d < start || d > end) return;
-    }
+    if (!txDateStr) return;
+    if (sStart && txDateStr < sStart) return;
+    if (sEnd && txDateStr > sEnd) return;
 
     const amt = parseFloat(tx.amount) || 0;
     const isCash = (tx.payMethod === 'CASH');
+
+    if (!dailyMap[txDateStr]) {
+      dailyMap[txDateStr] = {
+        date: txDateStr,
+        cashSales: 0,
+        transferSales: 0,
+        qrSales: 0,
+        otherSales: 0,
+        bankSales: 0,
+        income: 0,
+        otherIncome: 0,
+        expense: 0,
+        salesCost: 0,
+        netCashFlow: 0,
+        netFlow: 0,
+        netProfit: 0
+      };
+    }
 
     if (tx.type === 'INCOME') {
       otherIncomeTotal += amt;
       if (isCash) cashIncome += amt;
       else bankIncome += amt;
 
-      if (txDateStr) {
-        if (!dailyMap[txDateStr]) {
-          dailyMap[txDateStr] = { date: txDateStr, cashSales: 0, bankSales: 0, otherIncome: 0, expense: 0, salesCost: 0, netFlow: 0, netProfit: 0 };
-        }
-        dailyMap[txDateStr].otherIncome += amt;
-      }
+      dailyMap[txDateStr].income += amt;
+      dailyMap[txDateStr].otherIncome += amt;
     } else if (tx.type === 'EXPENSE') {
       expenseTotal += amt;
       if (isCash) cashExpense += amt;
@@ -156,12 +188,7 @@ function getFinanceOverview(startDateStr, endDateStr, branchId = '') {
       categoryMap[cat].totalAmount += amt;
       categoryMap[cat].count += 1;
 
-      if (txDateStr) {
-        if (!dailyMap[txDateStr]) {
-          dailyMap[txDateStr] = { date: txDateStr, cashSales: 0, bankSales: 0, otherIncome: 0, expense: 0, salesCost: 0, netFlow: 0, netProfit: 0 };
-        }
-        dailyMap[txDateStr].expense += amt;
-      }
+      dailyMap[txDateStr].expense += amt;
     }
   });
 
@@ -169,13 +196,18 @@ function getFinanceOverview(startDateStr, endDateStr, branchId = '') {
   const dailyFlow = Object.keys(dailyMap).sort().map(k => {
     const d = dailyMap[k];
     d.cashSales = round2_(d.cashSales);
+    d.transferSales = round2_(d.transferSales);
+    d.qrSales = round2_(d.qrSales);
+    d.otherSales = round2_(d.otherSales);
     d.bankSales = round2_(d.bankSales);
+    d.income = round2_(d.income);
     d.otherIncome = round2_(d.otherIncome);
     d.expense = round2_(d.expense);
     d.salesCost = round2_(d.salesCost);
-    d.netFlow = round2_((d.cashSales + d.bankSales + d.otherIncome) - d.expense);
+    d.netCashFlow = round2_((d.cashSales + d.bankSales + d.income) - d.expense);
+    d.netFlow = d.netCashFlow;
     const grossDay = (d.cashSales + d.bankSales) - d.salesCost;
-    d.netProfit = round2_(grossDay + d.otherIncome - d.expense);
+    d.netProfit = round2_(grossDay + d.income - d.expense);
     return d;
   });
 
@@ -191,7 +223,32 @@ function getFinanceOverview(startDateStr, endDateStr, branchId = '') {
     return c;
   }).sort((a, b) => b.totalAmount - a.totalAmount);
 
+  const summary = {
+    totalSales: round2_(totalSales),
+    cashSales: round2_(cashSales),
+    transferSales: round2_(transferSales),
+    qrSales: round2_(qrSales),
+    otherSales: round2_(otherSales),
+    bankSales: round2_(transferSales + qrSales + otherSales),
+    totalCost: round2_(totalCost),
+    grossProfit: grossProfit,
+    totalIncome: round2_(otherIncomeTotal),
+    cashIncome: round2_(cashIncome),
+    bankIncome: round2_(bankIncome),
+    totalExpense: round2_(expenseTotal),
+    cashExpense: round2_(cashExpense),
+    bankExpense: round2_(bankExpense),
+    netOperatingProfit: netOperatingProfit,
+    netCashInflow: netCashInflow,
+    netBankInflow: netBankInflow,
+    totalNetCashFlow: totalNetCashFlow,
+    paidBills: validSales.length,
+    voidBills: voidSales.length,
+    voidAmount: round2_(voidAmount)
+  };
+
   return {
+    summary: summary,
     sales: {
       totalSales: round2_(totalSales),
       cashSales: round2_(cashSales),
@@ -234,8 +291,8 @@ function getFinanceTxns(options = {}) {
   const txnsTable = getTable(SHEETS.FINANCE_TXNS);
   const rows = txnsTable.rows || [];
 
-  const start = options.startDate ? new Date(options.startDate + 'T00:00:00') : null;
-  const end = options.endDate ? new Date(options.endDate + 'T23:59:59') : null;
+  const startDateStr = options.startDate || '';
+  const endDateStr = options.endDate || '';
   const branchId = options.branchId || '';
   const type = options.type || '';
   const payMethod = options.payMethod || '';
@@ -259,9 +316,8 @@ function getFinanceTxns(options = {}) {
 
     const rDateStr = r.txDate || (r.ts ? Utilities.formatDate(new Date(r.ts), 'Asia/Bangkok', 'yyyy-MM-dd') : '');
     if (rDateStr) {
-      const d = new Date(rDateStr + 'T12:00:00');
-      if (start && d < start) continue;
-      if (end && d > end) continue;
+      if (startDateStr && rDateStr < startDateStr) continue;
+      if (endDateStr && rDateStr > endDateStr) continue;
     }
 
     if (searchLower) {

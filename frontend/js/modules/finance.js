@@ -157,9 +157,16 @@ const FinanceModule = {
 
     if (res && res.ok && res.data) {
       this.cachedOverview = res.data;
-      this.renderSummaryCards(res.data.summary);
+      const sum = res.data.summary || {
+        ...(res.data.sales || {}),
+        ...(res.data.ledger || {}),
+        ...(res.data.net || {}),
+        totalIncome: (res.data.ledger && res.data.ledger.otherIncomeTotal) || 0,
+        totalExpense: (res.data.ledger && res.data.ledger.expenseTotal) || 0
+      };
+      this.renderSummaryCards(sum);
       this.renderDailyFlowTable(res.data.dailyFlow || []);
-      this.renderExpenseCategoryTable(res.data.expenseByCategory || {});
+      this.renderExpenseCategoryTable(res.data.expenseByCategory || []);
     } else {
       UI.showToast(res.error || 'ไม่สามารถโหลดข้อมูลการเงินได้', 'error');
     }
@@ -215,14 +222,18 @@ const FinanceModule = {
     }
 
     tbody.innerHTML = [...list].reverse().map(d => {
-      const net = d.netCashFlow || 0;
+      const net = d.netCashFlow !== undefined ? d.netCashFlow : (d.netFlow || 0);
+      const income = d.income !== undefined ? d.income : (d.otherIncome || 0);
+      const transfer = d.transferSales || 0;
+      const qr = d.qrSales || 0;
+      const bankSales = (transfer + qr) || (d.bankSales || 0);
       return `
         <tr class="border-b border-slate-100 hover:bg-slate-50 text-xs">
           <td class="py-2.5 px-3 font-mono font-bold">${d.date}</td>
           <td class="py-2.5 px-3 text-right font-mono text-emerald-700">฿${(d.cashSales || 0).toFixed(2)}</td>
-          <td class="py-2.5 px-3 text-right font-mono text-blue-700">฿${((d.transferSales || 0) + (d.qrSales || 0)).toFixed(2)}</td>
-          <td class="py-2.5 px-3 text-right font-mono text-teal-600">${d.income > 0 ? `+฿${d.income.toFixed(2)}` : '-'}</td>
-          <td class="py-2.5 px-3 text-right font-mono text-rose-500">${d.expense > 0 ? `-฿${d.expense.toFixed(2)}` : '-'}</td>
+          <td class="py-2.5 px-3 text-right font-mono text-blue-700">฿${bankSales.toFixed(2)}</td>
+          <td class="py-2.5 px-3 text-right font-mono text-teal-600">${income > 0 ? `+฿${income.toFixed(2)}` : '-'}</td>
+          <td class="py-2.5 px-3 text-right font-mono text-rose-500">${d.expense > 0 ? `-฿${(d.expense || 0).toFixed(2)}` : '-'}</td>
           <td class="py-2.5 px-3 text-right font-mono font-black ${net >= 0 ? 'text-slate-800' : 'text-rose-600'}">
             ${net >= 0 ? '+' : ''}฿${net.toFixed(2)}
           </td>
@@ -236,24 +247,35 @@ const FinanceModule = {
     }).join('');
   },
 
-  renderExpenseCategoryTable(catMap = {}) {
+  renderExpenseCategoryTable(catData) {
     const tbody = document.getElementById('financeExpenseCategoryTableBody');
     if (!tbody) return;
 
-    const entries = Object.entries(catMap);
-    if (entries.length === 0) {
+    let list = [];
+    if (Array.isArray(catData)) {
+      list = catData;
+    } else if (catData && typeof catData === 'object') {
+      const entries = Object.entries(catData);
+      const total = entries.reduce((acc, [, val]) => acc + (parseFloat(val) || 0), 0);
+      list = entries.map(([category, amount]) => ({
+        category,
+        totalAmount: parseFloat(amount) || 0,
+        percent: total > 0 ? (parseFloat(amount) / total) * 100 : 0
+      })).sort((a, b) => b.totalAmount - a.totalAmount);
+    }
+
+    if (list.length === 0) {
       tbody.innerHTML = `<tr><td colspan="3" class="text-center py-6 text-slate-400">ไม่มีรายการค่าใช้จ่ายในช่วงเวลาที่เลือก</td></tr>`;
       return;
     }
 
-    const totalExp = entries.reduce((acc, [, val]) => acc + (parseFloat(val) || 0), 0);
-    entries.sort((a, b) => b[1] - a[1]);
-
-    tbody.innerHTML = entries.map(([cat, amt]) => {
-      const pct = totalExp > 0 ? ((amt / totalExp) * 100).toFixed(1) : '0.0';
+    tbody.innerHTML = list.map(item => {
+      const safeCat = typeof escapeHtml === 'function' ? escapeHtml(item.category) : item.category;
+      const amt = parseFloat(item.totalAmount) || 0;
+      const pct = (parseFloat(item.percent) || 0).toFixed(1);
       return `
         <tr class="border-b border-slate-100 hover:bg-slate-50 text-xs">
-          <td class="py-2 px-3 font-bold text-slate-700">${typeof escapeHtml === 'function' ? escapeHtml(cat) : cat}</td>
+          <td class="py-2 px-3 font-bold text-slate-700">${safeCat}</td>
           <td class="py-2 px-3 text-right font-mono font-bold text-rose-600">฿${amt.toFixed(2)}</td>
           <td class="py-2 px-3 text-right font-mono text-slate-500">${pct}%</td>
         </tr>
@@ -268,15 +290,19 @@ const FinanceModule = {
       return;
     }
     const headers = ['วันที่', 'ยอดขายเงินสด (บาท)', 'ยอดขายโอนเงิน (บาท)', 'ยอดขาย QR (บาท)', 'รายรับอื่น (บาท)', 'รายจ่ายหน้าร้าน (บาท)', 'กระแสเงินสดสุทธิ (บาท)'];
-    const rows = list.map(d => [
-      d.date,
-      (d.cashSales || 0).toFixed(2),
-      (d.transferSales || 0).toFixed(2),
-      (d.qrSales || 0).toFixed(2),
-      (d.income || 0).toFixed(2),
-      (d.expense || 0).toFixed(2),
-      (d.netCashFlow || 0).toFixed(2)
-    ]);
+    const rows = list.map(d => {
+      const net = d.netCashFlow !== undefined ? d.netCashFlow : (d.netFlow || 0);
+      const income = d.income !== undefined ? d.income : (d.otherIncome || 0);
+      return [
+        d.date,
+        (d.cashSales || 0).toFixed(2),
+        (d.transferSales || 0).toFixed(2),
+        (d.qrSales || 0).toFixed(2),
+        income.toFixed(2),
+        (d.expense || 0).toFixed(2),
+        net.toFixed(2)
+      ];
+    });
     const filename = `daily-cashflow-${this.formatLocalDate(new Date())}.csv`;
     this.downloadCsv(filename, headers, rows);
     UI.showToast(`ส่งออกไฟล์ ${filename} เรียบร้อยแล้ว`, 'success');
