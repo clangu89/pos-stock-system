@@ -71,6 +71,7 @@ const AdminModule = {
     else if (tabName === 'categories') this.loadCategoriesUI();
     else if (tabName === 'units') this.loadUnitsUI();
     else if (tabName === 'audit') this.loadAuditLogs();
+    else if (tabName === 'backup') this.loadBackupUI();
     else if (tabName === 'api') this.renderApiSettings();
   },
 
@@ -472,7 +473,8 @@ const AdminModule = {
               <div class="font-bold text-slate-800 mb-2">⚙️ Admin (ระบบ)</div>
               <label class="flex items-center gap-1.5 mb-1"><input type="checkbox" ${isAdmin || p.admin?.users ? 'checked' : ''} ${isAdmin ? 'disabled' : ''} id="perm_${r.roleId}_admin_users"> จัดการผู้ใช้</label>
               <label class="flex items-center gap-1.5 mb-1"><input type="checkbox" ${isAdmin || p.admin?.config ? 'checked' : ''} ${isAdmin ? 'disabled' : ''} id="perm_${r.roleId}_admin_config"> ตั้งค่าระบบ</label>
-              <label class="flex items-center gap-1.5"><input type="checkbox" ${isAdmin || p.admin?.printer ? 'checked' : ''} ${isAdmin ? 'disabled' : ''} id="perm_${r.roleId}_admin_printer"> ตั้งค่าเครื่องพิมพ์</label>
+              <label class="flex items-center gap-1.5 mb-1"><input type="checkbox" ${isAdmin || p.admin?.printer ? 'checked' : ''} ${isAdmin ? 'disabled' : ''} id="perm_${r.roleId}_admin_printer"> ตั้งค่าเครื่องพิมพ์</label>
+              <label class="flex items-center gap-1.5"><input type="checkbox" ${isAdmin || p.admin?.backup ? 'checked' : ''} ${isAdmin ? 'disabled' : ''} id="perm_${r.roleId}_admin_backup"> สำรอง/กู้คืนฐานข้อมูล</label>
             </div>
           </div>
           ${!isAdmin ? `
@@ -1605,6 +1607,534 @@ const AdminModule = {
     } catch (err) {
       UI.hideLoading();
       UI.showToast(`ไม่สามารถเชื่อมต่อ API ได้: ${err.message}`, 'error');
+      SoundManager.playErrorTone();
+    }
+  }
+  // --- Database Backup & Restore ---
+  backupStatus: null,
+  backupPreset: 'full',
+  selectedRestoreFile: null,
+  restoreParsedData: null,
+
+  async loadBackupUI() {
+    UI.showLoading('กำลังโหลดสถานะฐานข้อมูล...');
+    const res = await Api.call('admin:backupStatus');
+    UI.hideLoading();
+
+    if (res && res.ok) {
+      this.backupStatus = res;
+      this.renderBackupOverview();
+      this.renderBackupTablesStats();
+      this.renderBackupTableCheckboxes();
+      this.renderBackupHistoryTable(res.history || []);
+    } else {
+      UI.showToast(`ไม่สามารถโหลดสถานะฐานข้อมูลได้: ${res ? (res.error || res.message) : 'Network error'}`, 'error');
+    }
+  },
+
+  renderBackupOverview() {
+    if (!this.backupStatus) return;
+    const s = this.backupStatus;
+
+    // Spreadsheet info
+    const nameEl = document.getElementById('backupSpreadsheetName');
+    if (nameEl) nameEl.textContent = `ID: ${s.spreadsheetId || '-'}`;
+
+    const linkEl = document.getElementById('backupSpreadsheetLink');
+    if (linkEl && s.spreadsheetId) {
+      linkEl.href = `https://docs.google.com/spreadsheets/d/${s.spreadsheetId}/edit`;
+    }
+
+    // Rows count & Table count
+    const totalEl = document.getElementById('backupTotalRowsCount');
+    if (totalEl) totalEl.textContent = `${(s.totalRows || 0).toLocaleString()} แถว`;
+
+    const tableBadge = document.getElementById('backupTableCountBadge');
+    if (tableBadge) tableBadge.textContent = `${s.tableCount || 17} ตารางฐานข้อมูล`;
+
+    // Last Backup
+    const lastBAt = document.getElementById('backupLastAtLabel');
+    const lastBBy = document.getElementById('backupLastByLabel');
+    const lastCard = document.getElementById('backupLastCard');
+
+    if (s.lastBackupAt) {
+      const d = new Date(s.lastBackupAt);
+      if (lastBAt) lastBAt.textContent = d.toLocaleString('th-TH');
+      if (lastBBy) lastBBy.textContent = `โดย: ${s.lastBackupBy || 'ผู้ดูแลระบบ'}`;
+      if (lastCard) {
+        lastCard.className = 'p-4 rounded-2xl bg-emerald-50 border border-emerald-200';
+      }
+    } else {
+      if (lastBAt) lastBAt.textContent = 'ยังไม่มีประวัติ';
+      if (lastBBy) lastBBy.textContent = 'แนะนำให้กดสำรองข้อมูลครั้งแรก';
+      if (lastCard) {
+        lastCard.className = 'p-4 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900';
+      }
+    }
+
+    // Last Restore
+    const lastRAt = document.getElementById('restoreLastAtLabel');
+    const lastRBy = document.getElementById('restoreLastByLabel');
+    if (s.lastRestoreAt) {
+      const d = new Date(s.lastRestoreAt);
+      if (lastRAt) lastRAt.textContent = d.toLocaleString('th-TH');
+      if (lastRBy) lastRBy.textContent = `โดย: ${s.lastRestoreBy || 'ผู้ดูแลระบบ'}`;
+    } else {
+      if (lastRAt) lastRAt.textContent = 'ยังไม่มีประวัติ';
+      if (lastRBy) lastRBy.textContent = '-';
+    }
+  },
+
+  renderBackupTablesStats() {
+    const container = document.getElementById('backupTablesDetailGrid');
+    if (!container || !this.backupStatus || !this.backupStatus.tableStats) return;
+
+    const stats = this.backupStatus.tableStats;
+    const tableKeys = Object.keys(stats);
+
+    container.innerHTML = tableKeys.map(k => {
+      const count = stats[k] || 0;
+      return `
+        <div class="p-2.5 rounded-xl bg-white border border-slate-200 flex items-center justify-between">
+          <span class="font-mono font-bold text-slate-700 truncate" title="${k}">${k}</span>
+          <span class="px-2 py-0.5 rounded-full text-[11px] font-mono font-bold ${count > 0 ? 'bg-blue-100 text-blue-800' : 'bg-slate-100 text-slate-400'}">${count.toLocaleString()}</span>
+        </div>
+      `;
+    }).join('');
+  },
+
+  selectBackupPreset(preset) {
+    this.backupPreset = preset;
+
+    // Highlight selected card
+    ['full', 'master', 'custom'].forEach(p => {
+      const el = document.getElementById(`presetLabel_${p}`);
+      if (el) {
+        if (p === preset) {
+          el.className = 'flex items-start gap-3 p-3.5 rounded-2xl border-2 border-blue-600 bg-blue-50/50 cursor-pointer transition';
+        } else {
+          el.className = 'flex items-start gap-3 p-3.5 rounded-2xl border border-slate-200 hover:bg-slate-50 cursor-pointer transition';
+        }
+      }
+    });
+
+    const customContainer = document.getElementById('backupCustomTablesContainer');
+    if (customContainer) {
+      if (preset === 'custom') {
+        customContainer.classList.remove('hidden');
+      } else {
+        customContainer.classList.add('hidden');
+      }
+    }
+  },
+
+  renderBackupTableCheckboxes() {
+    const container = document.getElementById('backupCustomCheckboxesList');
+    if (!container || !this.backupStatus || !this.backupStatus.tableStats) return;
+
+    const stats = this.backupStatus.tableStats;
+    const tableKeys = Object.keys(stats);
+
+    container.innerHTML = tableKeys.map(k => {
+      const count = stats[k] || 0;
+      return `
+        <label class="flex items-center gap-2 p-1.5 rounded-lg hover:bg-white cursor-pointer select-none">
+          <input type="checkbox" name="backupTableItem" value="${k}" checked class="rounded text-blue-600">
+          <span class="font-mono text-slate-800 truncate flex-1">${k}</span>
+          <span class="text-[10px] text-slate-400 font-mono">(${count})</span>
+        </label>
+      `;
+    }).join('');
+  },
+
+  toggleAllBackupTables(checked) {
+    document.querySelectorAll('input[name="backupTableItem"]').forEach(cb => {
+      cb.checked = Boolean(checked);
+    });
+  },
+
+  renderBackupHistoryTable(historyList) {
+    const tbody = document.getElementById('backupHistoryTableBody');
+    if (!tbody) return;
+
+    if (!historyList || historyList.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="4" class="text-center py-6 text-slate-400">ยังไม่มีบันทึกประวัติการสำรองข้อมูล</td></tr>';
+      return;
+    }
+
+    tbody.innerHTML = historyList.map(h => {
+      const isRestore = h.action === 'RESTORE_DATABASE';
+      let detailObj = {};
+      try {
+        detailObj = typeof h.detail === 'string' ? JSON.parse(h.detail) : (h.detail || {});
+      } catch (e) {
+        detailObj = { raw: h.detail };
+      }
+
+      let detailStr = '';
+      if (detailObj.tableCount !== undefined) {
+        detailStr = `${detailObj.tableCount} ตาราง, ${(detailObj.totalRows || 0).toLocaleString()} แถว`;
+        if (detailObj.note) detailStr += ` ("${detailObj.note}")`;
+      } else {
+        detailStr = typeof h.detail === 'object' ? JSON.stringify(h.detail) : String(h.detail || '-');
+      }
+
+      return `
+        <tr class="border-b border-slate-100 text-xs hover:bg-slate-50 font-medium">
+          <td class="py-2.5 px-3 font-mono text-slate-500">${new Date(h.ts).toLocaleString('th-TH')}</td>
+          <td class="py-2.5 px-3">
+            <span class="px-2.5 py-1 rounded-full text-[11px] font-bold ${isRestore ? 'bg-rose-100 text-rose-800' : 'bg-blue-100 text-blue-800'}">
+              ${isRestore ? '📤 กู้คืนฐานข้อมูล' : '📥 สำรองฐานข้อมูล'}
+            </span>
+          </td>
+          <td class="py-2.5 px-3 font-bold text-slate-800">${h.userId || '-'}</td>
+          <td class="py-2.5 px-3 font-mono text-slate-600 truncate max-w-sm" title="${detailStr}">${detailStr}</td>
+        </tr>
+      `;
+    }).join('');
+  },
+
+  async exportDatabaseBackup() {
+    let targetTables = [];
+    const allKnownTables = this.backupStatus && this.backupStatus.tableStats ? Object.keys(this.backupStatus.tableStats) : [];
+
+    if (this.backupPreset === 'full') {
+      targetTables = allKnownTables.filter(t => t !== 'Sessions');
+    } else if (this.backupPreset === 'master') {
+      targetTables = ['Users', 'Roles', 'Branches', 'Categories', 'Units', 'Products', 'Config', 'ReceiptTexts', 'PrintProfiles'];
+    } else if (this.backupPreset === 'custom') {
+      const cbs = document.querySelectorAll('input[name="backupTableItem"]:checked');
+      cbs.forEach(cb => targetTables.push(cb.value));
+      if (targetTables.length === 0) {
+        UI.showToast('กรุณาเลือกตารางที่ต้องการสำรองข้อมูลอย่างน้อย 1 ตาราง', 'warning');
+        return;
+      }
+    }
+
+    const includeAudit = document.getElementById('backupIncludeAuditLogCheck')?.checked;
+    if (includeAudit && !targetTables.includes('AuditLog')) {
+      targetTables.push('AuditLog');
+    } else if (!includeAudit && targetTables.includes('AuditLog') && this.backupPreset !== 'custom') {
+      targetTables = targetTables.filter(t => t !== 'AuditLog');
+    }
+
+    const note = document.getElementById('backupNoteInput')?.value || '';
+
+    UI.showLoading('กำลังรวบรวมและสร้างไฟล์สำรองข้อมูล (JSON)...');
+    const res = await Api.call('admin:exportBackup', {
+      tables: targetTables,
+      note: note
+    });
+    UI.hideLoading();
+
+    if (res && res.ok && res.backup) {
+      const backupObj = res.backup;
+      const jsonStr = JSON.stringify(backupObj, null, 2);
+      const blob = new Blob([jsonStr], { type: 'application/json;charset=utf-8' });
+      const nowStr = new Date().toISOString().replace(/[-:T]/g, '').slice(0, 14);
+      const fileName = `pos-backup-${this.backupPreset}-${nowStr}.json`;
+
+      const downloadUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = downloadUrl;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(downloadUrl);
+
+      UI.showToast(`ดาวน์โหลดไฟล์สำรองข้อมูลสำเร็จ (${backupObj.tableCount} ตาราง, ${backupObj.totalRows.toLocaleString()} แถว)`, 'success');
+      SoundManager.playSuccessChime();
+
+      await this.loadBackupUI();
+    } else {
+      UI.showToast(`สร้างไฟล์สำรองข้อมูลไม่สำเร็จ: ${res ? (res.error || res.message) : 'เกิดข้อผิดพลาด'}`, 'error');
+    }
+  },
+
+  // --- Restore Handlers ---
+  handleRestoreDragOver(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    const zone = document.getElementById('restoreDropZone');
+    if (zone) zone.classList.add('border-blue-500', 'bg-blue-50/50');
+  },
+
+  handleRestoreDragLeave(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    const zone = document.getElementById('restoreDropZone');
+    if (zone) zone.classList.remove('border-blue-500', 'bg-blue-50/50');
+  },
+
+  handleRestoreDrop(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    const zone = document.getElementById('restoreDropZone');
+    if (zone) zone.classList.remove('border-blue-500', 'bg-blue-50/50');
+
+    const dt = e.dataTransfer;
+    if (dt && dt.files && dt.files.length > 0) {
+      this.processRestoreFile(dt.files[0]);
+    }
+  },
+
+  handleRestoreFileSelect(e) {
+    if (e.target && e.target.files && e.target.files.length > 0) {
+      this.processRestoreFile(e.target.files[0]);
+    }
+  },
+
+  async processRestoreFile(file) {
+    if (!file) return;
+    if (!file.name.endsWith('.json') && file.type !== 'application/json') {
+      UI.showToast('กรุณาเลือกไฟล์รูปแบบ .json เท่านั้น', 'warning');
+      return;
+    }
+
+    this.selectedRestoreFile = file;
+
+    try {
+      const text = await file.text();
+      const parsed = JSON.parse(text);
+
+      if (!parsed || !parsed.tables || typeof parsed.tables !== 'object') {
+        throw new Error('โครงสร้างไฟล์ไม่ถูกต้อง ไม่พบข้อมูลตารางฐานข้อมูล');
+      }
+
+      this.restoreParsedData = parsed;
+
+      // Populate file meta
+      const nameLabel = document.getElementById('restoreFileNameLabel');
+      if (nameLabel) nameLabel.textContent = file.name;
+
+      const dateLabel = document.getElementById('restoreFileExportedAt');
+      if (dateLabel) {
+        dateLabel.textContent = parsed.exportedAt ? new Date(parsed.exportedAt).toLocaleString('th-TH') : '-';
+      }
+
+      const byLabel = document.getElementById('restoreFileExportedBy');
+      if (byLabel) byLabel.textContent = parsed.exportedBy || '-';
+
+      const noteLabel = document.getElementById('restoreFileNote');
+      if (noteLabel) noteLabel.textContent = parsed.note || '(ไม่มีหมายเหตุ)';
+
+      // Checksum validation
+      const checksumBadge = document.getElementById('restoreChecksumStatusBadge');
+      if (checksumBadge) {
+        let isChecksumValid = true;
+        if (parsed.checksum && parsed.checksum.startsWith('sha256:')) {
+          const keys = Object.keys(parsed.tables).sort();
+          const summary = keys.map(k => {
+            const t = parsed.tables[k];
+            const rLen = (t && t.rows) ? t.rows.length : 0;
+            const hJoin = (t && t.headers) ? t.headers.join(',') : '';
+            return `${k}:${hJoin}:${rLen}`;
+          }).join('|');
+
+          try {
+            const enc = new TextEncoder();
+            const data = enc.encode(summary);
+            const hashBuf = await crypto.subtle.digest('SHA-256', data);
+            const hashArr = Array.from(new Uint8Array(hashBuf));
+            const calculated = 'sha256:' + hashArr.map(b => b.toString(16).padStart(2, '0')).join('');
+            isChecksumValid = (calculated === parsed.checksum);
+          } catch (err) {
+            // If crypto.subtle fails in old browser, leave valid
+            isChecksumValid = true;
+          }
+        }
+
+        if (isChecksumValid) {
+          checksumBadge.className = 'px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-800';
+          checksumBadge.textContent = '✅ ตรวจสอบไฟล์สมบูรณ์';
+        } else {
+          checksumBadge.className = 'px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-rose-100 text-rose-800';
+          checksumBadge.textContent = '⚠️ Checksum ไม่ตรง (ไฟล์อาจถูกแก้ไข)';
+        }
+      }
+
+      // Render Diff Table
+      this.renderRestoreDiffTable();
+
+      // Show inspector, hide dropzone
+      const inspector = document.getElementById('restoreFileInspectorContainer');
+      const dropzone = document.getElementById('restoreDropZone');
+      if (inspector) inspector.classList.remove('hidden');
+      if (dropzone) dropzone.classList.add('hidden');
+
+    } catch (err) {
+      UI.showToast(`ไม่สามารถอ่านไฟล์ได้: ${err.message}`, 'error');
+      this.clearSelectedRestoreFile();
+    }
+  },
+
+  renderRestoreDiffTable() {
+    const tbody = document.getElementById('restoreDiffTableBody');
+    if (!tbody || !this.restoreParsedData || !this.restoreParsedData.tables) return;
+
+    const tables = this.restoreParsedData.tables;
+    const tableKeys = Object.keys(tables);
+    const liveStats = (this.backupStatus && this.backupStatus.tableStats) ? this.backupStatus.tableStats : {};
+
+    tbody.innerHTML = tableKeys.map(k => {
+      const backupRows = tables[k] && tables[k].rows ? tables[k].rows.length : 0;
+      const currentRows = liveStats[k] !== undefined ? liveStats[k] : 0;
+      const diff = backupRows - currentRows;
+      let diffBadge = '';
+      if (diff > 0) {
+        diffBadge = `<span class="text-emerald-600 font-bold font-mono">+${diff}</span>`;
+      } else if (diff < 0) {
+        diffBadge = `<span class="text-rose-600 font-bold font-mono">${diff}</span>`;
+      } else {
+        diffBadge = `<span class="text-slate-400 font-mono">0</span>`;
+      }
+
+      return `
+        <tr class="hover:bg-slate-50 transition">
+          <td class="py-2 px-3 text-center">
+            <input type="checkbox" name="restoreTableItem" value="${k}" checked class="rounded text-blue-600">
+          </td>
+          <td class="py-2 px-2 font-mono font-bold text-slate-800">${k}</td>
+          <td class="py-2 px-2 text-right font-mono text-slate-500">${currentRows.toLocaleString()}</td>
+          <td class="py-2 px-2 text-right font-mono font-bold text-blue-700">${backupRows.toLocaleString()}</td>
+          <td class="py-2 px-3 text-center">${diffBadge}</td>
+        </tr>
+      `;
+    }).join('');
+  },
+
+  toggleAllRestoreTables(checked) {
+    document.querySelectorAll('input[name="restoreTableItem"]').forEach(cb => {
+      cb.checked = Boolean(checked);
+    });
+  },
+
+  clearSelectedRestoreFile() {
+    this.selectedRestoreFile = null;
+    this.restoreParsedData = null;
+
+    const inspector = document.getElementById('restoreFileInspectorContainer');
+    const dropzone = document.getElementById('restoreDropZone');
+    const fileInput = document.getElementById('restoreFileInput');
+
+    if (inspector) inspector.classList.add('hidden');
+    if (dropzone) dropzone.classList.remove('hidden');
+    if (fileInput) fileInput.value = '';
+  },
+
+  openRestoreConfirmModal() {
+    if (!this.restoreParsedData || !this.restoreParsedData.tables) {
+      UI.showToast('กรุณาเลือกไฟล์สำรองข้อมูลก่อน', 'warning');
+      return;
+    }
+
+    const selectedTables = [];
+    document.querySelectorAll('input[name="restoreTableItem"]:checked').forEach(cb => {
+      selectedTables.push(cb.value);
+    });
+
+    if (selectedTables.length === 0) {
+      UI.showToast('กรุณาเลือกตารางที่ต้องการกู้คืนอย่างน้อย 1 ตาราง', 'warning');
+      return;
+    }
+
+    let totalRowsToRestore = 0;
+    selectedTables.forEach(t => {
+      if (this.restoreParsedData.tables[t] && this.restoreParsedData.tables[t].rows) {
+        totalRowsToRestore += this.restoreParsedData.tables[t].rows.length;
+      }
+    });
+
+    const summaryText = document.getElementById('restoreConfirmSummaryText');
+    if (summaryText) {
+      summaryText.textContent = `กำลังเตรียมกู้คืนข้อมูลจำนวน ${selectedTables.length} ตาราง รวม ${totalRowsToRestore.toLocaleString()} แถว: (${selectedTables.join(', ')})`;
+    }
+
+    const input = document.getElementById('restoreConfirmPhraseInput');
+    const btn = document.getElementById('restoreConfirmSubmitBtn');
+    if (input) input.value = '';
+    if (btn) btn.disabled = true;
+
+    UI.openModal('restoreConfirmModal');
+    if (input) setTimeout(() => input.focus(), 100);
+  },
+
+  onRestoreConfirmInput(val) {
+    const btn = document.getElementById('restoreConfirmSubmitBtn');
+    if (btn) {
+      btn.disabled = (String(val || '').trim() !== 'RESTORE');
+    }
+  },
+
+  async executeRestoreDatabase() {
+    UI.closeModal('restoreConfirmModal');
+
+    const selectedTables = [];
+    document.querySelectorAll('input[name="restoreTableItem"]:checked').forEach(cb => {
+      selectedTables.push(cb.value);
+    });
+
+    if (selectedTables.length === 0) {
+      UI.showToast('ไม่มีตารางที่เลือกสำหรับการกู้คืน', 'warning');
+      return;
+    }
+
+    // Step 1: Optional Auto Pre-Restore Safety Backup
+    const safetyCheck = document.getElementById('restoreSafetyBackupCheck')?.checked;
+    if (safetyCheck) {
+      UI.showLoading('กำลังสร้างไฟล์สำรองข้อมูลฉุกเฉินก่อนเริ่มกู้คืน (Safety Backup)...');
+      try {
+        const safetyRes = await Api.call('admin:exportBackup', {
+          tables: Object.keys(this.backupStatus?.tableStats || {}).filter(t => t !== 'Sessions'),
+          note: 'Auto Pre-Restore Safety Backup'
+        });
+        if (safetyRes && safetyRes.ok && safetyRes.backup) {
+          const jsonStr = JSON.stringify(safetyRes.backup, null, 2);
+          const blob = new Blob([jsonStr], { type: 'application/json;charset=utf-8' });
+          const nowStr = new Date().toISOString().replace(/[-:T]/g, '').slice(0, 14);
+          const fileName = `pos-safety-backup-before-restore-${nowStr}.json`;
+          const downloadUrl = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = downloadUrl;
+          a.download = fileName;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(downloadUrl);
+        }
+      } catch (e) {
+        console.warn('Safety backup error:', e);
+      }
+    }
+
+    // Step 2: Execute Restore on Backend
+    UI.showLoading('กำลังกู้คืนข้อมูลลงใน Google Sheets... กรุณาอย่าปิดหน้าต่าง');
+    const res = await Api.call('admin:restoreBackup', {
+      tables: this.restoreParsedData.tables,
+      selectedTables: selectedTables,
+      exportedAt: this.restoreParsedData.exportedAt,
+      exportedBy: this.restoreParsedData.exportedBy,
+      checksum: this.restoreParsedData.checksum,
+      skipChecksumVerify: false
+    });
+    UI.hideLoading();
+
+    if (res && res.ok) {
+      UI.showToast(res.message || 'กู้คืนฐานข้อมูลสำเร็จเรียบร้อยสมบูรณ์', 'success');
+      SoundManager.playSuccessChime();
+
+      // Clear selected file and reload admin data
+      this.clearSelectedRestoreFile();
+      await this.loadAdminData();
+      await this.loadBackupUI();
+
+      // Sync other module data if open
+      if (window.StockModule && StockModule.refreshData) StockModule.refreshData();
+      if (window.SalesModule && SalesModule.refreshData) SalesModule.refreshData();
+
+    } else {
+      UI.showToast(`การกู้คืนข้อมูลล้มเหลว: ${res ? (res.error || res.message) : 'เกิดข้อผิดพลาด'}`, 'error');
       SoundManager.playErrorTone();
     }
   }

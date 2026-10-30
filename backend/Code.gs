@@ -322,6 +322,22 @@ function routeAction(action, token, data, reqContext) {
     return { ok: true, logs: getAuditLogsList(data.limit) };
   }
 
+
+  // --- Admin: Database Backup & Restore ---
+  if (action === 'admin:backupStatus') {
+    requireAuth(token, 'admin', 'backup');
+    return getBackupStatus();
+  }
+
+  if (action === 'admin:exportBackup') {
+    requireAuth(token, 'admin', 'backup');
+    return exportDatabaseBackup(data, session);
+  }
+
+  if (action === 'admin:restoreBackup') {
+    requireAuth(token, 'admin', 'backup');
+    return restoreDatabaseBackup(data, session, token);
+  }
   if (action === 'admin:previewReceipt') {
     return {
       ok: true,

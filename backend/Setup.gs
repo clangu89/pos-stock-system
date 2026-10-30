@@ -2,10 +2,7 @@
  * Setup.gs - Database Schema Initialization and Seed Data
  */
 
-function setupDatabase() {
-  const ss = getSpreadsheet();
-
-  const schemas = {
+const DB_SCHEMAS = {
     [SHEETS.USERS]: ['userId', 'username', 'passHash', 'salt', 'name', 'roleId', 'branchIds', 'active', 'lastLogin', 'failCount', 'lockedUntil', 'createdAt'],
     [SHEETS.ROLES]: ['roleId', 'roleName', 'description', 'permissions', 'createdAt'],
     [SHEETS.SESSIONS]: ['token', 'userId', 'createdAt', 'expiresAt', 'userAgent', 'ip'],
@@ -23,7 +20,11 @@ function setupDatabase() {
     [SHEETS.RECEIPT_TEXTS]: ['scopeId', 'branchId', 'receiptTitle', 'storeName', 'subHeader', 'address', 'phone', 'taxId', 'footer', 'showAddress', 'showPhone', 'showTaxId', 'showCashier', 'showBranch', 'updatedBy', 'updatedAt'],
     [SHEETS.PRINT_PROFILES]: ['profileId', 'branchId', 'stationId', 'printerName', 'paperType', 'widthMm', 'heightMm', 'marginMm', 'fontSize', 'copies', 'autoPrint', 'showLogo', 'updatedAt'],
     [SHEETS.AUDIT_LOG]: ['ts', 'userId', 'action', 'target', 'detail']
-  };
+};
+
+function setupDatabase() {
+  const ss = getSpreadsheet();
+  const schemas = DB_SCHEMAS;
 
   for (const sheetName in schemas) {
     let sheet = ss.getSheetByName(sheetName);
@@ -56,7 +57,7 @@ function setupDatabase() {
           sales: { view: true, create: true, void: true, discount: true, reprint: true },
           stock: { view: true, create: true, edit: true, delete: true, receive: true, adjust: true, transfer: true },
           reports: { view: true, export: true },
-          admin: { view: true, users: true, roles: true, config: true, printer: true, audit: true }
+          admin: { view: true, users: true, roles: true, config: true, printer: true, audit: true, backup: true }
         }),
         createdAt: new Date().toISOString()
       },

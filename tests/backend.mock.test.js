@@ -91,6 +91,16 @@ function createGasMockContext(options = {}) {
     deleteRow(rowIdx) {
       this.data.splice(rowIdx - 1, 1);
     }
+
+    clearContents() {
+      this.data = [];
+      return this;
+    }
+
+    clear() {
+      this.data = [];
+      return this;
+    }
   }
 
   function getOrCreateSheet(name) {
@@ -212,6 +222,7 @@ function createGasMockContext(options = {}) {
     'Stock.gs',
     'Sales.gs',
     'Admin.gs',
+    'Backup.gs',
     'Reports.gs',
     'Setup.gs',
     'Code.gs'
@@ -828,3 +839,6 @@ test('GAS Mock: Performance optimizations, cache validity, and getRecentSalesRow
   const ssAfterClear = sandbox.getSpreadsheet();
   assert.ok(ssAfterClear);
 });
+
+
+module.exports = { createGasMockContext };
