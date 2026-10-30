@@ -266,3 +266,38 @@ test('Frontend DOM: Admin Backup & Restore tab, controls, presets, and safety co
   assert.ok(html.includes(`id="restoreConfirmSubmitBtn"`), 'restoreConfirmSubmitBtn must exist');
   assert.ok(html.includes(`id="restoreSafetyBackupCheck"`), 'restoreSafetyBackupCheck must exist');
 });
+
+
+test('Frontend JS: admin.js parses with valid syntax and AdminModule has all tab handlers', () => {
+  const adminJsPath = path.join(__dirname, '..', 'frontend', 'js', 'modules', 'admin.js');
+  const code = fs.readFileSync(adminJsPath, 'utf8');
+
+  // Verify syntax via vm
+  const vm = require('vm');
+  const sandbox = {
+    window: {},
+    document: {
+      querySelectorAll: () => [],
+      getElementById: () => null
+    },
+    localStorage: { getItem: () => null, setItem: () => null },
+    console,
+    UI: { showToast: () => {}, showLoading: () => {}, hideLoading: () => {}, openModal: () => {}, closeModal: () => {} },
+    Api: { call: async () => ({ ok: true }) },
+    SoundManager: { playSuccessChime: () => {}, playErrorTone: () => {} },
+    Auth: { user: { roleId: 'admin' } }
+  };
+  vm.createContext(sandbox);
+
+  let AdminModule;
+  assert.doesNotThrow(() => {
+    AdminModule = vm.runInContext(code + '\n;AdminModule;', sandbox, { filename: 'admin.js' });
+  }, 'admin.js must parse and execute without syntax errors');
+  assert.ok(AdminModule, 'AdminModule object must be defined');
+  assert.strictEqual(typeof AdminModule.activate, 'function');
+  assert.strictEqual(typeof AdminModule.switchTab, 'function');
+  assert.strictEqual(typeof AdminModule.setupTabNavigation, 'function');
+  assert.strictEqual(typeof AdminModule.loadBackupUI, 'function');
+  assert.strictEqual(typeof AdminModule.executeRestoreDatabase, 'function');
+  assert.strictEqual(typeof AdminModule.exportDatabaseBackup, 'function');
+});

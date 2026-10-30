@@ -1609,7 +1609,7 @@ const AdminModule = {
       UI.showToast(`ไม่สามารถเชื่อมต่อ API ได้: ${err.message}`, 'error');
       SoundManager.playErrorTone();
     }
-  }
+  },
   // --- Database Backup & Restore ---
   backupStatus: null,
   backupPreset: 'full',
