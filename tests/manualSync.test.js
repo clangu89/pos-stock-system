@@ -49,9 +49,16 @@ test('Manual Data Module: frontend/js/modules/manualData.js is valid and contain
 test('In-App Manual DOM: frontend/index.html includes manual view, buttons, and scripts', () => {
   const indexHtml = fs.readFileSync(INDEX_HTML_PATH, 'utf-8');
 
-  // Header Manual Button
+  // Header Manual Button at Top Right
+  assert.match(indexHtml, /id="headerManualBtn"/, 'Should have headerManualBtn');
   assert.match(indexHtml, /Router\.navigate\('manual'\)/, 'Header or buttons should link to manual');
-  assert.match(indexHtml, /📖.*คู่มือ/, 'Should have manual label');
+  assert.match(indexHtml, /📖/, 'Should have manual icon');
+  assert.match(indexHtml, />คู่มือ</, 'Should have prominent text คู่มือ');
+  assert.match(indexHtml, />F1</, 'Should have prominent badge F1');
+
+  // Verify headerManualBtn is inside the right controls div
+  const rightControlsMatch = indexHtml.match(/<!-- Right Controls[^>]*-->[\s\S]*?id="headerManualBtn"/);
+  assert.ok(rightControlsMatch, 'headerManualBtn must be inside the right controls section (Top Right Menu Bar)');
 
   // Manual Section View
   assert.match(indexHtml, /id="view_manual"/, 'Should have view_manual container');
@@ -72,6 +79,7 @@ test('Router: router.js supports manual view, unauthenticated access, and F1 sho
   assert.match(routerCode, /e\.key === 'F1'/, 'Should handle F1 shortcut to open manual');
   assert.match(routerCode, /ManualModule\.activate\(\)/, 'Should activate ManualModule on view_manual');
   assert.match(routerCode, /goBack\(\)/, 'Should provide goBack function');
+  assert.match(routerCode, /header\.classList\.remove\('hidden'\)/, 'Header should remain visible for top-right manual button');
 });
 
 test('Launcher: launcher.js includes manual card for quick access', () => {

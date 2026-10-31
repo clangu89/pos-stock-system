@@ -11,12 +11,12 @@
 <body class="bg-slate-50 text-slate-900 min-h-screen flex flex-col font-sans antialiased select-none">
 
   <!-- ================= TOP HEADER BAR ================= -->
-  <header id="mainHeader" class="hidden sticky top-0 z-40 glass-header border-b border-slate-200/80 shadow-sm transition-all">
+  <header id="mainHeader" class="sticky top-0 z-40 glass-header border-b border-slate-200/80 shadow-sm transition-all">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4">
       
       <!-- Brand & Launcher Switcher -->
       <div class="flex items-center gap-3">
-        <button onclick="Router.navigate('launcher')" 
+        <button id="headerLauncherBtn" onclick="Router.navigate('launcher')" 
                 title="กลับหน้าเลือกระบบ (Launcher)" 
                 class="flex items-center gap-2 px-3 py-1.5 rounded-2xl bg-blue-50 hover:bg-blue-100 text-blue-700 font-extrabold text-sm border border-blue-200 transition shadow-sm cursor-pointer">
           <span class="text-base">⊞</span>
@@ -27,15 +27,8 @@
         </span>
       </div>
 
-      <!-- Center Controls: Voice Status Badge, Sound Toggle & User Manual Button -->
+      <!-- Center Controls: Voice Status Badge & Sound Toggle -->
       <div class="flex items-center gap-2">
-        <button onclick="Router.navigate('manual')" 
-                title="คู่มือการใช้งานระบบ (กด F1 ได้ตลอดเวลา)" 
-                class="flex items-center gap-1.5 px-3 py-1.5 rounded-2xl bg-amber-50 hover:bg-amber-100 text-amber-800 font-extrabold text-xs border border-amber-200 transition shadow-sm cursor-pointer">
-          <span class="text-sm">📖</span>
-          <span class="hidden sm:inline">คู่มือ</span>
-          <span class="hidden md:inline text-[10px] bg-amber-200/70 text-amber-900 px-1.5 py-0.5 rounded-md font-mono">F1</span>
-        </button>
         <button id="soundQuickToggleBtn" 
                 onclick="const s = SoundManager.toggleSound(); SoundManager.updateStatusBadge(); UI.showToast(s ? 'เปิดเสียงแล้ว' : 'ปิดเสียงแล้ว', 'info');"
                 title="เปิด/ปิดเสียงระบบ"
@@ -47,8 +40,18 @@
         </span>
       </div>
 
-      <!-- Right Controls: Branch Switcher, User Profile & Logout -->
-      <div class="flex items-center gap-2.5">
+      <!-- Right Controls: Manual Button (Top Right), Branch Switcher, User Profile & Logout -->
+      <div class="flex items-center gap-2 sm:gap-2.5">
+        <!-- Manual Button (Top Right, Always Visible) -->
+        <button id="headerManualBtn" 
+                onclick="Router.navigate('manual')" 
+                title="คู่มือการใช้งานระบบ (กด F1 ได้ตลอดเวลา)" 
+                class="flex items-center gap-1.5 px-3 py-1.5 rounded-2xl bg-amber-100 hover:bg-amber-200 text-amber-950 font-black text-xs border border-amber-300 transition shadow-sm hover:shadow-md cursor-pointer">
+          <span class="text-base">📖</span>
+          <span class="font-bold">คู่มือ</span>
+          <span class="text-[10px] bg-amber-200/90 text-amber-950 px-1.5 py-0.5 rounded-md font-mono font-black border border-amber-300/70">F1</span>
+        </button>
+
         <!-- Active Branch Badge / Switcher -->
         <div id="headerBranchContainer" class="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-2xl bg-slate-100 hover:bg-blue-50 text-slate-700 hover:text-blue-700 font-bold text-xs border border-slate-200 hover:border-blue-300 transition cursor-pointer select-none"
              onclick="Auth.openBranchSwitcherModal()" title="คลิกเพื่อสลับสาขาที่เข้าใช้งาน">
@@ -58,11 +61,12 @@
           <span class="text-[10px] text-slate-400">▾</span>
         </div>
 
-        <div class="text-right hidden sm:block">
+        <div id="headerUserContainer" class="text-right hidden sm:block">
           <div id="headerUserName" class="text-xs font-extrabold text-slate-900 leading-tight">User</div>
           <div id="headerUserRole" class="text-[10px] font-bold text-blue-600 uppercase">Role</div>
         </div>
-        <button onclick="Auth.logout()" 
+        <button id="headerLogoutBtn" 
+                onclick="Auth.logout()" 
                 title="ออกจากระบบ" 
                 class="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-rose-50 text-slate-600 hover:text-rose-600 font-bold text-xs border border-slate-200 transition cursor-pointer">
           🚪 <span class="hidden md:inline">ออกจากระบบ</span>

@@ -140,20 +140,31 @@ const Router = {
 
   updateHeaderUI() {
     const header = document.getElementById('mainHeader');
-    const user = Auth.getUser();
-
     if (!header) return;
 
-    if (this.currentView === 'login' || !Auth.isLoggedIn()) {
-      header.classList.add('hidden');
-    } else {
-      header.classList.remove('hidden');
+    // Header is always visible so user manual and system branding are accessible from all views
+    header.classList.remove('hidden');
 
+    const isLoggedIn = typeof Auth !== 'undefined' && Auth.isLoggedIn && Auth.isLoggedIn();
+    const launcherBtn = document.getElementById('headerLauncherBtn');
+    const branchContainer = document.getElementById('headerBranchContainer');
+    const userContainer = document.getElementById('headerUserContainer');
+    const logoutBtn = document.getElementById('headerLogoutBtn');
+
+    if (launcherBtn) launcherBtn.style.display = isLoggedIn ? '' : 'none';
+    if (branchContainer) branchContainer.style.display = isLoggedIn ? '' : 'none';
+    if (userContainer) userContainer.style.display = isLoggedIn ? '' : 'none';
+    if (logoutBtn) logoutBtn.style.display = isLoggedIn ? '' : 'none';
+
+    if (isLoggedIn) {
+      const user = Auth.getUser();
       const userNameEl = document.getElementById('headerUserName');
       const userRoleEl = document.getElementById('headerUserRole');
       if (userNameEl) userNameEl.textContent = user.name || user.username;
       if (userRoleEl) userRoleEl.textContent = user.roleName || user.roleId;
+    }
 
+    if (typeof SoundManager !== 'undefined' && SoundManager.updateStatusBadge) {
       SoundManager.updateStatusBadge();
     }
   }
