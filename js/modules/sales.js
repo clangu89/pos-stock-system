@@ -13,6 +13,9 @@ const SalesModule = {
   stationId: 'POS-01',
   dayDrawerStatus: null,
   activeDrawerPreview: null,
+  todayVoidReceipts: [],
+  activeVoidFilter: 'ALL',
+  selectedVoidReceiptNo: null,
   receiptStoreInfo: null,
   isSubmittingPayment: false,
   currentSuggestions: [],
@@ -1083,80 +1086,334 @@ const SalesModule = {
   },
 
   // --- Void Receipt Operations ---
-  openVoidModal() {
-    document.getElementById('voidSearchReceiptNo').value = '';
-    document.getElementById('voidReasonInput').value = '';
-    document.getElementById('voidReceiptDetailContainer').innerHTML = `
-      <div class="text-center py-8 text-slate-400">กรุณากรอกเลขที่ใบเสร็จแล้วกดค้นหา</div>
-    `;
-    document.getElementById('voidConfirmBtn').disabled = true;
+  async openVoidModal() {
+    this.selectedVoidReceiptNo = null;
+    this.activeVoidFilter = 'ALL';
+    this.todayVoidReceipts = [];
+
+    const searchInput = document.getElementById('voidSearchReceiptNo');
+    if (searchInput) searchInput.value = '';
+
+    const reasonInput = document.getElementById('voidReasonInput');
+    if (reasonInput) reasonInput.value = '';
+
+    const detailContainer = document.getElementById('voidReceiptDetailContainer');
+    if (detailContainer) {
+      detailContainer.innerHTML = `
+        <div class="text-center py-10 text-slate-400 text-xs flex flex-col items-center justify-center gap-2">
+          <span class="text-3xl">👈</span>
+          <span>คลิกเลือกใบเสร็จจากรายการด้านซ้าย<br>หรือกรอกเลขที่ใบเสร็จแล้วกดค้นหา</span>
+        </div>
+      `;
+    }
+
+    const confirmBtn = document.getElementById('voidConfirmBtn');
+    if (confirmBtn) confirmBtn.disabled = true;
+
+    const statusBadge = document.getElementById('voidSelectedStatusBadge');
+    if (statusBadge) statusBadge.classList.add('hidden');
+
+    const sub = document.getElementById('voidModalSubtitle');
+    const businessDate = (this.dayDrawerStatus && this.dayDrawerStatus.activeDay && this.dayDrawerStatus.activeDay.businessDate) || new Date().toISOString().slice(0, 10);
+    if (sub) {
+      sub.textContent = `สาขา: ${this.activeBranchId} | วันทำการ: ${businessDate}`;
+    }
+
+    this.updateVoidFilterTabsUI();
     UI.openModal('voidReceiptModal');
+
+    // Fetch today's receipts in background
+    await this.loadTodayReceiptsForVoid();
   },
 
-  async searchReceiptForVoid() {
-    const receiptNo = document.getElementById('voidSearchReceiptNo').value.trim();
-    if (!receiptNo) {
-      UI.showToast('กรุณากรอกเลขที่ใบเสร็จ', 'warning');
+  async loadTodayReceiptsForVoid() {
+    const listContainer = document.getElementById('voidTodayReceiptsList');
+    if (listContainer) {
+      listContainer.innerHTML = `
+        <div class="text-center py-8 text-slate-400 text-xs flex items-center justify-center gap-2">
+          <span class="animate-spin text-sm">⏳</span> <span>กำลังโหลดรายการใบเสร็จของวันนี้...</span>
+        </div>
+      `;
+    }
+
+    const businessDate = (this.dayDrawerStatus && this.dayDrawerStatus.activeDay && this.dayDrawerStatus.activeDay.businessDate) || '';
+    const res = await Api.call('sales:todayReceipts', {
+      branchId: this.activeBranchId,
+      date: businessDate
+    });
+
+    if (res && res.ok && Array.isArray(res.receipts)) {
+      this.todayVoidReceipts = res.receipts;
+      this.renderTodayVoidReceiptsList();
+    } else {
+      if (listContainer) {
+        listContainer.innerHTML = `
+          <div class="text-center py-6 text-rose-500 text-xs">
+            ไม่สามารถโหลดรายการใบเสร็จได้ (${(res && res.error) || 'ลองค้นหาด้วยเลขที่บิลแทน'})
+          </div>
+        `;
+      }
+    }
+  },
+
+  setVoidFilter(filter) {
+    this.activeVoidFilter = filter || 'ALL';
+    this.updateVoidFilterTabsUI();
+    const searchInput = document.getElementById('voidSearchReceiptNo');
+    const query = searchInput ? searchInput.value.trim() : '';
+    this.renderTodayVoidReceiptsList(query);
+  },
+
+  updateVoidFilterTabsUI() {
+    const tabs = ['ALL', 'PAID', 'VOID'];
+    tabs.forEach(t => {
+      const btn = document.getElementById(`voidFilterBtn_${t}`);
+      if (btn) {
+        if (this.activeVoidFilter === t) {
+          btn.className = 'py-1 rounded-lg bg-white text-slate-800 shadow-xs transition cursor-pointer';
+        } else {
+          btn.className = 'py-1 rounded-lg text-slate-600 hover:text-slate-900 transition cursor-pointer';
+        }
+      }
+    });
+  },
+
+  filterTodayVoidReceipts(query) {
+    this.renderTodayVoidReceiptsList(query);
+  },
+
+  renderTodayVoidReceiptsList(searchQuery = '') {
+    const listContainer = document.getElementById('voidTodayReceiptsList');
+    if (!listContainer) return;
+
+    let filtered = this.todayVoidReceipts || [];
+
+    // Filter by status tab
+    if (this.activeVoidFilter === 'PAID') {
+      filtered = filtered.filter(r => r.status !== 'VOID');
+    } else if (this.activeVoidFilter === 'VOID') {
+      filtered = filtered.filter(r => r.status === 'VOID');
+    }
+
+    // Filter by search query
+    const cleanQuery = (searchQuery || '').trim().toLowerCase();
+    if (cleanQuery) {
+      filtered = filtered.filter(r => {
+        const no = String(r.receiptNo || '').toLowerCase();
+        const cashier = String(r.cashierName || '').toLowerCase();
+        const amount = String(r.total != null ? r.total : '');
+        const pay = String(r.payMethod || '').toLowerCase();
+        return no.includes(cleanQuery) || cashier.includes(cleanQuery) || amount.includes(cleanQuery) || pay.includes(cleanQuery);
+      });
+    }
+
+    const countBadge = document.getElementById('voidReceiptsCountBadge');
+    if (countBadge) {
+      countBadge.textContent = `${filtered.length} / ${this.todayVoidReceipts.length} รายการ`;
+    }
+
+    if (filtered.length === 0) {
+      listContainer.innerHTML = `
+        <div class="text-center py-8 text-slate-400 text-xs">
+          ${cleanQuery ? 'ไม่พบบิลที่ตรงกับคำค้นหา' : 'ยังไม่มีรายการใบเสร็จในวันนี้'}
+        </div>
+      `;
       return;
     }
 
-    UI.showLoading('กำลังค้นหาใบเสร็จ...');
-    const res = await Api.call('sales:receipt', { receiptNo });
-    UI.hideLoading();
+    listContainer.innerHTML = filtered.map(r => {
+      const isSelected = this.selectedVoidReceiptNo === r.receiptNo;
+      const isVoid = r.status === 'VOID';
 
-    const container = document.getElementById('voidReceiptDetailContainer');
-    const confirmBtn = document.getElementById('voidConfirmBtn');
+      const cardBorder = isSelected ?
+        'border-rose-500 bg-rose-50/50 shadow-sm ring-1 ring-rose-500' :
+        'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50/80';
 
-    if (res && res.ok && res.receipt) {
-      const sale = res.receipt.sale;
-      const items = res.receipt.items;
+      const statusBadge = isVoid ?
+        '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-800">VOID</span>' :
+        '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">PAID</span>';
 
-      if (sale.status === 'VOID') {
-        container.innerHTML = `
-          <div class="p-4 bg-rose-50 border border-rose-200 rounded-2xl text-rose-800 text-center">
-            <b class="text-lg">ใบเสร็จนี้ถูกยกเลิกแล้ว</b>
-            <div class="text-xs mt-1">ผู้ยกเลิก: ${sale.voidBy} เมื่อ ${new Date(sale.voidAt).toLocaleString('th-TH')}</div>
-            <div class="text-xs">เหตุผล: ${sale.voidReason}</div>
+      const timeStr = r.ts ? new Date(r.ts).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }) : '-';
+      const payIcon = r.payMethod === 'CASH' ? '💵 สด' : (r.payMethod === 'QR' ? '📱 QR' : '🏦 โอน');
+
+      return `
+        <div onclick="SalesModule.selectReceiptForVoid('${escapeHtml(r.receiptNo)}')"
+             class="p-2.5 rounded-2xl border transition cursor-pointer text-xs space-y-1 ${cardBorder}">
+          <div class="flex items-center justify-between">
+            <span class="font-mono font-bold text-slate-900">${escapeHtml(r.receiptNo)}</span>
+            ${statusBadge}
           </div>
-        `;
-        confirmBtn.disabled = true;
-        return;
-      }
-
-      container.innerHTML = `
-        <div class="p-4 bg-slate-50 border border-slate-200 rounded-2xl text-sm space-y-2">
-          <div class="flex justify-between font-bold">
-            <span>เลขที่: ${sale.receiptNo}</span>
-            <span class="text-blue-600">ยอดรวม: ฿${parseFloat(sale.total).toFixed(2)}</span>
+          <div class="flex items-center justify-between text-[11px] text-slate-500">
+            <span>🕒 ${timeStr} • ${escapeHtml(r.cashierName || '-')}</span>
+            <span class="font-mono font-bold text-slate-600">${payIcon}</span>
           </div>
-          <div class="text-xs text-slate-500">วันที่: ${new Date(sale.ts).toLocaleString('th-TH')} | แคชเชียร์: ${sale.cashierName || sale.userId}</div>
-          <div class="border-t border-slate-200 pt-2 space-y-1">
-            ${items.map(it => `
-              <div class="flex justify-between text-xs">
-                <span>${it.name} (x${it.qty})</span>
-                <span>฿${parseFloat(it.amount).toFixed(2)}</span>
-              </div>
-            `).join('')}
+          <div class="flex items-center justify-between pt-1 border-t border-slate-100 font-mono">
+            <span class="text-[10px] text-slate-400">ยอดสุทธิ:</span>
+            <span class="font-bold ${isVoid ? 'text-slate-400 line-through' : 'text-blue-600'}">฿${parseFloat(r.total || 0).toFixed(2)}</span>
           </div>
         </div>
       `;
-      confirmBtn.disabled = false;
+    }).join('');
+  },
+
+  async selectReceiptForVoid(receiptNo) {
+    if (!receiptNo) return;
+    this.selectedVoidReceiptNo = receiptNo;
+
+    const searchInput = document.getElementById('voidSearchReceiptNo');
+    if (searchInput) searchInput.value = receiptNo;
+
+    // Refresh active card highlight
+    this.renderTodayVoidReceiptsList(searchInput ? searchInput.value : '');
+
+    // Load full details for this receipt
+    await this.searchReceiptForVoid(receiptNo);
+  },
+
+  async searchReceiptForVoid(explicitReceiptNo = null) {
+    const receiptNo = (explicitReceiptNo || document.getElementById('voidSearchReceiptNo')?.value || '').trim();
+    if (!receiptNo) {
+      UI.showToast('กรุณากรอกหรือเลือกเลขที่ใบเสร็จ', 'warning');
+      return;
+    }
+
+    this.selectedVoidReceiptNo = receiptNo;
+    const searchInput = document.getElementById('voidSearchReceiptNo');
+    if (searchInput) searchInput.value = receiptNo;
+
+    const container = document.getElementById('voidReceiptDetailContainer');
+    const confirmBtn = document.getElementById('voidConfirmBtn');
+    const statusBadge = document.getElementById('voidSelectedStatusBadge');
+
+    if (container) {
+      container.innerHTML = `
+        <div class="text-center py-8 text-slate-400 text-xs flex items-center justify-center gap-2">
+          <span class="animate-spin text-sm">⏳</span> <span>กำลังโหลดรายละเอียดใบเสร็จ ${escapeHtml(receiptNo)}...</span>
+        </div>
+      `;
+    }
+
+    const res = await Api.call('sales:receipt', { receiptNo });
+
+    if (res && res.ok && res.receipt) {
+      const sale = res.receipt.sale;
+      const items = res.receipt.items || [];
+      const isVoid = sale.status === 'VOID';
+
+      if (statusBadge) {
+        statusBadge.classList.remove('hidden');
+        if (isVoid) {
+          statusBadge.className = 'px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-800';
+          statusBadge.textContent = 'ยกเลิกแล้ว (VOID)';
+        } else {
+          statusBadge.className = 'px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800';
+          statusBadge.textContent = 'ชำระแล้ว (PAID)';
+        }
+      }
+
+      const voidBannerHtml = isVoid ? `
+        <div class="p-3 bg-rose-50 border border-rose-200 rounded-2xl text-rose-800 text-xs space-y-1 mb-2">
+          <div class="font-bold flex items-center gap-1.5 text-rose-900">
+            <span>⚠️</span> <span>ใบเสร็จนี้ถูกยกเลิกไปแล้ว (VOID)</span>
+          </div>
+          <div class="text-[11px] text-rose-700">ผู้ยกเลิก: <strong>${escapeHtml(sale.voidBy || '-')}</strong> เมื่อ ${sale.voidAt ? new Date(sale.voidAt).toLocaleString('th-TH') : '-'}</div>
+          ${sale.voidReason ? `<div class="text-[11px] text-rose-700">เหตุผล: ${escapeHtml(sale.voidReason)}</div>` : ''}
+        </div>
+      ` : '';
+
+      const payMethodLabel = sale.payMethod === 'CASH' ? 'เงินสด (Cash)' : (sale.payMethod === 'QR' ? 'สแกน QR Code' : 'โอนเงิน (Transfer)');
+
+      if (container) {
+        container.innerHTML = `
+          ${voidBannerHtml}
+          <div class="p-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-xs space-y-2.5">
+            <div class="flex items-center justify-between font-bold text-slate-800 border-b border-slate-200 pb-2">
+              <div>
+                <span class="font-mono text-sm text-purple-700">${escapeHtml(sale.receiptNo)}</span>
+                <span class="text-slate-400 font-normal ml-1">(${sale.ts ? new Date(sale.ts).toLocaleString('th-TH') : '-'})</span>
+              </div>
+              <span class="text-blue-600 font-mono text-base font-black">฿${parseFloat(sale.total || 0).toFixed(2)}</span>
+            </div>
+
+            <div class="grid grid-cols-2 gap-2 text-[11px] text-slate-600">
+              <div>แคชเชียร์: <strong class="text-slate-800">${escapeHtml(sale.cashierName || sale.userId || '-')}</strong></div>
+              <div>ช่องทางชำระ: <strong class="text-slate-800">${payMethodLabel}</strong></div>
+            </div>
+
+            <!-- Items Table -->
+            <div class="border-t border-slate-200 pt-2 space-y-1.5 max-h-44 overflow-y-auto pr-1">
+              <div class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">รายการสินค้า (${items.length} รายการ):</div>
+              ${items.map(it => `
+                <div class="flex items-center justify-between text-xs py-0.5">
+                  <div class="flex-1 truncate pr-2">
+                    <span class="font-medium text-slate-800">${escapeHtml(it.name)}</span>
+                    <span class="text-slate-400 font-mono text-[11px]"> x${it.qty}</span>
+                  </div>
+                  <span class="font-mono font-bold text-slate-700">฿${parseFloat(it.amount || 0).toFixed(2)}</span>
+                </div>
+              `).join('')}
+            </div>
+
+            <!-- Summary Breakdown -->
+            <div class="border-t border-slate-200 pt-2 space-y-0.5 text-[11px] font-mono">
+              <div class="flex justify-between text-slate-500">
+                <span>ยอดรวมสินค้า:</span>
+                <span>฿${parseFloat(sale.subtotal || sale.total || 0).toFixed(2)}</span>
+              </div>
+              ${parseFloat(sale.discount || 0) > 0 ? `
+                <div class="flex justify-between text-rose-600">
+                  <span>ส่วนลด:</span>
+                  <span>-฿${parseFloat(sale.discount).toFixed(2)}</span>
+                </div>
+              ` : ''}
+              <div class="flex justify-between font-bold text-slate-800 text-xs pt-1 border-t border-slate-100">
+                <span>ยอดชำระสุทธิ:</span>
+                <span class="text-blue-600">฿${parseFloat(sale.total || 0).toFixed(2)}</span>
+              </div>
+            </div>
+          </div>
+        `;
+      }
+
+      if (confirmBtn) {
+        confirmBtn.disabled = isVoid;
+      }
+
+      if (!isVoid) {
+        const reasonInput = document.getElementById('voidReasonInput');
+        if (reasonInput) reasonInput.focus();
+      }
     } else {
-      container.innerHTML = `<div class="text-center py-6 text-rose-500">ไม่พบข้อมูลใบเสร็จ ${receiptNo}</div>`;
-      confirmBtn.disabled = true;
+      if (statusBadge) statusBadge.classList.add('hidden');
+      if (container) {
+        container.innerHTML = `
+          <div class="text-center py-8 text-rose-500 text-xs">
+            ไม่พบข้อมูลใบเสร็จ ${escapeHtml(receiptNo)}
+          </div>
+        `;
+      }
+      if (confirmBtn) confirmBtn.disabled = true;
+    }
+  },
+
+  setQuickVoidReason(reason) {
+    const reasonInput = document.getElementById('voidReasonInput');
+    if (reasonInput) {
+      reasonInput.value = reason;
+      reasonInput.focus();
     }
   },
 
   async confirmVoidReceipt() {
-    const receiptNo = document.getElementById('voidSearchReceiptNo').value.trim();
-    const reason = document.getElementById('voidReasonInput').value.trim();
+    const receiptNo = (this.selectedVoidReceiptNo || document.getElementById('voidSearchReceiptNo')?.value || '').trim();
+    const reason = document.getElementById('voidReasonInput')?.value.trim();
 
     if (!receiptNo || !reason) {
       UI.showToast('กรุณาระบุเหตุผลในการยกเลิกใบเสร็จ', 'warning');
       return;
     }
 
-    const ok = await UI.confirmDialog('ยืนยันยกเลิกใบเสร็จ', `คุณต้องการยกเลิกใบเสร็จเลขที่ ${receiptNo} ใช่หรือไม่? รายการสินค้าจะถูกคืนสต๊อกโดยอัตโนมัติ`);
+    const ok = await UI.confirmDialog('ยืนยันยกเลิกใบเสร็จ', `คุณต้องการยกเลิกใบเสร็จเลขที่ ${receiptNo} ใช่หรือไม่?\nรายการสินค้าจะถูกคืนสต๊อกโดยอัตโนมัติ`);
     if (!ok) return;
 
     UI.showLoading('กำลังยกเลิกใบเสร็จและคืนสต๊อก...');
@@ -1164,13 +1421,19 @@ const SalesModule = {
     UI.hideLoading();
 
     if (res && res.ok) {
-      UI.closeModal('voidReceiptModal');
       SoundManager.announceVoid(receiptNo);
-      UI.showToast(res.message || 'ยกเลิกใบเสร็จสำเร็จ', 'success');
+      UI.showToast(res.message || 'ยกเลิกใบเสร็จสำเร็จ (คืนสต๊อกเรียบร้อย)', 'success');
+      
+      // Refresh background stock balances and day/drawer status
       this.refreshProductsStockSilent();
+      this.refreshDayDrawerStatusSilent();
+
+      // Reload today's receipts in modal and show voided status
+      await this.loadTodayReceiptsForVoid();
+      await this.searchReceiptForVoid(receiptNo);
     } else {
       SoundManager.playErrorTone();
-      UI.showToast(`ยกเลิกไม่สำเร็จ: ${res.error || res.message}`, 'error');
+      UI.showToast(`ยกเลิกไม่สำเร็จ: ${(res && (res.error || res.message)) || 'เกิดข้อผิดพลาด'}`, 'error');
     }
   },
 
