@@ -49,16 +49,16 @@ test('Manual Data Module: frontend/js/modules/manualData.js is valid and contain
 test('In-App Manual DOM: frontend/index.html includes manual view, buttons, and scripts', () => {
   const indexHtml = fs.readFileSync(INDEX_HTML_PATH, 'utf-8');
 
-  // Header Manual Button at Top Right
+  // Header Manual Button next to Launcher Button
   assert.match(indexHtml, /id="headerManualBtn"/, 'Should have headerManualBtn');
   assert.match(indexHtml, /Router\.navigate\('manual'\)/, 'Header or buttons should link to manual');
   assert.match(indexHtml, /📖/, 'Should have manual icon');
   assert.match(indexHtml, />คู่มือ</, 'Should have prominent text คู่มือ');
   assert.match(indexHtml, />F1</, 'Should have prominent badge F1');
 
-  // Verify headerManualBtn is inside the right controls div
-  const rightControlsMatch = indexHtml.match(/<!-- Right Controls[^>]*-->[\s\S]*?id="headerManualBtn"/);
-  assert.ok(rightControlsMatch, 'headerManualBtn must be inside the right controls section (Top Right Menu Bar)');
+  // Verify headerManualBtn is placed next to headerLauncherBtn
+  const launcherAndManualMatch = indexHtml.match(/id="headerLauncherBtn"[\s\S]*?id="headerManualBtn"/);
+  assert.ok(launcherAndManualMatch, 'headerManualBtn must be positioned right next to headerLauncherBtn');
 
   // Manual Section View
   assert.match(indexHtml, /id="view_manual"/, 'Should have view_manual container');
