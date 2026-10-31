@@ -47,6 +47,14 @@ const LauncherModule = {
         icon: '⚙️',
         color: 'from-slate-700 to-gray-900',
         allowed: Auth.hasPerm('admin', 'view')
+      },
+      {
+        id: 'manual',
+        title: 'คู่มือการใช้งาน (Manual)',
+        desc: 'คู่มือฉบับสมบูรณ์ วิธีติดตั้งและเริ่มใช้งาน ตารางคีย์ลัดแคชเชียร์ (F1) การขาย สต๊อก การเงิน และการแก้ปัญหาที่พบบ่อย',
+        icon: '📖',
+        color: 'from-sky-600 to-blue-700',
+        allowed: true
       }
     ];
 

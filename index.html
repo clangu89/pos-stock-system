@@ -27,8 +27,15 @@
         </span>
       </div>
 
-      <!-- Center Controls: Voice Status Badge & Sound Toggle -->
+      <!-- Center Controls: Voice Status Badge, Sound Toggle & User Manual Button -->
       <div class="flex items-center gap-2">
+        <button onclick="Router.navigate('manual')" 
+                title="คู่มือการใช้งานระบบ (กด F1 ได้ตลอดเวลา)" 
+                class="flex items-center gap-1.5 px-3 py-1.5 rounded-2xl bg-amber-50 hover:bg-amber-100 text-amber-800 font-extrabold text-xs border border-amber-200 transition shadow-sm cursor-pointer">
+          <span class="text-sm">📖</span>
+          <span class="hidden sm:inline">คู่มือ</span>
+          <span class="hidden md:inline text-[10px] bg-amber-200/70 text-amber-900 px-1.5 py-0.5 rounded-md font-mono">F1</span>
+        </button>
         <button id="soundQuickToggleBtn" 
                 onclick="const s = SoundManager.toggleSound(); SoundManager.updateStatusBadge(); UI.showToast(s ? 'เปิดเสียงแล้ว' : 'ปิดเสียงแล้ว', 'info');"
                 title="เปิด/ปิดเสียงระบบ"
@@ -102,6 +109,12 @@
                   class="w-full py-3.5 rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-700 hover:from-blue-700 hover:to-indigo-800 text-white font-extrabold text-sm shadow-lg hover:shadow-xl transition-all duration-200 transform hover:-translate-y-0.5 cursor-pointer">
             เข้าสู่ระบบ
           </button>
+          <div class="mt-4 pt-4 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
+            <button type="button" onclick="Router.navigate('manual')" class="text-blue-600 hover:text-blue-800 font-bold hover:underline flex items-center gap-1 cursor-pointer">
+              📖 คู่มือการใช้งานระบบ
+            </button>
+            <span class="text-slate-400 font-medium">กด F1 ได้ตลอดเวลา</span>
+          </div>
         </form>
       </div>
     </section>
@@ -2711,6 +2724,100 @@
 
     </section>
 
+    <!-- 7. USER MANUAL SCREEN (INTERACTIVE & SEARCHABLE) -->
+    <section id="view_manual" class="view-screen hidden space-y-5 flex-1">
+      <!-- Header Banner & Actions -->
+      <div class="bg-white rounded-3xl p-6 border border-slate-200/80 shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+        <div class="flex items-center gap-4">
+          <div class="w-14 h-14 rounded-2xl bg-gradient-to-br from-amber-500 to-orange-600 text-white flex items-center justify-center text-3xl shadow-lg shrink-0">
+            📖
+          </div>
+          <div>
+            <h2 class="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">คู่มือการใช้งานระบบ (User Manual)</h2>
+            <p class="text-xs text-slate-500 mt-1">คู่มือฉบับสมบูรณ์ คีย์ลัดแคชเชียร์ การขาย สต๊อก การเงิน และการแก้ปัญหา</p>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-2 w-full md:w-auto justify-end">
+          <button type="button" onclick="ManualModule.printManual()" 
+                  class="flex items-center gap-1.5 px-4 py-2 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-extrabold text-xs transition shadow-sm cursor-pointer">
+            <span>🖨️</span>
+            <span>พิมพ์คู่มือ</span>
+          </button>
+          <button type="button" onclick="ManualModule.goBack()" 
+                  class="flex items-center gap-1.5 px-4 py-2 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-xs transition shadow-md cursor-pointer">
+            <span>⬅️</span>
+            <span>กลับสู่ระบบ (Esc)</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Search & Category Filters -->
+      <div class="bg-white rounded-3xl p-4 sm:p-5 border border-slate-200/80 shadow-sm space-y-3">
+        <!-- Search Input -->
+        <div class="relative">
+          <span class="absolute inset-y-0 left-3.5 flex items-center text-slate-400 pointer-events-none text-base">🔍</span>
+          <input type="search" id="manualSearchInput" placeholder="ค้นหาหัวข้อ, ฟังก์ชันการใช้งาน, คีย์ลัด หรือวิธีแก้ปัญหา..."
+                 class="w-full pl-10 pr-10 py-3 rounded-2xl bg-slate-50 border border-slate-200 focus:outline-none focus:border-blue-600 focus:bg-white text-sm font-semibold transition">
+          <button type="button" onclick="ManualModule.clearSearch()" title="ล้างคำค้นหา"
+                  class="absolute inset-y-0 right-3 my-auto h-7 w-7 rounded-full hover:bg-slate-200 flex items-center justify-center text-slate-400 hover:text-slate-600 text-xs transition cursor-pointer">
+            ✕
+          </button>
+        </div>
+
+        <!-- Category Horizontal Tabs -->
+        <div id="manualCategoryTabs" class="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar">
+          <!-- Populated dynamically by manual.js -->
+        </div>
+      </div>
+
+      <!-- Main 2-Column Content Grid -->
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+        <!-- Left: Topics List (8 cols) -->
+        <div id="manualTopicsContainer" class="lg:col-span-8 space-y-4">
+          <!-- Populated dynamically by manual.js -->
+        </div>
+
+        <!-- Right: Sticky Shortcuts & Quick Tips Sidebar (4 cols) -->
+        <aside class="lg:col-span-4 space-y-4 lg:sticky lg:top-20">
+          <!-- Cashier Shortcuts Cheat Sheet -->
+          <div class="bg-white rounded-3xl p-5 border border-slate-200/80 shadow-sm">
+            <div class="flex items-center justify-between pb-3 border-b border-slate-100 mb-3">
+              <h3 class="font-extrabold text-slate-900 text-sm flex items-center gap-2">
+                <span>⌨️</span> <span>คีย์ลัดสำหรับแคชเชียร์</span>
+              </h3>
+              <span class="text-[10px] font-mono text-slate-400">Shortcuts</span>
+            </div>
+            <div id="manualQuickShortcuts" class="space-y-1">
+              <!-- Populated dynamically by manual.js -->
+            </div>
+          </div>
+
+          <!-- Quick Roles & Access Reference -->
+          <div class="bg-gradient-to-br from-blue-50 to-indigo-50/50 rounded-3xl p-5 border border-blue-100 shadow-sm">
+            <h3 class="font-extrabold text-blue-950 text-sm flex items-center gap-2 mb-2">
+              <span>🛡️</span> <span>สิทธิ์การใช้งาน (Roles)</span>
+            </h3>
+            <ul class="text-xs text-blue-900/80 space-y-2 leading-relaxed">
+              <li><strong class="text-blue-950">👑 Admin</strong>: เข้าถึงทุกโมดูล ตั้งค่าระบบ สำรอง/กู้คืน</li>
+              <li><strong class="text-blue-950">👔 Manager</strong>: ขาย ปรับสต๊อก ยกเลิกบิล และดูรายงาน</li>
+              <li><strong class="text-blue-950">🛒 Cashier</strong>: เข้าเฉพาะหน้าขาย (POS) และพิมพ์ใบเสร็จ</li>
+              <li><strong class="text-blue-950">📦 Stock Keeper</strong>: รับสินค้าเข้า โอนย้าย ปรับยอดสต๊อก</li>
+            </ul>
+          </div>
+
+          <!-- Contact & Support Note -->
+          <div class="bg-white rounded-3xl p-5 border border-slate-200/80 shadow-sm text-center">
+            <div class="text-2xl mb-1">💡</div>
+            <h4 class="font-bold text-slate-800 text-xs mb-1">ต้องการความช่วยเหลือเพิ่มเติม?</h4>
+            <p class="text-[11px] text-slate-500 leading-relaxed">
+              อ่านคู่มือฉบับเต็มและเอกสารทางเทคนิคได้ที่ไฟล์ <code class="px-1.5 py-0.5 rounded bg-slate-100 text-blue-700 font-mono text-[10px]">docs/USER_MANUAL.md</code> ในโฟลเดอร์โปรเจกต์
+            </p>
+          </div>
+        </aside>
+      </div>
+    </section>
+
   </main>
 
   <!-- ================= MODALS & POPUPS ================= -->
@@ -3743,6 +3850,8 @@
   <script src="js/modules/reports.js?v=20261031-v21"></script>
   <script src="js/modules/finance.js?v=20261031-v21"></script>
   <script src="js/modules/admin.js?v=20261031-v21"></script>
+  <script src="js/modules/manualData.js?v=20261031-v21"></script>
+  <script src="js/modules/manual.js?v=20261031-v21"></script>
   <script src="js/router.js?v=20261031-v21"></script>
 
   <script>
