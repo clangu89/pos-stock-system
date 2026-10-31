@@ -3,6 +3,21 @@
  */
 
 let _financeSheetsEnsured = false;
+
+function formatBangkokDate_(val) {
+  if (!val) return '';
+  if (typeof val === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(val.trim())) {
+    return val.trim();
+  }
+  try {
+    const d = (val instanceof Date) ? val : new Date(val);
+    if (!isNaN(d.getTime())) {
+      return Utilities.formatDate(d, 'Asia/Bangkok', 'yyyy-MM-dd');
+    }
+  } catch (e) {}
+  return '';
+}
+
 function ensureFinanceSheets_() {
   if (_financeSheetsEnsured) return;
   const ss = getSpreadsheet();
@@ -73,7 +88,7 @@ function getFinanceOverview(startDateStr, endDateStr, branchId = '') {
 
   const inRange = (s) => {
     if (branchId && s.branchId !== branchId) return false;
-    const sDateStr = s.ts ? Utilities.formatDate(new Date(s.ts), 'Asia/Bangkok', 'yyyy-MM-dd') : '';
+    const sDateStr = formatBangkokDate_(s.ts);
     if (!sDateStr) return false;
     if (sStart && sDateStr < sStart) return false;
     if (sEnd && sDateStr > sEnd) return false;
@@ -115,7 +130,7 @@ function getFinanceOverview(startDateStr, endDateStr, branchId = '') {
     totalCost += cost;
 
     const pm = String(s.payMethod || '').toUpperCase();
-    const dayKey = Utilities.formatDate(new Date(s.ts), 'Asia/Bangkok', 'yyyy-MM-dd');
+    const dayKey = formatBangkokDate_(s.ts) || todayBangkok;
     if (!dailyMap[dayKey]) {
       dailyMap[dayKey] = {
         date: dayKey,
@@ -170,7 +185,7 @@ function getFinanceOverview(startDateStr, endDateStr, branchId = '') {
     if (branchId && tx.branchId !== branchId) return;
 
     // Check date (txDate or ts)
-    const txDateStr = tx.txDate || (tx.ts ? Utilities.formatDate(new Date(tx.ts), 'Asia/Bangkok', 'yyyy-MM-dd') : '');
+    const txDateStr = formatBangkokDate_(tx.txDate) || formatBangkokDate_(tx.ts);
     if (!txDateStr) return;
     if (sStart && txDateStr < sStart) return;
     if (sEnd && txDateStr > sEnd) return;
@@ -589,7 +604,7 @@ function getCashClosingPreview(closeDateStr, branchId = '') {
 
   salesTable.rows.forEach(s => {
     if (targetBranch && s.branchId !== targetBranch) return;
-    const sDate = s.ts ? Utilities.formatDate(new Date(s.ts), 'Asia/Bangkok', 'yyyy-MM-dd') : '';
+    const sDate = formatBangkokDate_(s.ts);
     if (sDate !== closeDate) return;
 
     const t = parseFloat(s.total) || 0;
@@ -613,7 +628,7 @@ function getCashClosingPreview(closeDateStr, branchId = '') {
   txnsTable.rows.forEach(tx => {
     if (tx.status === 'VOID') return;
     if (targetBranch && tx.branchId !== targetBranch) return;
-    const txDate = tx.txDate || (tx.ts ? Utilities.formatDate(new Date(tx.ts), 'Asia/Bangkok', 'yyyy-MM-dd') : '');
+    const txDate = formatBangkokDate_(tx.txDate) || formatBangkokDate_(tx.ts);
     if (txDate !== closeDate) return;
 
     if (tx.payMethod === 'CASH') {
@@ -1201,7 +1216,7 @@ function getBusinessDayClosePreview(payload = {}) {
 
   salesTable.rows.forEach(s => {
     if (s.branchId !== branchId) return;
-    const matchDay = s.dayId ? (s.dayId === targetDay.dayId) : (s.ts && Utilities.formatDate(new Date(s.ts), 'Asia/Bangkok', 'yyyy-MM-dd') === targetDay.businessDate);
+    const matchDay = s.dayId ? (s.dayId === targetDay.dayId) : (formatBangkokDate_(s.ts) === targetDay.businessDate);
     if (!matchDay) return;
 
     const t = parseFloat(s.total) || 0;

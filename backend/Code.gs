@@ -173,6 +173,11 @@ function routeAction(action, token, data, reqContext) {
     return { ok: true, receipt: getReceiptDetails(data.receiptNo) };
   }
 
+  if (action === 'sales:todayReceipts') {
+    requireAuth(token, 'sales', 'view');
+    return { ok: true, receipts: getTodaySalesForVoid(data.branchId, data.date) };
+  }
+
   // --- Reports ---
   if (action === 'reports:daily') {
     requireAuth(token, 'reports', 'view');

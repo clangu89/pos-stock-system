@@ -317,7 +317,7 @@ test('Finance & Reports Separation: Frontend UI Integrity & 5 Launcher Cards', (
   assert.ok(indexHtml.includes('id="cashClosingDetailModal"'));
 
   // 6. Scripts import finance.js and router has finance route
-  assert.ok(indexHtml.includes('src="js/modules/finance.js?v=20261030-v19"'));
+  assert.ok(/src="js\/modules\/finance\.js\?v=[\w-]+"/.test(indexHtml));
   const routerJs = fs.readFileSync(path.join(frontendDir, 'js', 'router.js'), 'utf8');
   assert.ok(routerJs.includes("hash === 'finance' && !Auth.hasPerm('finance', 'view')"));
   assert.ok(routerJs.includes("FinanceModule.activate()"));

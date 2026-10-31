@@ -1218,7 +1218,7 @@ const FinanceModule = {
 
       this.updateVarianceAndCarry();
     } else {
-      UI.showToast(res.error || 'ไม่สามารถคำนวณยอดปิดได้', 'error');
+      UI.showToast((res && (res.error || res.message)) || 'ไม่สามารถคำนวณยอดปิดได้', 'error');
     }
   },
 

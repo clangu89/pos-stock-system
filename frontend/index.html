@@ -2770,27 +2770,103 @@
 
   <!-- 2. Void Receipt Modal -->
   <div id="voidReceiptModal" class="hidden fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
-    <div class="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-4">
-      <div class="flex items-center justify-between pb-3 border-b border-slate-100">
-        <h3 class="font-black text-lg text-rose-700">ยกเลิกใบเสร็จรับเงิน (Void)</h3>
-        <button onclick="UI.closeModal('voidReceiptModal')" class="text-slate-400 hover:text-slate-700">✕</button>
+    <div class="bg-white rounded-3xl max-w-4xl w-full p-6 shadow-2xl border border-slate-200 space-y-4 max-h-[90vh] flex flex-col">
+      <!-- Modal Header -->
+      <div class="flex items-center justify-between pb-3 border-b border-slate-100 flex-shrink-0">
+        <div class="flex items-center gap-2.5">
+          <span class="text-2xl">🚫</span>
+          <div>
+            <h3 class="font-black text-lg text-rose-700">ยกเลิกใบเสร็จรับเงิน (Void Receipt)</h3>
+            <p class="text-xs text-slate-500" id="voidModalSubtitle">เลือกใบเสร็จของวันนี้เพื่อยกเลิกรายการและคืนสต๊อกสินค้า</p>
+          </div>
+        </div>
+        <button onclick="UI.closeModal('voidReceiptModal')" class="text-slate-400 hover:text-slate-700 text-lg p-1">✕</button>
       </div>
 
-      <div class="flex gap-2">
-        <input type="search" id="voidSearchReceiptNo" name="void_search_receipt_no" autocomplete="off" placeholder="กรอกเลขที่ใบเสร็จ..." class="flex-1 px-4 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs font-mono font-bold">
-        <button onclick="SalesModule.searchReceiptForVoid()" class="px-4 py-2 rounded-xl bg-slate-900 text-white font-bold text-xs">ค้นหา</button>
+      <!-- Modal Body (2-Column Grid) -->
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-5 flex-1 overflow-hidden min-h-0">
+        
+        <!-- Left: Today's Receipts List (5 cols) -->
+        <div class="lg:col-span-5 flex flex-col space-y-3 min-h-0 border-b lg:border-b-0 lg:border-r border-slate-100 lg:pr-5 pb-4 lg:pb-0">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+              <span>📄</span> <span>ใบเสร็จประจำวัน</span>
+            </span>
+            <span id="voidReceiptsCountBadge" class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-600">0 รายการ</span>
+          </div>
+
+          <!-- Status Filter Tabs -->
+          <div class="grid grid-cols-3 gap-1 bg-slate-100 p-1 rounded-xl text-xs font-bold">
+            <button type="button" id="voidFilterBtn_ALL" onclick="SalesModule.setVoidFilter('ALL')" class="py-1 rounded-lg bg-white text-slate-800 shadow-xs transition cursor-pointer">ทั้งหมด</button>
+            <button type="button" id="voidFilterBtn_PAID" onclick="SalesModule.setVoidFilter('PAID')" class="py-1 rounded-lg text-slate-600 hover:text-slate-900 transition cursor-pointer">ปกติ (PAID)</button>
+            <button type="button" id="voidFilterBtn_VOID" onclick="SalesModule.setVoidFilter('VOID')" class="py-1 rounded-lg text-slate-600 hover:text-slate-900 transition cursor-pointer">ยกเลิก (VOID)</button>
+          </div>
+
+          <!-- Search Box -->
+          <div class="flex gap-1.5">
+            <div class="relative flex-1">
+              <span class="absolute inset-y-0 left-2.5 flex items-center text-slate-400 text-xs pointer-events-none">🔍</span>
+              <input type="search" id="voidSearchReceiptNo" name="void_search_receipt_no" autocomplete="off"
+                     oninput="SalesModule.filterTodayVoidReceipts(this.value)"
+                     onkeydown="if(event.key === 'Enter') SalesModule.searchReceiptForVoid()"
+                     placeholder="ค้นหาเลขที่บิล, แคชเชียร์, ยอด..."
+                     class="w-full pl-8 pr-3 py-1.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-mono font-bold focus:outline-none focus:border-rose-500 focus:bg-white">
+            </div>
+            <button type="button" onclick="SalesModule.searchReceiptForVoid()" class="px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs shadow-xs transition cursor-pointer">
+              ค้นหา
+            </button>
+          </div>
+
+          <!-- Scrollable Receipts List Container -->
+          <div id="voidTodayReceiptsList" class="flex-1 overflow-y-auto space-y-2 pr-1 min-h-[160px] max-h-[360px]">
+            <div class="text-center py-8 text-slate-400 text-xs">กำลังโหลดรายการใบเสร็จ...</div>
+          </div>
+        </div>
+
+        <!-- Right: Selected Receipt Details & Void Action (7 cols) -->
+        <div class="lg:col-span-7 flex flex-col justify-between space-y-3 min-h-0 overflow-y-auto pr-1">
+          <div>
+            <div class="flex items-center justify-between pb-2 border-b border-slate-100">
+              <span class="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                <span>🔍</span> <span>รายละเอียดใบเสร็จที่เลือก</span>
+              </span>
+              <span id="voidSelectedStatusBadge" class="hidden px-2.5 py-0.5 rounded-full text-[10px] font-bold"></span>
+            </div>
+
+            <div id="voidReceiptDetailContainer" class="mt-2 min-h-32">
+              <div class="text-center py-10 text-slate-400 text-xs flex flex-col items-center justify-center gap-2">
+                <span class="text-3xl">👈</span>
+                <span>คลิกเลือกใบเสร็จจากรายการด้านซ้าย<br>หรือกรอกเลขที่ใบเสร็จแล้วกดค้นหา</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Reason & Confirm Section -->
+          <div class="pt-3 border-t border-slate-100 space-y-2.5">
+            <div>
+              <div class="flex items-center justify-between mb-1">
+                <label class="block text-xs font-bold text-slate-700">เหตุผลในการยกเลิก (บังคับ) *</label>
+                <span class="text-[10px] text-slate-400">คลิกเลือกเหตุผลด่วน:</span>
+              </div>
+
+              <!-- Quick Reason Chips -->
+              <div class="flex items-center gap-1.5 flex-wrap mb-2">
+                <button type="button" onclick="SalesModule.setQuickVoidReason('ลูกค้าเปลี่ยนใจ')" class="px-2 py-0.5 rounded-lg bg-slate-100 hover:bg-rose-50 text-slate-600 hover:text-rose-700 border border-slate-200 text-[10px] font-bold transition cursor-pointer">ลูกค้าเปลี่ยนใจ</button>
+                <button type="button" onclick="SalesModule.setQuickVoidReason('สแกนสินค้าผิดชิ้น')" class="px-2 py-0.5 rounded-lg bg-slate-100 hover:bg-rose-50 text-slate-600 hover:text-rose-700 border border-slate-200 text-[10px] font-bold transition cursor-pointer">สแกนสินค้าผิดชิ้น</button>
+                <button type="button" onclick="SalesModule.setQuickVoidReason('คิดเงินผิดจำนวน')" class="px-2 py-0.5 rounded-lg bg-slate-100 hover:bg-rose-50 text-slate-600 hover:text-rose-700 border border-slate-200 text-[10px] font-bold transition cursor-pointer">คิดเงินผิดจำนวน</button>
+                <button type="button" onclick="SalesModule.setQuickVoidReason('ลูกค้ายกเลิกออเดอร์')" class="px-2 py-0.5 rounded-lg bg-slate-100 hover:bg-rose-50 text-slate-600 hover:text-rose-700 border border-slate-200 text-[10px] font-bold transition cursor-pointer">ลูกค้ายกเลิกออเดอร์</button>
+              </div>
+
+              <input type="text" id="voidReasonInput" placeholder="ระบุเหตุผลในการยกเลิก..." class="w-full px-3.5 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs font-medium focus:bg-white focus:border-rose-500">
+            </div>
+
+            <button id="voidConfirmBtn" disabled onclick="SalesModule.confirmVoidReceipt()" class="w-full py-3 rounded-2xl bg-rose-600 hover:bg-rose-700 disabled:opacity-40 text-white font-bold text-xs shadow-md transition flex items-center justify-center gap-1.5 cursor-pointer">
+              <span>🚫</span> <span>ยืนยันการยกเลิกใบเสร็จ (คืนสต๊อก)</span>
+            </button>
+          </div>
+        </div>
+
       </div>
-
-      <div id="voidReceiptDetailContainer" class="min-h-24"></div>
-
-      <div>
-        <label class="block text-xs font-bold text-slate-700 mb-1">เหตุผลในการยกเลิก (บังคับ)</label>
-        <input type="text" id="voidReasonInput" placeholder="เช่น ลูกค้าเปลี่ยนใจ, สแกนสินค้าผิดชิ้น..." class="w-full px-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs">
-      </div>
-
-      <button id="voidConfirmBtn" disabled onclick="SalesModule.confirmVoidReceipt()" class="w-full py-3 rounded-2xl bg-rose-600 hover:bg-rose-700 disabled:opacity-50 text-white font-bold text-xs shadow-md">
-        ยืนยันการยกเลิกใบเสร็จ (คืนสต๊อก)
-      </button>
     </div>
   </div>
 
@@ -3654,20 +3730,20 @@
   <iframe id="receiptPrintIframe" class="hidden"></iframe>
 
   <!-- ================= SCRIPTS ================= -->
-  <script src="config.js?v=20261030-v16"></script>
-  <script src="js/numberToThai.js?v=20261030-v16"></script>
-  <script src="js/sound.js?v=20261030-v16"></script>
-  <script src="js/print.js?v=20261030-v16"></script>
-  <script src="js/ui.js?v=20261030-v16"></script>
-  <script src="js/api.js?v=20261030-v16"></script>
-  <script src="js/auth.js?v=20261030-v16"></script>
-  <script src="js/modules/launcher.js?v=20261031-v20"></script>
-  <script src="js/modules/sales.js?v=20261031-v20"></script>
-  <script src="js/modules/stock.js?v=20261031-v20"></script>
-  <script src="js/modules/reports.js?v=20261031-v20"></script>
-  <script src="js/modules/finance.js?v=20261031-v20"></script>
-  <script src="js/modules/admin.js?v=20261031-v20"></script>
-  <script src="js/router.js?v=20261031-v20"></script>
+  <script src="config.js?v=20261031-v21"></script>
+  <script src="js/numberToThai.js?v=20261031-v21"></script>
+  <script src="js/sound.js?v=20261031-v21"></script>
+  <script src="js/print.js?v=20261031-v21"></script>
+  <script src="js/ui.js?v=20261031-v21"></script>
+  <script src="js/api.js?v=20261031-v21"></script>
+  <script src="js/auth.js?v=20261031-v21"></script>
+  <script src="js/modules/launcher.js?v=20261031-v21"></script>
+  <script src="js/modules/sales.js?v=20261031-v21"></script>
+  <script src="js/modules/stock.js?v=20261031-v21"></script>
+  <script src="js/modules/reports.js?v=20261031-v21"></script>
+  <script src="js/modules/finance.js?v=20261031-v21"></script>
+  <script src="js/modules/admin.js?v=20261031-v21"></script>
+  <script src="js/router.js?v=20261031-v21"></script>
 
   <script>
     // System Startup

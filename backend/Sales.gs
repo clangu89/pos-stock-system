@@ -418,3 +418,51 @@ function getReceiptDetails(receiptNo) {
     store: storeInfo
   };
 }
+
+function getTodaySalesForVoid(branchId = '', dateStr = '') {
+  let targetDate = dateStr;
+  if (!targetDate) {
+    try {
+      targetDate = Utilities.formatDate(new Date(), 'Asia/Bangkok', 'yyyy-MM-dd');
+    } catch (e) {
+      const bkk = new Date(Date.now() + (7 * 3600 * 1000));
+      targetDate = bkk.toISOString().slice(0, 10);
+    }
+  }
+
+  const sales = findRows(SHEETS.SALES, r => {
+    if (branchId && r.branchId !== branchId) return false;
+    if (!r.ts) return false;
+    let rowDate = '';
+    try {
+      rowDate = Utilities.formatDate(new Date(r.ts), 'Asia/Bangkok', 'yyyy-MM-dd');
+    } catch (e) {
+      const bkk = new Date(new Date(r.ts).getTime() + (7 * 3600 * 1000));
+      rowDate = bkk.toISOString().slice(0, 10);
+    }
+    return rowDate === targetDate;
+  });
+
+  sales.sort((a, b) => new Date(b.ts || 0) - new Date(a.ts || 0));
+
+  return sales.map(s => ({
+    receiptNo: s.receiptNo,
+    ts: s.ts,
+    branchId: s.branchId,
+    stationId: s.stationId || 'POS-01',
+    dayId: s.dayId || '',
+    drawerId: s.drawerId || '',
+    userId: s.userId || '',
+    cashierName: s.cashierName || s.userId || '-',
+    subtotal: parseFloat(s.subtotal || 0),
+    discount: parseFloat(s.discount || 0),
+    total: parseFloat(s.total || 0),
+    received: parseFloat(s.received || 0),
+    change: parseFloat(s.change || 0),
+    payMethod: s.payMethod || 'CASH',
+    status: s.status || 'PAID',
+    voidBy: s.voidBy || '',
+    voidAt: s.voidAt || '',
+    voidReason: s.voidReason || ''
+  }));
+}
