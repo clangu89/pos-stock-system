@@ -4,14 +4,40 @@
 
 const Router = {
   currentView: 'login',
+  previousView: null,
 
   init() {
     window.addEventListener('hashchange', () => this.handleRoute());
+
+    // Global System Shortcuts (F1: Manual, Esc: Return from Manual)
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'F1') {
+        e.preventDefault();
+        this.navigate('manual');
+      } else if (e.key === 'Escape') {
+        if (this.currentView === 'manual') {
+          e.preventDefault();
+          this.goBack();
+        }
+      }
+    });
+
     this.handleRoute();
   },
 
   navigate(viewName) {
+    if (this.currentView !== viewName && this.currentView !== 'manual') {
+      this.previousView = this.currentView;
+    }
     window.location.hash = `#${viewName}`;
+  },
+
+  goBack() {
+    if (this.previousView && this.previousView !== 'manual') {
+      this.navigate(this.previousView);
+    } else {
+      this.navigate(Auth.isLoggedIn() ? 'launcher' : 'login');
+    }
   },
 
   handleRoute() {
@@ -20,8 +46,19 @@ const Router = {
       hash = Auth.isLoggedIn() ? 'launcher' : 'login';
     }
 
-    // Auth Guard
-    if (hash !== 'login' && !Auth.isLoggedIn()) {
+    // Support direct hash to topic e.g. #manual_sales
+    if (hash.startsWith('manual_')) {
+      const topicId = hash.replace('manual_', '');
+      hash = 'manual';
+      setTimeout(() => {
+        if (typeof ManualModule !== 'undefined') {
+          ManualModule.scrollToTopic(topicId);
+        }
+      }, 100);
+    }
+
+    // Auth Guard (exempt 'login' and 'manual' views)
+    if (hash !== 'login' && hash !== 'manual' && !Auth.isLoggedIn()) {
       window.location.hash = '#login';
       return;
     }
@@ -61,6 +98,9 @@ const Router = {
   },
 
   switchView(viewName) {
+    if (this.currentView !== viewName && this.currentView !== 'manual') {
+      this.previousView = this.currentView;
+    }
     this.currentView = viewName;
 
     // Hide all view containers
@@ -93,6 +133,8 @@ const Router = {
       FinanceModule.activate();
     } else if (viewName === 'admin' && typeof AdminModule !== 'undefined') {
       AdminModule.activate();
+    } else if (viewName === 'manual' && typeof ManualModule !== 'undefined') {
+      ManualModule.activate();
     }
   },
 
@@ -116,3 +158,7 @@ const Router = {
     }
   }
 };
+
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = { Router };
+}

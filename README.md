@@ -15,18 +15,18 @@
    - สื่อสารผ่าน `POST` แบบ `Content-Type: text/plain` ป้องกันปัญหา CORS Preflight
    - จัดการความปลอดภัยด้วย Session Token + Hash Salt SHA-256 + Role-based Permission Guard ทุก Action
    - ป้องกัน Stock Race Condition และเลขที่ใบเสร็จชนกันด้วย `LockService.getScriptLock()`
-3. **Database (Google Sheets - 19 ตาราง)**:
+3. **Database (Google Sheets - 21 ตาราง)**:
    - จัดเก็บข้อมูลทั้งหมดใน Google Spreadsheet ของคุณ:
      - `Users`, `Roles`, `Branches`, `Products`, `Categories`, `Units`
      - `StockBalance`, `StockMovements`, `StockDocs`
      - `Sales`, `SaleItems`, `Counters`, `Config`, `ReceiptTexts`, `PrintProfiles`, `AuditLog`, `Sessions`
-     - `FinanceTxns`, `CashClosings`
+     - `FinanceTxns`, `CashClosings`, `BusinessDays`, `CashDrawers`
 
 ---
 
-## 5 ระบบหลักในหน้าเลือกระบบ (Launcher Dashboard)
+## ฟังก์ชันการทำงานหลักในระบบ (Launcher Dashboard)
 
-ระบบแบ่งออกเป็น **5 ระบบอิสระ** ตามสิทธิ์การใช้งานของผู้ใช้:
+ระบบแบ่งออกเป็นโมดูลอิสระตามสิทธิ์การใช้งานของผู้ใช้:
 
 ### 1. 🛒 ระบบงานขาย (POS)
 - **ขายพร้อมกันหลายบิลไม่จำกัด**: กด `+ บิลใหม่ (F2)` เพื่อสลับบิลลูกค้าได้อิสระ โดยบันทึก Draft ใน `localStorage` อัตโนมัติ (รีเฟรชหน้าจอข้อมูลไม่หาย)
@@ -81,7 +81,16 @@
 - กำหนดรูปแบบเลขที่ใบเสร็จด้วย Token เช่น `{PREFIX}{BRANCH}-{YYYY}{MM}{DD}-{RUN:5}` พร้อมตั้งรอบการรีเซ็ตเลขรันนิ่ง (รายวัน, รายเดือน, รายปี)
 - ปรับแต่งข้อความใบเสร็จ (หัวกระดาษ, ที่อยู่, เบอร์โทร, เลขภาษี, ท้ายบิล) รองรับค่ากลางและปรับแต่งรายสาขา
 - ตั้งค่าเครื่องพิมพ์ความร้อน ไดรเวอร์ ขนาดกระดาษ (58 มม. / 80 มม.) และเสียงพูดระบบ
-- **สำรองและกู้คืนฐานข้อมูล (Backup & Safe Restore)**: ส่งออกข้อมูลทั้ง 19 ตารางพร้อม SHA-256 Checksum และระบบความปลอดภัย 4 ชั้นป้องกันข้อมูลสูญหาย
+- **สำรองและกู้คืนฐานข้อมูล (Backup & Safe Restore)**: ส่งออกข้อมูลทั้ง 21 ตารางพร้อม SHA-256 Checksum และระบบความปลอดภัย 4 ชั้นป้องกันข้อมูลสูญหาย
+
+### 6. 📖 คู่มือการใช้งานระบบ (In-App Interactive Manual & Docs)
+- **หน้าจอคู่มือในแอป (`#manual`)**: เข้าถึงได้ทันทีโดยกดปุ่ม **`📖 คู่มือ (F1)`** บน Header, ในหน้าเลือกระบบ Launcher หรือกดปุ่มลัด `F1` จากหน้าจอใดก็ได้
+- **ค้นหาอัจฉริยะแบบ Real-time**: ค้นหาหัวข้อการใช้งาน คีย์ลัด หรือวิธีแก้ปัญหา พร้อมระบบแยกหมวดหมู่
+- **เอกสารคู่มือฉบับเต็มภาษาไทย**: อ่านคู่มือฉบับสมบูรณ์พร้อมไดอะแกรม Mermaid ได้ที่ [docs/USER_MANUAL.md](docs/USER_MANUAL.md)
+- **ระบบอัปเดตคู่มืออัตโนมัติ (Zero-drift Pipeline)**:
+  - สคริปต์สกัด Metadata จากโค้ดจริง (Routes, Shortcuts, Roles, Sheets, APIs): `npm run manual:update`
+  - ตรวจสอบความสอดคล้องใน CI: `npm run manual:verify`
+  - Git Pre-commit Hook ซิงค์คู่มืออัตโนมัติทุกครั้งที่มีการ commit โค้ด
 
 ---
 
@@ -99,8 +108,8 @@
 
 1. เปิดลิงก์ **[Google Apps Script Editor](https://script.google.com/d/10rMmH_47aiOvXCzDPBf2ih4z3-cDrf8URBuycGHiyiwV8i_TGNKWCcV4/edit)** (ล็อกอินด้วยบัญชี Google ของคุณ)
 2. โค้ดทั้งหมดในโฟลเดอร์ `backend/` ได้รับการ Deploy สู่ Version 13 เรียบร้อยแล้ว
-3. ระบบจะสร้างชีตใหม่ (`FinanceTxns`, `CashClosings`) พร้อมจัดฟอร์แมตอัตโนมัติ
+3. ระบบจะสร้างชีตใหม่ (`FinanceTxns`, `CashClosings`, `BusinessDays`, `CashDrawers`) พร้อมจัดฟอร์แมตอัตโนมัติ
 4. เข้าใช้งานระบบผ่าน **[GitHub Pages](https://clangu89.github.io/pos-stock-system/)**
 5. เข้าสู่ระบบด้วยผู้ใช้งานเริ่มต้น:
-   - **Admin**: `admin` / `Admin1234!` (เข้าได้ครบทั้ง 5 ระบบ)
+   - **Admin**: `admin` / `Admin1234!` (เข้าได้ครบทุกระบบ)
    - **Cashier**: `cashier` / `Cashier1234!` (เฉพาะระบบงานขาย POS และระบบสต๊อกสินค้า)

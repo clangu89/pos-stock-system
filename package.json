@@ -1,0 +1,20 @@
+{
+  "name": "pos-stock-system",
+  "version": "1.0.0",
+  "description": "ระบบขายสินค้าและสต๊อกสินค้า (POS & Stock Management System)",
+  "main": "frontend/config.js",
+  "scripts": {
+    "test": "node --test tests/*.test.js",
+    "manual:update": "node scripts/update-manual.js",
+    "manual:verify": "node scripts/update-manual.js --verify"
+  },
+  "keywords": [
+    "pos",
+    "stock",
+    "inventory",
+    "google-apps-script",
+    "vanilla-js"
+  ],
+  "author": "clangu89",
+  "license": "MIT"
+}
