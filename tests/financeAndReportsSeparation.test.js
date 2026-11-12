@@ -428,10 +428,13 @@ test('Finance & Reports Separation: POS Checkout of 46.00 THB reflects accuratel
   assert.strictEqual(checkoutRes.sale.total, 46);
   assert.strictEqual(checkoutRes.sale.payMethod, 'CASH');
 
-  // Query finance:overview API
+  // Query finance:overview API for the sale's Bangkok month
+  const bkkMonth = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Bangkok' })
+    .format(new Date(checkoutRes.sale.ts))
+    .slice(0, 7);
   const overviewRes = sandbox.routeAction('finance:overview', adminLogin.token, {
-    startDate: '2026-10-01',
-    endDate: '2026-10-31',
+    startDate: `${bkkMonth}-01`,
+    endDate: `${bkkMonth}-31`,
     branchId: 'B01'
   }, {});
 

@@ -68,6 +68,7 @@ function ensureFinanceSheets_() {
 
   ensureSheetColumns_(SHEETS.SALES, ['dayId', 'drawerId']);
   ensureSheetColumns_(SHEETS.FINANCE_TXNS, ['dayId', 'drawerId']);
+  ensureSheetColumns_(SHEETS.BUSINESS_DAYS, ['zReportJson']);
 
   _financeSheetsEnsured = true;
 }
@@ -1129,7 +1130,8 @@ function openBusinessDay(payload = {}, sessionUser = {}) {
       closedAt: '',
       closedBy: '',
       closedByName: '',
-      closeNote: ''
+      closeNote: '',
+      zReportJson: ''
     };
 
     appendRow(SHEETS.BUSINESS_DAYS, dayRecord);
@@ -1287,6 +1289,11 @@ function getBusinessDayClosePreview(payload = {}) {
     openDrawersCount: openDrawers.length,
     closedDrawersCount: closedDrawers.length,
     canClose: canClose,
+    checklist: {
+      allDrawersClosed: openDrawers.length === 0,
+      openDrawersCount: openDrawers.length,
+      closedDrawersCount: closedDrawers.length
+    },
     openDrawers: openDrawers,
     closedDrawers: closedDrawers,
     allDrawers: dayDrawers,
@@ -1305,6 +1312,8 @@ function getBusinessDayClosePreview(payload = {}) {
     variance: variance,
     cashDrop: cashDrop,
     carryForward: carryForward,
+    totalCashDrop: cashDrop,
+    totalCarryForward: carryForward,
     paidBillsCount: branchPaidCount,
     voidBillsCount: branchVoidCount,
     settings: st
@@ -1328,7 +1337,7 @@ function closeBusinessDay(payload = {}, sessionUser = {}) {
   try {
     const preview = getBusinessDayClosePreview({ branchId, dayId });
     if (!preview.canClose && st.requireCloseAllDrawersBeforeDayClose) {
-      const names = preview.openDrawers.map(d => `${d.stationId} (${d.shiftLabel})`).join(', ');
+      const names = preview.openDrawers.map(d => `${d.stationId} (${d.shiftLabel || d.shift || 'ปกติ'})`).join(', ');
       throw new Error(`ไม่สามารถปิดวันทำการได้: ยังมีลิ้นชักเปิดค้างอยู่ ${preview.openDrawersCount} เครื่อง (${names}) กรุณาปิดลิ้นชักให้ครบก่อน`);
     }
 
@@ -1337,7 +1346,68 @@ function closeBusinessDay(payload = {}, sessionUser = {}) {
     const cashDrop = payload.cashDrop !== undefined ? round2_(parseFloat(payload.cashDrop) || 0) : preview.cashDrop;
     const carryForward = round2_(Math.max(0, actualCash - cashDrop));
     const now = new Date().toISOString();
+    const closedByName = sessionUser.name || sessionUser.username || 'Manager';
+    const closedBy = sessionUser.userId || 'SYSTEM';
+    const combinedTransferAndQr = round2_((preview.transferSales || 0) + (preview.qrSales || 0) + (preview.otherSales || 0));
 
+    const zReportObj = {
+      dayId: preview.dayId,
+      businessDate: preview.businessDate,
+      branchId: branchId,
+      openedAt: preview.day.openedAt,
+      openedBy: preview.day.openedBy || '',
+      openedByName: preview.day.openedByName || '',
+      closedAt: now,
+      closedBy: closedBy,
+      closedByName: closedByName,
+      note: closeNote,
+      closeNote: closeNote,
+      breakdown: {
+        openingFloat: preview.openingFloat,
+        drawerCount: preview.drawerCount,
+        cashSales: preview.cashSales,
+        transferSales: combinedTransferAndQr,
+        qrSales: preview.qrSales,
+        otherSales: preview.otherSales,
+        totalSales: preview.totalSales,
+        cashIncome: preview.cashIncome,
+        cashExpense: preview.cashExpense,
+        expectedCash: preview.expectedCash,
+        actualCash: actualCash,
+        variance: variance,
+        totalCashDrop: cashDrop,
+        totalCarryForward: carryForward
+      },
+      drawers: (preview.allDrawers || []).map(d => ({
+        drawerId: d.drawerId,
+        stationId: d.stationId,
+        shiftLabel: d.shiftLabel || 'ปกติ',
+        shift: d.shiftLabel || 'ปกติ',
+        openedByName: d.openedByName || d.openedBy || '-',
+        cashierName: d.openedByName || d.openedBy || '-',
+        cashSales: parseFloat(d.cashSales) || 0,
+        cashDrop: parseFloat(d.cashDrop) || 0,
+        finalDrop: parseFloat(d.cashDrop) || 0,
+        carryForward: parseFloat(d.carryForward) || 0
+      })),
+      openingFloat: preview.openingFloat,
+      drawerCount: preview.drawerCount,
+      cashSales: preview.cashSales,
+      transferSales: preview.transferSales,
+      qrSales: preview.qrSales,
+      otherSales: preview.otherSales,
+      totalSales: preview.totalSales,
+      cashIncome: preview.cashIncome,
+      cashExpense: preview.cashExpense,
+      expectedCash: preview.expectedCash,
+      actualCash: actualCash,
+      variance: variance,
+      cashDrop: cashDrop,
+      carryForward: carryForward
+    };
+
+    const zReportJsonStr = JSON.stringify(zReportObj);
+    let updatedDay = null;
     updateRows(SHEETS.BUSINESS_DAYS, r => r.dayId === preview.dayId, r => {
       r.status = 'CLOSED';
       r.drawerCount = preview.drawerCount;
@@ -1356,9 +1426,11 @@ function closeBusinessDay(payload = {}, sessionUser = {}) {
       r.cashDrop = cashDrop;
       r.carryForward = carryForward;
       r.closedAt = now;
-      r.closedBy = sessionUser.userId || 'SYSTEM';
-      r.closedByName = sessionUser.name || sessionUser.username || 'Manager';
+      r.closedBy = closedBy;
+      r.closedByName = closedByName;
       r.closeNote = closeNote;
+      r.zReportJson = zReportJsonStr;
+      updatedDay = r;
       return r;
     });
 
@@ -1386,8 +1458,8 @@ function closeBusinessDay(payload = {}, sessionUser = {}) {
       denomJson: '{}',
       note: `ปิดวันทำการ ${preview.dayId}${closeNote ? ' - ' + closeNote : ''}`,
       status: 'CLOSED',
-      userId: sessionUser.userId || 'SYSTEM',
-      userName: sessionUser.name || sessionUser.username || 'Manager'
+      userId: closedBy,
+      userName: closedByName
     });
 
     logAudit(sessionUser.userId, 'CLOSE_BUSINESS_DAY', 'BusinessDays', {
@@ -1402,32 +1474,10 @@ function closeBusinessDay(payload = {}, sessionUser = {}) {
     return {
       ok: true,
       message: `ปิดวันทำการ [${preview.businessDate}] ของสาขา [${branchId}] สำเร็จ`,
+      day: updatedDay || Object.assign({}, preview.day, { dayId: preview.dayId, status: 'CLOSED', closedAt: now, closedBy: closedBy, closedByName: closedByName, cashDrop: cashDrop, carryForward: carryForward, zReportJson: zReportJsonStr }),
       dayId: preview.dayId,
       businessDate: preview.businessDate,
-      zReport: {
-        dayId: preview.dayId,
-        businessDate: preview.businessDate,
-        branchId: branchId,
-        openedAt: preview.day.openedAt,
-        openedByName: preview.day.openedByName,
-        closedAt: now,
-        closedByName: sessionUser.name || sessionUser.username || 'Manager',
-        openingFloat: preview.openingFloat,
-        drawerCount: preview.drawerCount,
-        cashSales: preview.cashSales,
-        transferSales: preview.transferSales,
-        qrSales: preview.qrSales,
-        otherSales: preview.otherSales,
-        totalSales: preview.totalSales,
-        cashIncome: preview.cashIncome,
-        cashExpense: preview.cashExpense,
-        expectedCash: preview.expectedCash,
-        actualCash: actualCash,
-        variance: variance,
-        cashDrop: cashDrop,
-        carryForward: carryForward,
-        closeNote: closeNote
-      }
+      zReport: zReportObj
     };
   } finally {
     lock.releaseLock();
@@ -1462,9 +1512,15 @@ function getBusinessDaysHistory(options = {}) {
   });
 
   const limit = Math.max(1, parseInt(options.limit, 10) || 50);
+  const sliced = matched.slice(0, limit).map(d => Object.assign({}, d, {
+    totalCashDrop: d.cashDrop !== undefined ? (parseFloat(d.cashDrop) || 0) : 0,
+    totalCarryForward: d.carryForward !== undefined ? (parseFloat(d.carryForward) || 0) : 0
+  }));
+
   return {
     ok: true,
-    days: matched.slice(0, limit)
+    days: sliced,
+    history: sliced
   };
 }
 
@@ -1475,7 +1531,7 @@ function openCashDrawer(payload = {}, sessionUser = {}) {
   ensureFinanceSheets_();
   const branchId = String(payload.branchId || 'B01').trim();
   const stationId = String(payload.stationId || 'POS-01').trim();
-  const shiftLabel = String(payload.shiftLabel || 'กะเช้า').trim();
+  const shiftLabel = String(payload.shiftLabel || payload.shift || 'กะเช้า').trim();
   const openingFloat = Math.max(0, parseFloat(payload.openingFloat) || 0);
   const openNote = String(payload.note || payload.openNote || '').trim();
 
@@ -1574,7 +1630,7 @@ function recordDrawerMovement(payload = {}, sessionUser = {}) {
   const drawerId = String(payload.drawerId || '').trim();
   const type = String(payload.type || '').trim().toUpperCase();
   const amount = Math.max(0, parseFloat(payload.amount) || 0);
-  const reason = String(payload.reason || '').trim();
+  const reason = String(payload.reason || payload.note || '').trim();
 
   if (!drawerId) throw new Error('กรุณาระบุรหัสลิ้นชัก');
   if (!['CASH_IN', 'CASH_OUT', 'CASH_DROP'].includes(type)) {
@@ -1734,7 +1790,12 @@ function closeCashDrawer(payload = {}, sessionUser = {}) {
   const actualCash = Math.max(0, parseFloat(payload.actualCash) || 0);
   const cashDrop = Math.max(0, parseFloat(payload.cashDrop) || 0);
   const closeNote = String(payload.note || payload.closeNote || '').trim();
-  const denomJson = typeof payload.denomBreakdown === 'object' ? JSON.stringify(payload.denomBreakdown) : (typeof payload.denomCounts === 'object' ? JSON.stringify(payload.denomCounts) : String(payload.denomJson || '{}'));
+  const denomObj = (payload.denomBreakdown && typeof payload.denomBreakdown === 'object')
+    ? payload.denomBreakdown
+    : ((payload.denominations && typeof payload.denominations === 'object')
+      ? payload.denominations
+      : ((payload.denomCounts && typeof payload.denomCounts === 'object') ? payload.denomCounts : null));
+  const denomJson = denomObj ? JSON.stringify(denomObj) : String(payload.denomJson || '{}');
 
   if (!drawerId) throw new Error('กรุณาระบุรหัสลิ้นชัก');
 
@@ -1807,7 +1868,7 @@ function closeCashDrawer(payload = {}, sessionUser = {}) {
         variance: variance,
         cashDrop: cashDrop,
         carryForward: carryForward,
-        denomBreakdown: payload.denomBreakdown || {},
+        denomBreakdown: denomObj || {},
         closeNote: closeNote
       }
     };

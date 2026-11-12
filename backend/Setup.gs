@@ -22,7 +22,7 @@ const DB_SCHEMAS = {
     [SHEETS.AUDIT_LOG]: ['ts', 'userId', 'action', 'target', 'detail'],
     [SHEETS.FINANCE_TXNS]: ['txnId', 'ts', 'txDate', 'branchId', 'type', 'category', 'amount', 'payMethod', 'refDoc', 'description', 'status', 'userId', 'userName', 'voidBy', 'voidAt', 'voidReason', 'dayId', 'drawerId'],
     [SHEETS.CASH_CLOSINGS]: ['closingId', 'ts', 'closeDate', 'branchId', 'openingFloat', 'cashSales', 'transferSales', 'qrSales', 'cashIncome', 'cashExpense', 'expectedCash', 'actualCash', 'variance', 'cashDrop', 'carryForward', 'denomJson', 'note', 'status', 'userId', 'userName'],
-    [SHEETS.BUSINESS_DAYS]: ['dayId', 'businessDate', 'branchId', 'status', 'openingFloat', 'openedAt', 'openedBy', 'openedByName', 'openNote', 'drawerCount', 'cashSales', 'transferSales', 'qrSales', 'otherSales', 'cashIncome', 'cashExpense', 'drawerCashIn', 'drawerCashOut', 'drawerMidDrop', 'expectedCash', 'actualCash', 'variance', 'cashDrop', 'carryForward', 'closedAt', 'closedBy', 'closedByName', 'closeNote'],
+    [SHEETS.BUSINESS_DAYS]: ['dayId', 'businessDate', 'branchId', 'status', 'openingFloat', 'openedAt', 'openedBy', 'openedByName', 'openNote', 'drawerCount', 'cashSales', 'transferSales', 'qrSales', 'otherSales', 'cashIncome', 'cashExpense', 'drawerCashIn', 'drawerCashOut', 'drawerMidDrop', 'expectedCash', 'actualCash', 'variance', 'cashDrop', 'carryForward', 'closedAt', 'closedBy', 'closedByName', 'closeNote', 'zReportJson'],
     [SHEETS.CASH_DRAWERS]: ['drawerId', 'dayId', 'businessDate', 'branchId', 'stationId', 'shiftLabel', 'status', 'openingFloat', 'openedAt', 'openedBy', 'openedByName', 'openNote', 'cashIn', 'cashOut', 'midShiftDrop', 'movementsJson', 'cashSales', 'transferSales', 'qrSales', 'otherSales', 'saleCount', 'expectedCash', 'actualCash', 'variance', 'cashDrop', 'carryForward', 'denomJson', 'closedAt', 'closedBy', 'closedByName', 'closeNote']
 };
 
@@ -52,6 +52,7 @@ function setupDatabase() {
   // Ensure newly added columns on existing sheets
   ensureSheetColumns_(SHEETS.SALES, ['dayId', 'drawerId']);
   ensureSheetColumns_(SHEETS.FINANCE_TXNS, ['dayId', 'drawerId']);
+  ensureSheetColumns_(SHEETS.BUSINESS_DAYS, ['zReportJson']);
 
   // Set plain text format on key ID columns
   setTextColumns_(SHEETS.BUSINESS_DAYS, ['dayId', 'businessDate', 'branchId', 'openedBy', 'closedBy']);

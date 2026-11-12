@@ -506,3 +506,86 @@ test('Day & Drawer Control: Frontend DOM Elements and Module Functionality', () 
   assert.strictEqual(typeof FinanceModule.openNewDrawerModal, 'function');
   assert.strictEqual(typeof FinanceModule.saveSettings, 'function');
 });
+
+test('Day & Drawer Control: Frontend <-> Backend Contract Parity (shift, denominations, checklist, zReport & history)', () => {
+  const { sandbox } = createGasMockContext();
+  sandbox.setupDatabase();
+  const manager = sandbox.loginUser('admin', 'Admin1234!');
+  const cashier = sandbox.loginUser('cashier', 'Cashier1234!');
+
+  // 1. Open Day
+  const dayRes = sandbox.routeAction('finance:openDay', manager.token, {
+    branchId: 'B01',
+    businessDate: '2026-11-12',
+    openingFloat: 1000
+  }, {});
+  assert.strictEqual(dayRes.ok, true);
+
+  // 2. Open Drawer using frontend field alias `shift` (instead of `shiftLabel`)
+  const openDrawerRes = sandbox.routeAction('finance:openDrawer', cashier.token, {
+    branchId: 'B01',
+    stationId: 'POS-01',
+    shift: 'กะบ่าย',
+    openingFloat: 1000,
+    note: 'เปิดลิ้นชักจาก UI'
+  }, {});
+  assert.strictEqual(openDrawerRes.ok, true);
+  assert.strictEqual(openDrawerRes.drawer.shiftLabel, 'กะบ่าย', 'Backend must honor frontend shift alias');
+
+  // 3. Record movement using frontend field alias `note` (instead of `reason`)
+  const movRes = sandbox.routeAction('finance:drawerMovement', cashier.token, {
+    drawerId: openDrawerRes.drawer.drawerId,
+    type: 'CASH_IN',
+    amount: 200,
+    note: 'เติมเหรียญผ่าน UI'
+  }, {});
+  assert.strictEqual(movRes.ok, true);
+  assert.strictEqual(movRes.movement.reason, 'เติมเหรียญผ่าน UI');
+
+  // 4. Close Drawer using frontend field `denominations`
+  const closeDrawerRes = sandbox.routeAction('finance:closeDrawer', cashier.token, {
+    drawerId: openDrawerRes.drawer.drawerId,
+    actualCash: 1200,
+    denominations: { 1000: 1, 100: 2 },
+    cashDrop: 200,
+    note: 'ปิดลิ้นชักครบ'
+  }, {});
+  assert.strictEqual(closeDrawerRes.ok, true);
+  assert.strictEqual(closeDrawerRes.drawer.denomJson, JSON.stringify({ 1000: 1, 100: 2 }));
+  assert.deepStrictEqual(closeDrawerRes.slipData.denomBreakdown, { 1000: 1, 100: 2 });
+
+  // 5. Day Close Preview includes `checklist`, `totalCashDrop`, `totalCarryForward`
+  const dayPreview = sandbox.routeAction('finance:dayClosePreview', manager.token, {
+    branchId: 'B01',
+    dayId: dayRes.day.dayId
+  }, {});
+  assert.strictEqual(dayPreview.ok, true);
+  assert.ok(dayPreview.checklist, 'Day preview must include checklist object');
+  assert.strictEqual(dayPreview.checklist.allDrawersClosed, true);
+  assert.strictEqual(dayPreview.checklist.openDrawersCount, 0);
+  assert.strictEqual(dayPreview.totalCashDrop, 200);
+  assert.strictEqual(dayPreview.totalCarryForward, 1000);
+
+  // 6. Close Day returns `day` and structured `zReport` (`breakdown`, `drawers`), and persists `zReportJson`
+  const closeDayRes = sandbox.routeAction('finance:closeDay', manager.token, {
+    branchId: 'B01',
+    dayId: dayRes.day.dayId,
+    note: 'ปิดวันสมบูรณ์'
+  }, {});
+  assert.strictEqual(closeDayRes.ok, true);
+  assert.ok(closeDayRes.day && closeDayRes.day.dayId === dayRes.day.dayId, 'closeDay must return day object');
+  assert.ok(closeDayRes.zReport.breakdown, 'zReport must include breakdown object');
+  assert.strictEqual(closeDayRes.zReport.breakdown.totalCashDrop, 200);
+  assert.strictEqual(closeDayRes.zReport.breakdown.totalCarryForward, 1000);
+  assert.ok(Array.isArray(closeDayRes.zReport.drawers) && closeDayRes.zReport.drawers.length === 1);
+  assert.strictEqual(closeDayRes.zReport.drawers[0].shiftLabel, 'กะบ่าย');
+
+  // 7. Business Days History returns both `days` and `history` with `zReportJson`
+  const historyRes = sandbox.routeAction('finance:daysHistory', manager.token, { branchId: 'B01' }, {});
+  assert.strictEqual(historyRes.ok, true);
+  assert.ok(Array.isArray(historyRes.history) && historyRes.history.length === 1);
+  assert.ok(Array.isArray(historyRes.days) && historyRes.days.length === 1);
+  assert.strictEqual(historyRes.history[0].totalCashDrop, 200);
+  assert.strictEqual(historyRes.history[0].totalCarryForward, 1000);
+  assert.ok(historyRes.history[0].zReportJson, 'Closed day history must persist zReportJson');
+});

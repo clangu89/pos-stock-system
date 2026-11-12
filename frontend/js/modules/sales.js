@@ -1517,7 +1517,8 @@ const SalesModule = {
     const isDrawerOpen = !!(activeDrawer && activeDrawer.status === 'OPEN');
     if (drawerPill && drawerText) {
       if (isDrawerOpen) {
-        drawerText.textContent = `ลิ้นชักเปิด: ${activeDrawer.shift || 'ปกติ'}`;
+        const shiftDisplay = activeDrawer.shiftLabel || activeDrawer.shift || 'ปกติ';
+        drawerText.textContent = `ลิ้นชักเปิด: ${shiftDisplay}`;
         drawerPill.className = 'flex items-center gap-1.5 px-3 py-1 rounded-xl bg-purple-50 text-purple-800 border border-purple-200 font-bold';
         if (manageBtnText) manageBtnText.textContent = 'จัดการลิ้นชัก / ปิดกะ';
         if (manageBtn) manageBtn.className = 'px-3.5 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold transition flex items-center gap-1.5 shadow-sm cursor-pointer';
@@ -1584,7 +1585,9 @@ const SalesModule = {
         const d = prev.drawer || res.activeDrawer;
 
         const shiftEl = document.getElementById('posActiveShiftLabel');
-        if (shiftEl) shiftEl.textContent = `${d.shift || 'ปกติ'} (แคชเชียร์: ${d.cashierName || d.cashierId || '-'})`;
+        const shiftText = prev.shiftLabel || d.shiftLabel || d.shift || 'ปกติ';
+        const cashierText = d.openedByName || d.cashierName || d.openedBy || d.cashierId || '-';
+        if (shiftEl) shiftEl.textContent = `${shiftText} (แคชเชียร์: ${cashierText})`;
 
         const idEl = document.getElementById('posActiveDrawerId');
         if (idEl) idEl.textContent = d.drawerId;
@@ -1602,7 +1605,8 @@ const SalesModule = {
         if (inEl) inEl.textContent = `+฿${(prev.cashIn || 0).toFixed(2)}`;
 
         const dropEl = document.getElementById('posActiveCashDrop');
-        if (dropEl) dropEl.textContent = `-฿${(prev.cashDrop || 0).toFixed(2)}`;
+        const midDrop = prev.midShiftDrop !== undefined ? prev.midShiftDrop : (prev.cashDrop || 0);
+        if (dropEl) dropEl.textContent = `-฿${parseFloat(midDrop || 0).toFixed(2)}`;
 
         // Clear denominations
         [1000, 500, 100, 50, 20, 10, 5, 2, 1].forEach(dVal => {
@@ -1633,7 +1637,9 @@ const SalesModule = {
       if (shiftInp && !shiftInp.value) shiftInp.value = 'กะเช้า';
 
       const floatInp = document.getElementById('posOpenDrawerFloatInput');
-      const defFloat = (res.settings && res.settings.openingFloatAmount !== undefined) ? res.settings.openingFloatAmount : 1000;
+      const defFloat = res.suggestedOpeningFloat !== undefined
+        ? res.suggestedOpeningFloat
+        : ((res.settings && res.settings.openingFloatAmount !== undefined) ? res.settings.openingFloatAmount : 1000);
       if (floatInp) floatInp.value = defFloat;
 
       const noteInp = document.getElementById('posOpenDrawerNoteInput');
@@ -1649,7 +1655,7 @@ const SalesModule = {
   },
 
   async submitOpenDrawer() {
-    const shift = document.getElementById('posOpenDrawerShiftInput')?.value.trim() || 'ปกติ';
+    const shift = document.getElementById('posOpenDrawerShiftInput')?.value.trim() || 'กะเช้า';
     const openingFloat = parseFloat(document.getElementById('posOpenDrawerFloatInput')?.value);
     const note = document.getElementById('posOpenDrawerNoteInput')?.value.trim() || '';
 
@@ -1662,6 +1668,7 @@ const SalesModule = {
     const res = await Api.call('finance:openDrawer', {
       branchId: this.activeBranchId,
       stationId: this.stationId,
+      shiftLabel: shift,
       shift,
       openingFloat,
       note
@@ -1672,6 +1679,9 @@ const SalesModule = {
       UI.closeModal('posDrawerModal');
       UI.showToast(`เปิดลิ้นชัก ${shift} สำเร็จ! (เงินทอน: ฿${openingFloat.toFixed(2)})`, 'success');
       await this.refreshDayDrawerStatus();
+      if (typeof FinanceModule !== 'undefined' && !document.getElementById('view_finance')?.classList.contains('hidden')) {
+        await FinanceModule.loadDayStatus();
+      }
     } else {
       UI.showToast(res && res.error ? res.error : 'ไม่สามารถเปิดลิ้นชักได้', 'error');
     }
@@ -1706,6 +1716,7 @@ const SalesModule = {
       drawerId: dId,
       type,
       amount,
+      reason: note,
       note
     });
     UI.hideLoading();
@@ -1713,6 +1724,10 @@ const SalesModule = {
     if (res && res.ok) {
       UI.showToast(`บันทึก ${title} เรียบร้อยแล้ว (฿${amount.toFixed(2)})`, 'success');
       await this.openDrawerModal();
+      await this.refreshDayDrawerStatusSilent();
+      if (typeof FinanceModule !== 'undefined' && !document.getElementById('view_finance')?.classList.contains('hidden')) {
+        await FinanceModule.loadDayStatus();
+      }
     } else {
       UI.showToast(res && res.error ? res.error : 'บันทึกรายการไม่สำเร็จ', 'error');
     }
@@ -1803,6 +1818,7 @@ const SalesModule = {
     const res = await Api.call('finance:closeDrawer', {
       drawerId: dId,
       actualCash,
+      denomBreakdown: denoms,
       denominations: denoms,
       cashDrop,
       note
@@ -1814,6 +1830,9 @@ const SalesModule = {
       UI.showToast(`ปิดลิ้นชัก ${res.drawer.drawerId} สำเร็จ!`, 'success');
       this.printDrawerClosingSlip(res.drawer);
       await this.refreshDayDrawerStatus();
+      if (typeof FinanceModule !== 'undefined' && !document.getElementById('view_finance')?.classList.contains('hidden')) {
+        await FinanceModule.loadDayStatus();
+      }
     } else {
       UI.showToast(res && res.error ? res.error : 'ไม่สามารถปิดลิ้นชักได้', 'error');
     }
@@ -1829,7 +1848,8 @@ const SalesModule = {
 
     let denomObj = {};
     try {
-      denomObj = typeof drawer.denominationsJson === 'string' ? JSON.parse(drawer.denominationsJson || '{}') : (drawer.denominationsJson || {});
+      const rawDenom = drawer.denomJson || drawer.denominationsJson || '{}';
+      denomObj = typeof rawDenom === 'string' ? JSON.parse(rawDenom || '{}') : (rawDenom || {});
     } catch (e) {
       denomObj = {};
     }
@@ -1840,6 +1860,12 @@ const SalesModule = {
         <span>฿${(parseFloat(face) * count).toFixed(2)}</span>
       </div>
     `).join('');
+
+    const shiftDisplay = drawer.shiftLabel || drawer.shift || '-';
+    const cashierDisplay = drawer.openedByName || drawer.cashierName || drawer.openedBy || drawer.cashierId || '-';
+    const midDropAmt = parseFloat(drawer.midShiftDrop || 0);
+    const finalDropAmt = parseFloat((drawer.finalDrop !== undefined ? drawer.finalDrop : drawer.cashDrop) || 0);
+    const closeNoteText = drawer.closeNote || drawer.note || '';
 
     const html = `
       <!DOCTYPE html>
@@ -1864,24 +1890,24 @@ const SalesModule = {
         <div class="center" style="font-size:10px;">สาขา: ${escapeHtml(branchName)} | เครื่อง: ${escapeHtml(drawer.stationId || 'POS-01')}</div>
         <div class="line"></div>
         <div class="row"><span>รหัสลิ้นชัก:</span><span class="bold">${escapeHtml(drawer.drawerId)}</span></div>
-        <div class="row"><span>กะการทำงาน:</span><span>${escapeHtml(drawer.shift || '-')}</span></div>
-        <div class="row"><span>แคชเชียร์:</span><span>${escapeHtml(drawer.cashierName || drawer.cashierId || '-')}</span></div>
+        <div class="row"><span>กะการทำงาน:</span><span>${escapeHtml(shiftDisplay)}</span></div>
+        <div class="row"><span>แคชเชียร์:</span><span>${escapeHtml(cashierDisplay)}</span></div>
         <div class="row"><span>เวลาเปิด:</span><span>${new Date(drawer.openedAt).toLocaleTimeString('th-TH')}</span></div>
         <div class="row"><span>เวลาปิด:</span><span>${new Date(drawer.closedAt || Date.now()).toLocaleTimeString('th-TH')}</span></div>
         <div class="line"></div>
         <div class="row"><span>เงินทอนตั้งต้น:</span><span class="bold">฿${parseFloat(drawer.openingFloat || 0).toFixed(2)}</span></div>
         <div class="row"><span>ยอดขายเงินสด:</span><span class="bold">฿${parseFloat(drawer.cashSales || 0).toFixed(2)}</span></div>
         <div class="row"><span>เติมเงิน (+) / ออก (-):</span><span>฿${((parseFloat(drawer.cashIn) || 0) - (parseFloat(drawer.cashOut) || 0)).toFixed(2)}</span></div>
-        <div class="row"><span>ส่งเซฟกลางกะ (-):</span><span>-฿${parseFloat(drawer.cashDrop || 0).toFixed(2)}</span></div>
+        <div class="row"><span>ส่งเซฟกลางกะ (-):</span><span>-฿${midDropAmt.toFixed(2)}</span></div>
         <div class="line"></div>
         <div class="row bold" style="font-size:12px;"><span>เงินสดคาดการณ์:</span><span>฿${parseFloat(drawer.expectedCash || 0).toFixed(2)}</span></div>
         <div class="row bold" style="font-size:12px;"><span>เงินสดนับได้จริง:</span><span>฿${parseFloat(drawer.actualCash || 0).toFixed(2)}</span></div>
         <div class="row"><span>ผลต่าง:</span><span class="bold">${varText}</span></div>
         <div class="double-line"></div>
-        <div class="row bold"><span>เงินสดส่งเซฟปิดกะ:</span><span>฿${parseFloat(drawer.finalDrop || 0).toFixed(2)}</span></div>
+        <div class="row bold"><span>เงินสดส่งเซฟปิดกะ:</span><span>฿${finalDropAmt.toFixed(2)}</span></div>
         <div class="row bold"><span>เงินทอนยกไปกะถัดไป:</span><span>฿${parseFloat(drawer.carryForward || 0).toFixed(2)}</span></div>
         ${denomRows ? `<div class="line"></div><div class="bold" style="font-size:10px; margin-bottom:2px;">รายละเอียดธนบัตร/เหรียญ:</div>${denomRows}` : ''}
-        ${drawer.note ? `<div class="line"></div><div style="font-size:10px;">หมายเหตุ: ${escapeHtml(drawer.note)}</div>` : ''}
+        ${closeNoteText ? `<div class="line"></div><div style="font-size:10px;">หมายเหตุ: ${escapeHtml(closeNoteText)}</div>` : ''}
         <div class="line"></div>
         <div style="margin-top:16px; display:flex; justify-content:space-between; font-size:10px; text-align:center;">
           <div>........................<br>ผู้ส่งมอบเงิน (แคชเชียร์)</div>
