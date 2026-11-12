@@ -261,7 +261,9 @@ const FinanceModule = {
 
       const floatInput = document.getElementById('financeOpenDayFloatInput');
       if (floatInput && !floatInput.value) {
-        floatInput.value = (res.settings && res.settings.openingFloatAmount !== undefined) ? res.settings.openingFloatAmount : 1000;
+        floatInput.value = res.suggestedOpeningFloat !== undefined
+          ? res.suggestedOpeningFloat
+          : ((res.settings && res.settings.openingFloatAmount !== undefined) ? res.settings.openingFloatAmount : 1000);
       }
     }
 
@@ -285,6 +287,7 @@ const FinanceModule = {
     }
 
     const drawers = res.drawers || [];
+    this.cachedLiveDrawers = drawers;
     const openCount = drawers.filter(d => d.status === 'OPEN').length;
     const countBadge = document.getElementById('drawersOpenBadge');
     if (countBadge) {
@@ -308,34 +311,40 @@ const FinanceModule = {
 
         const variance = d.variance !== null && d.variance !== undefined ? parseFloat(d.variance) : null;
         let varDisplay = '-';
-        if (variance !== null) {
+        if (!isOpen && variance !== null && !isNaN(variance)) {
           const varColor = Math.abs(variance) < 0.01 ? 'text-emerald-600' : (variance > 0 ? 'text-blue-600' : 'text-rose-600');
           varDisplay = `<span class="${varColor} font-bold">${variance >= 0 ? '+' : ''}฿${variance.toFixed(2)}</span>`;
         }
 
-        const moveTxt = `+฿${parseFloat(d.cashIn || 0).toFixed(2)} / -฿${parseFloat(d.cashOut || 0).toFixed(2)} / -฿${parseFloat(d.cashDrop || 0).toFixed(2)}`;
+        const midDrop = parseFloat(d.midShiftDrop || 0);
+        const endDrop = parseFloat((d.finalDrop !== undefined ? d.finalDrop : d.cashDrop) || 0);
+        const moveTxt = `+฿${parseFloat(d.cashIn || 0).toFixed(2)} / -฿${parseFloat(d.cashOut || 0).toFixed(2)} / -฿${midDrop.toFixed(2)}`;
+        const shiftTxt = d.shiftLabel || d.shift || '-';
+        const cashierTxt = d.openedByName || d.cashierName || d.openedBy || d.cashierId || '-';
 
         const safeDrawerId = escapeHtml(d.drawerId);
+        const safeBranchId = escapeHtml(d.branchId || branchId || 'B01');
+        const safeStationId = escapeHtml(d.stationId || 'POS-01');
 
         return `
           <tr class="hover:bg-slate-50 transition">
             <td class="py-2.5 px-3 font-mono font-bold text-purple-700">${safeDrawerId}</td>
-            <td class="py-2.5 px-3 font-bold text-slate-800">${escapeHtml(d.stationId || 'POS-01')} <span class="text-slate-400">(${escapeHtml(d.shift || '-')})</span></td>
-            <td class="py-2.5 px-3 text-slate-700">${escapeHtml(d.cashierName || d.cashierId || '-')}</td>
+            <td class="py-2.5 px-3 font-bold text-slate-800">${safeStationId} <span class="text-slate-400">(${escapeHtml(shiftTxt)})</span></td>
+            <td class="py-2.5 px-3 text-slate-700">${escapeHtml(cashierTxt)}</td>
             <td class="py-2.5 px-3 text-center">${stBadge}</td>
             <td class="py-2.5 px-3 text-right font-mono font-bold text-slate-700">฿${parseFloat(d.openingFloat || 0).toFixed(2)}</td>
             <td class="py-2.5 px-3 text-right font-mono font-bold text-emerald-600">฿${parseFloat(d.cashSales || 0).toFixed(2)}</td>
             <td class="py-2.5 px-3 text-right font-mono text-[10px] text-slate-500">${moveTxt}</td>
             <td class="py-2.5 px-3 text-right font-mono font-black text-purple-700">฿${parseFloat(d.expectedCash || 0).toFixed(2)}</td>
-            <td class="py-2.5 px-3 text-right font-mono">฿${parseFloat(d.actualCash || 0).toFixed(2)} (${varDisplay})</td>
-            <td class="py-2.5 px-3 text-right font-mono text-[11px] text-slate-600">฿${parseFloat(d.finalDrop || 0).toFixed(2)} / ฿${parseFloat(d.carryForward || 0).toFixed(2)}</td>
+            <td class="py-2.5 px-3 text-right font-mono">${isOpen ? '<span class="text-slate-400">-</span>' : `฿${parseFloat(d.actualCash || 0).toFixed(2)} (${varDisplay})`}</td>
+            <td class="py-2.5 px-3 text-right font-mono text-[11px] text-slate-600">${isOpen ? '<span class="text-slate-400">-</span>' : `฿${endDrop.toFixed(2)} / ฿${parseFloat(d.carryForward || 0).toFixed(2)}`}</td>
             <td class="py-2.5 px-3 text-center">
               ${isOpen ? `
-                <button onclick="SalesModule.stationId='${escapeHtml(d.stationId || 'POS-01')}'; SalesModule.openDrawerModal();" class="px-2.5 py-1 rounded-lg bg-purple-50 hover:bg-purple-100 text-purple-700 font-bold text-[11px] border border-purple-200 transition cursor-pointer">
+                <button onclick="SalesModule.activeBranchId='${safeBranchId}'; SalesModule.stationId='${safeStationId}'; SalesModule.openDrawerModal();" class="px-2.5 py-1 rounded-lg bg-purple-50 hover:bg-purple-100 text-purple-700 font-bold text-[11px] border border-purple-200 transition cursor-pointer">
                   จัดการ
                 </button>
               ` : `
-                <button onclick="SalesModule.printDrawerClosingSlip(${escapeHtml(JSON.stringify(d).replace(/"/g, '&quot;'))})" class="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-[11px] border border-slate-200 transition cursor-pointer">
+                <button onclick="FinanceModule.printLiveDrawerSlip('${safeDrawerId}')" class="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-[11px] border border-slate-200 transition cursor-pointer">
                   🖨️ สลิป
                 </button>
               `}
@@ -344,6 +353,15 @@ const FinanceModule = {
         `;
       }).join('');
     }
+  },
+
+  printLiveDrawerSlip(drawerId) {
+    const drawer = (this.cachedLiveDrawers || []).find(d => d.drawerId === drawerId);
+    if (!drawer) {
+      UI.showToast('ไม่พบข้อมูลลิ้นชักสำหรับพิมพ์', 'warning');
+      return;
+    }
+    SalesModule.printDrawerClosingSlip(drawer);
   },
 
   async fetchDayClosePreview(branchId, dayId) {
@@ -357,16 +375,23 @@ const FinanceModule = {
       if (el) el.textContent = val;
     };
 
+    const nonCashSales = (parseFloat(res.transferSales) || 0) + (parseFloat(res.qrSales) || 0) + (parseFloat(res.otherSales) || 0);
+    const totalDrop = res.totalCashDrop !== undefined ? (parseFloat(res.totalCashDrop) || 0) : (parseFloat(res.cashDrop) || 0);
+    const totalCarry = res.totalCarryForward !== undefined ? (parseFloat(res.totalCarryForward) || 0) : (parseFloat(res.carryForward) || 0);
+
     setTxt('zSummaryCashSales', `฿${(res.cashSales || 0).toFixed(2)}`);
-    setTxt('zSummaryTransferSales', `฿${(res.transferSales || 0).toFixed(2)}`);
+    setTxt('zSummaryTransferSales', `฿${nonCashSales.toFixed(2)}`);
     setTxt('zSummaryCashIncome', `+฿${(res.cashIncome || 0).toFixed(2)}`);
     setTxt('zSummaryCashExpense', `-฿${(res.cashExpense || 0).toFixed(2)}`);
-    setTxt('zSummaryCashDrop', `฿${(res.totalCashDrop || 0).toFixed(2)}`);
-    setTxt('zSummaryCarryForward', `฿${(res.totalCarryForward || 0).toFixed(2)}`);
+    setTxt('zSummaryCashDrop', `฿${totalDrop.toFixed(2)}`);
+    setTxt('zSummaryCarryForward', `฿${totalCarry.toFixed(2)}`);
 
     const chkBadge = document.getElementById('dayPrecloseChecklistBadge');
     const closeBtn = document.getElementById('financeSubmitCloseDayBtn');
-    const chk = res.checklist || {};
+    const chk = res.checklist || {
+      allDrawersClosed: (res.openDrawersCount || 0) === 0,
+      openDrawersCount: res.openDrawersCount || 0
+    };
     const requireCloseAll = !!(res.settings && res.settings.requireCloseAllDrawersBeforeDayClose);
 
     if (chkBadge) {
@@ -375,7 +400,7 @@ const FinanceModule = {
         chkBadge.className = 'px-3 py-1 rounded-xl text-xs font-bold bg-emerald-50 text-emerald-800 border border-emerald-200';
         if (closeBtn) closeBtn.disabled = false;
       } else {
-        chkBadge.textContent = `⚠️ มีลิ้นชักยังเปิดอยู่ (${chk.openDrawersCount} ลิ้นชัก)`;
+        chkBadge.textContent = `⚠️ มีลิ้นชักยังเปิดอยู่ (${chk.openDrawersCount || 0} ลิ้นชัก)`;
         chkBadge.className = 'px-3 py-1 rounded-xl text-xs font-bold bg-amber-50 text-amber-800 border border-amber-200';
         if (closeBtn) closeBtn.disabled = requireCloseAll;
       }
@@ -419,7 +444,10 @@ const FinanceModule = {
     }
 
     const prev = this.activeDayClosePreview;
-    const chk = (prev && prev.checklist) || {};
+    const chk = (prev && prev.checklist) || {
+      allDrawersClosed: (prev && prev.openDrawersCount !== undefined) ? prev.openDrawersCount === 0 : true,
+      openDrawersCount: (prev && prev.openDrawersCount) || 0
+    };
     const requireCloseAll = !!(prev && prev.settings && prev.settings.requireCloseAllDrawersBeforeDayClose);
 
     if (requireCloseAll && !chk.allDrawersClosed) {
@@ -428,10 +456,11 @@ const FinanceModule = {
     }
 
     const note = document.getElementById('financeDayCloseNoteInput')?.value.trim() || '';
+    const previewCashDrop = prev ? (prev.totalCashDrop !== undefined ? prev.totalCashDrop : (prev.cashDrop || 0)) : 0;
 
     const confirmed = await UI.confirmDialog(
       'ยืนยันปิดวันทำการ (Close Business Day)',
-      `รหัสวันทำการ: ${activeDay.dayId} (${activeDay.businessDate})\nยอดขายเงินสดรวม: ฿${((prev && prev.cashSales) || 0).toFixed(2)}\nเงินสดนำส่งเซฟรวม: ฿${((prev && prev.totalCashDrop) || 0).toFixed(2)}\n\nเมื่อปิดวันทำการแล้ว ระบบจะออกใบสรุป Z-Report และล็อกงวด (หากเปิดใช้งาน)\nต้องการยืนยันใช่หรือไม่?`
+      `รหัสวันทำการ: ${activeDay.dayId} (${activeDay.businessDate})\nยอดขายเงินสดรวม: ฿${((prev && prev.cashSales) || 0).toFixed(2)}\nเงินสดนำส่งเซฟรวม: ฿${parseFloat(previewCashDrop || 0).toFixed(2)}\n\nเมื่อปิดวันทำการแล้ว ระบบจะออกใบสรุป Z-Report และล็อกงวด (หากเปิดใช้งาน)\nต้องการยืนยันใช่หรือไม่?`
     );
     if (!confirmed) return;
 
@@ -444,7 +473,8 @@ const FinanceModule = {
     UI.hideLoading();
 
     if (res && res.ok && res.zReport) {
-      UI.showToast(`ปิดวันทำการ ${res.day.dayId} เรียบร้อยแล้ว!`, 'success');
+      const closedDayId = (res.day && res.day.dayId) || res.dayId || activeDay.dayId;
+      UI.showToast(`ปิดวันทำการ ${closedDayId} เรียบร้อยแล้ว!`, 'success');
       await this.loadDayStatus();
       await this.loadBusinessDaysHistory();
       this.renderZReportModal(res.zReport);
@@ -464,7 +494,7 @@ const FinanceModule = {
       return;
     }
 
-    this.cachedDayHistory = res.history || [];
+    this.cachedDayHistory = res.history || res.days || [];
     if (this.cachedDayHistory.length === 0) {
       if (tbody) tbody.innerHTML = `<tr><td colspan="11" class="text-center py-6 text-slate-400">ยังไม่มีประวัติการเปิด-ปิดวันทำการ</td></tr>`;
       return;
@@ -479,6 +509,9 @@ const FinanceModule = {
 
         const safeDayId = escapeHtml(day.dayId);
         const safeBranch = escapeHtml(this.getBranchName(day.branchId));
+        const nonCash = (parseFloat(day.transferSales) || 0) + (parseFloat(day.qrSales) || 0) + (parseFloat(day.otherSales) || 0);
+        const dropVal = day.totalCashDrop !== undefined ? day.totalCashDrop : (day.cashDrop || 0);
+        const carryVal = day.totalCarryForward !== undefined ? day.totalCarryForward : (day.carryForward || 0);
 
         return `
           <tr class="hover:bg-slate-50 transition">
@@ -488,9 +521,9 @@ const FinanceModule = {
             <td class="py-2.5 px-3 text-center">${stBadge}</td>
             <td class="py-2.5 px-3 text-right font-mono font-bold text-slate-700">฿${parseFloat(day.openingFloat || 0).toFixed(2)}</td>
             <td class="py-2.5 px-3 text-right font-mono font-bold text-emerald-600">฿${parseFloat(day.cashSales || 0).toFixed(2)}</td>
-            <td class="py-2.5 px-3 text-right font-mono font-bold text-blue-600">฿${parseFloat(day.transferSales || 0).toFixed(2)}</td>
-            <td class="py-2.5 px-3 text-right font-mono font-black text-purple-700">฿${parseFloat(day.totalCashDrop || 0).toFixed(2)}</td>
-            <td class="py-2.5 px-3 text-right font-mono text-slate-600">฿${parseFloat(day.totalCarryForward || 0).toFixed(2)}</td>
+            <td class="py-2.5 px-3 text-right font-mono font-bold text-blue-600">฿${nonCash.toFixed(2)}</td>
+            <td class="py-2.5 px-3 text-right font-mono font-black text-purple-700">฿${parseFloat(dropVal || 0).toFixed(2)}</td>
+            <td class="py-2.5 px-3 text-right font-mono text-slate-600">฿${parseFloat(carryVal || 0).toFixed(2)}</td>
             <td class="py-2.5 px-3 text-center text-[11px] text-slate-600">${escapeHtml(day.closedByName || day.closedBy || day.openedByName || day.openedBy || '-')}</td>
             <td class="py-2.5 px-3 text-center">
               ${day.zReportJson ? `
@@ -539,8 +572,11 @@ const FinanceModule = {
     const container = document.getElementById('zModalContent');
     if (!container) return;
 
-    const b = zReport.breakdown || {};
+    const b = zReport.breakdown || zReport;
     const dList = zReport.drawers || [];
+    const totalDrop = b.totalCashDrop !== undefined ? b.totalCashDrop : (b.cashDrop || 0);
+    const totalCarry = b.totalCarryForward !== undefined ? b.totalCarryForward : (b.carryForward || 0);
+    const noteText = zReport.note || zReport.closeNote || '';
 
     container.innerHTML = `
       <div class="space-y-3">
@@ -584,11 +620,11 @@ const FinanceModule = {
         <div class="p-3 bg-slate-900 text-white rounded-2xl space-y-1 text-xs">
           <div class="flex justify-between items-center">
             <span class="text-slate-300 font-bold">ยอดเงินสดนำส่งเซฟสุทธิ (Total Cash Drop):</span>
-            <span class="font-mono font-black text-emerald-400 text-base">฿${parseFloat(b.totalCashDrop || 0).toFixed(2)}</span>
+            <span class="font-mono font-black text-emerald-400 text-base">฿${parseFloat(totalDrop || 0).toFixed(2)}</span>
           </div>
           <div class="flex justify-between items-center pt-1 border-t border-slate-800">
             <span class="text-slate-400 text-[11px]">เงินทอนยกไปวันถัดไป (Carry Forward):</span>
-            <span class="font-mono font-bold text-slate-200">฿${parseFloat(b.totalCarryForward || 0).toFixed(2)}</span>
+            <span class="font-mono font-bold text-slate-200">฿${parseFloat(totalCarry || 0).toFixed(2)}</span>
           </div>
         </div>
 
@@ -601,12 +637,12 @@ const FinanceModule = {
                 <div class="p-2 bg-slate-50 rounded-xl border border-slate-200 text-[11px] flex justify-between items-center">
                   <div>
                     <span class="font-bold text-purple-700">${escapeHtml(d.stationId || 'POS-01')}</span>
-                    <span class="text-slate-500">(${escapeHtml(d.shift || '-')})</span>
-                    <span class="text-slate-400 text-[10px] block">${escapeHtml(d.cashierName || d.cashierId || '-')}</span>
+                    <span class="text-slate-500">(${escapeHtml(d.shiftLabel || d.shift || '-')})</span>
+                    <span class="text-slate-400 text-[10px] block">${escapeHtml(d.openedByName || d.cashierName || d.openedBy || d.cashierId || '-')}</span>
                   </div>
                   <div class="text-right font-mono">
                     <span class="text-emerald-600 font-bold block">ขายสด ฿${parseFloat(d.cashSales || 0).toFixed(2)}</span>
-                    <span class="text-slate-600 text-[10px]">ส่งเซฟ ฿${parseFloat(d.finalDrop || 0).toFixed(2)}</span>
+                    <span class="text-slate-600 text-[10px]">ส่งเซฟ ฿${parseFloat((d.finalDrop !== undefined ? d.finalDrop : d.cashDrop) || 0).toFixed(2)}</span>
                   </div>
                 </div>
               `).join('')}
@@ -614,9 +650,9 @@ const FinanceModule = {
           </div>
         ` : ''}
 
-        ${zReport.note ? `
+        ${noteText ? `
           <div class="p-2.5 bg-amber-50 rounded-xl border border-amber-200 text-amber-900 text-[11px]">
-            <strong>หมายเหตุ:</strong> ${escapeHtml(zReport.note)}
+            <strong>หมายเหตุ:</strong> ${escapeHtml(noteText)}
           </div>
         ` : ''}
       </div>
@@ -634,10 +670,13 @@ const FinanceModule = {
 
     const st = this.receiptStoreInfo || this.cachedSettings || {};
     const storeName = st.storeName || CONFIG.DEFAULT_STORE_NAME || 'POS System';
-    const b = zReport.breakdown || {};
+    const b = zReport.breakdown || zReport;
     const dList = zReport.drawers || [];
     const variance = parseFloat(b.variance || 0);
     const varText = variance === 0 ? '฿0.00 (ตรง)' : (variance > 0 ? `+฿${variance.toFixed(2)} (เกิน)` : `-฿${Math.abs(variance).toFixed(2)} (ขาด)`);
+    const totalDrop = b.totalCashDrop !== undefined ? b.totalCashDrop : (b.cashDrop || 0);
+    const totalCarry = b.totalCarryForward !== undefined ? b.totalCarryForward : (b.carryForward || 0);
+    const noteText = zReport.note || zReport.closeNote || '';
 
     const html = `
       <!DOCTYPE html>
@@ -677,19 +716,19 @@ const FinanceModule = {
         <div class="row bold" style="font-size:12px;"><span>เงินสดนับจริง:</span><span>฿${parseFloat(b.actualCash || 0).toFixed(2)}</span></div>
         <div class="row"><span>ผลต่างรวม:</span><span class="bold">${varText}</span></div>
         <div class="double-line"></div>
-        <div class="row bold" style="font-size:12px;"><span>เงินสดนำส่งเซฟรวม:</span><span>฿${parseFloat(b.totalCashDrop || 0).toFixed(2)}</span></div>
-        <div class="row bold"><span>เงินทอนยกไปวันถัดไป:</span><span>฿${parseFloat(b.totalCarryForward || 0).toFixed(2)}</span></div>
+        <div class="row bold" style="font-size:12px;"><span>เงินสดนำส่งเซฟรวม:</span><span>฿${parseFloat(totalDrop || 0).toFixed(2)}</span></div>
+        <div class="row bold"><span>เงินทอนยกไปวันถัดไป:</span><span>฿${parseFloat(totalCarry || 0).toFixed(2)}</span></div>
         ${dList.length > 0 ? `
           <div class="line"></div>
           <div class="bold" style="font-size:10px; margin-bottom:2px;">ลิ้นชักในวันทำการ (${dList.length} เครื่อง/กะ):</div>
           ${dList.map(d => `
             <div class="row" style="font-size:10px;">
-              <span>${escapeHtml(d.stationId || 'POS')} (${escapeHtml(d.shift || '-')}) ${escapeHtml(d.cashierName || '')}</span>
-              <span>สด ฿${parseFloat(d.cashSales || 0).toFixed(2)} | ส่ง ฿${parseFloat(d.finalDrop || 0).toFixed(2)}</span>
+              <span>${escapeHtml(d.stationId || 'POS')} (${escapeHtml(d.shiftLabel || d.shift || '-')}) ${escapeHtml(d.openedByName || d.cashierName || '')}</span>
+              <span>สด ฿${parseFloat(d.cashSales || 0).toFixed(2)} | ส่ง ฿${parseFloat((d.finalDrop !== undefined ? d.finalDrop : d.cashDrop) || 0).toFixed(2)}</span>
             </div>
           `).join('')}
         ` : ''}
-        ${zReport.note ? `<div class="line"></div><div style="font-size:10px;">หมายเหตุ: ${escapeHtml(zReport.note)}</div>` : ''}
+        ${noteText ? `<div class="line"></div><div style="font-size:10px;">หมายเหตุ: ${escapeHtml(noteText)}</div>` : ''}
         <div class="line"></div>
         <div style="margin-top:20px; display:flex; justify-content:space-between; font-size:10px; text-align:center;">
           <div>........................<br>ผู้จัดการสาขา / ผู้ปิดวัน</div>
